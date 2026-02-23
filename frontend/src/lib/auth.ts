@@ -72,11 +72,11 @@ export async function loginWithGoogle() {
   try {
     const credentials = await signInWithPopup(auth, googleProvider);
     await ensureUserProfile(credentials.user);
-    return { redirected: false };
+    return { redirected: false, user: credentials.user };
   } catch (error) {
     if (isRedirectFallbackError(error)) {
       await signInWithRedirect(auth, googleProvider);
-      return { redirected: true };
+      return { redirected: true, user: null };
     }
     throw error;
   }

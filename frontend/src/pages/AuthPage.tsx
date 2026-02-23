@@ -1,11 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 
-import { completeGoogleRedirect, loginWithGoogle, useAuthState } from '../lib';
+import {
+  completeGoogleRedirect,
+  getCurrentUserRole,
+  loginWithGoogle,
+  logoutCurrentUser,
+  refreshIdTokenClaims,
+  useAuthState,
+} from '../lib';
 import { toMessage } from '../utils/firestore';
+
+const ADMIN_EMAILS = new Set(['lrnz.sga@gmail.com']);
+const LOGIN_INTENT_KEY = 'bw_login_intent';
 
 export function AuthPage() {
   const { user, role } = useAuthState();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -13,15 +24,65 @@ export function AuthPage() {
     void completeGoogleRedirect();
   }, []);
 
-  if (user && role) return <Navigate to={role === 'client' ? '/app/client' : '/app/coach'} replace />;
-  if (user && !role) return <Navigate to="/onboarding" replace />;
+  if (user && role) {
+    sessionStorage.removeItem(LOGIN_INTENT_KEY);
+    return <Navigate to={role === 'client' ? '/app/client' : '/app/coach'} replace />;
+  }
+  if (user && !role) {
+    const intent = sessionStorage.getItem(LOGIN_INTENT_KEY);
+    const isAdminEmail = ADMIN_EMAILS.has((user.email ?? '').toLowerCase());
+    if (intent === 'coach' && isAdminEmail) return <Navigate to="/missing-role" replace />;
+    return <Navigate to="/onboarding" replace />;
+  }
 
-  async function submitGoogle() {
+  async function signInAsClient() {
     setLoading(true);
     setMessage('');
     try {
+      sessionStorage.setItem(LOGIN_INTENT_KEY, 'client');
       const result = await loginWithGoogle();
-      if (result.redirected) setMessage('Reindirizzamento Google in corso...');
+      if (result.redirected) {
+        setMessage('Apertura accesso Google...');
+        return;
+      }
+      navigate('/onboarding', { replace: true });
+    } catch (error) {
+      setMessage(toMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function signInAsCoach() {
+    setLoading(true);
+    setMessage('');
+    try {
+      sessionStorage.setItem(LOGIN_INTENT_KEY, 'coach');
+      const result = await loginWithGoogle();
+      if (result.redirected) {
+        setMessage('Apertura accesso Google...');
+        return;
+      }
+      if (!result.user) {
+        setMessage('Accesso non completato. Riprova.');
+        return;
+      }
+
+      const email = result.user.email?.toLowerCase() ?? '';
+      if (!ADMIN_EMAILS.has(email)) {
+        await logoutCurrentUser();
+        setMessage('Questo account non è abilitato come PT/Admin. Usa accesso utente.');
+        return;
+      }
+
+      await refreshIdTokenClaims();
+      const userRole = await getCurrentUserRole(result.user);
+      if (userRole === 'admin' || userRole === 'trainer') {
+        navigate('/app/coach', { replace: true });
+        return;
+      }
+
+      navigate('/missing-role', { replace: true });
     } catch (error) {
       setMessage(toMessage(error));
     } finally {
@@ -32,18 +93,22 @@ export function AuthPage() {
   return (
     <main className="page page-center">
       <section className="card auth-card">
-        <p className="eyebrow">Gym PT Platform</p>
+        <p className="eyebrow">Beastly Workout</p>
         <h1>Accedi con Google</h1>
-        <p className="hero-sub">
-          Accesso consentito solo tramite account Google. I permessi operativi dipendono dal ruolo in Firebase claims.
-        </p>
+        <p className="hero-sub">Inizia subito: entra come utente e completa il tuo percorso iniziale.</p>
 
-        <button className="btn" disabled={loading} onClick={() => void submitGoogle()} type="button">
+        <button className="btn" disabled={loading} onClick={() => void signInAsClient()} type="button">
           {loading ? 'Connessione...' : 'Continua con Google'}
         </button>
-        <p className="hint">Niente password locale: autenticazione unica con Google.</p>
+
+        <div className="divider" />
+        <h2>Sei PT/Admin?</h2>
+        <p className="hint">Usa il tuo account autorizzato per entrare nell&apos;area coach.</p>
+        <button className="btn btn-ghost" disabled={loading} onClick={() => void signInAsCoach()} type="button">
+          Continua con Google (PT/Admin)
+        </button>
         <p className="hint">
-          Sei PT/Admin? Vai a <Link to="/missing-role">setup ruolo admin</Link>.
+          Se non sei PT/Admin torna a <Link to="/onboarding">onboarding utente</Link>.
         </p>
 
         {message ? <p className="message">{message}</p> : null}

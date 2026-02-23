@@ -35,7 +35,7 @@ export function OnboardingPage() {
         trainingDaysPerWeek,
         notes: notes.trim(),
       });
-      setMessage('Onboarding salvato. Ora il PT/Admin deve assegnarti il ruolo client.');
+      setMessage('Perfetto, dati salvati. Il tuo percorso iniziale è stato registrato.');
     } catch (error) {
       setMessage(toMessage(error));
     } finally {
@@ -47,9 +47,9 @@ export function OnboardingPage() {
     <main className="page page-center">
       <section className="card auth-card">
         <p className="eyebrow">Onboarding Cliente</p>
-        <h1>Completa i dati iniziali</h1>
+        <h1>Partiamo con i tuoi obiettivi</h1>
         <p className="hero-sub">
-          Non hai ancora un ruolo assegnato, ma puoi completare il profilo. Account: <strong>{userEmail}</strong>
+          Completa queste informazioni per iniziare al meglio. Account: <strong>{userEmail}</strong>
         </p>
 
         <label>
@@ -95,7 +95,7 @@ export function OnboardingPage() {
         </button>
 
         <p className="hint">
-          Sei PT/Admin? Vai a <Link to="/missing-role">setup admin</Link>.
+          Sei PT/Admin? Vai a <Link to="/missing-role">accesso area coach</Link>.
         </p>
         {message ? <p className="message">{message}</p> : null}
       </section>

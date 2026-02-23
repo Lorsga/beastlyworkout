@@ -44,29 +44,29 @@ export function MissingRolePage() {
   return (
     <main className="page page-center">
       <section className="card auth-card">
-        <p className="eyebrow">Ruolo non trovato</p>
-        <h1>Setup ruolo PT/Admin</h1>
+        <p className="eyebrow">Accesso PT/Admin</p>
+        <h1>Completa accesso area coach</h1>
         <p className="hero-sub">
-          Sei autenticato come <strong>{user.email}</strong> ma non hai claim ruolo. Da qui puoi completare setup admin o
-          aggiornare i claim.
+          Hai fatto accesso con <strong>{user.email}</strong>. Se questo è il tuo account PT/Admin, completa la verifica qui
+          sotto.
         </p>
         {canBootstrapAdmin ? (
           <button className="btn" disabled={loading} onClick={() => void bootstrap()} type="button">
-            Sono PT: bootstrap admin
+            Attiva account PT/Admin
           </button>
         ) : (
           <p className="hint">
-            Questo account non è abilitato al bootstrap admin. Usa l&apos;account PT oppure vai su onboarding cliente.
+            Questo account non è tra quelli autorizzati come PT/Admin. Esci e accedi con l&apos;account corretto.
           </p>
         )}
         <button className="btn btn-ghost" disabled={loading} onClick={() => void refreshRole()} type="button">
-          Aggiorna token ruolo
+          Verifica di nuovo accesso
         </button>
         <button className="btn btn-ghost" disabled={loading} onClick={() => void logoutCurrentUser()} type="button">
           Esci e cambia account
         </button>
         <p className="hint">
-          Utente normale? Vai su <Link to="/onboarding">onboarding cliente</Link>.
+          Accesso utente standard: <Link to="/onboarding">continua onboarding</Link>.
         </p>
         {message ? <p className="message">{message}</p> : null}
       </section>

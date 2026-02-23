@@ -161,6 +161,12 @@ textarea {
   font-size: 14px;
 }
 
+.divider {
+  height: 1px;
+  background: rgba(18, 18, 18, 0.12);
+  margin: 6px 0;
+}
+
 .message {
   font-size: 14px;
   color: var(--danger);
