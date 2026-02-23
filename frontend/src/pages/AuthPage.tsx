@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
+import { InstallAppBanner } from '../components/InstallAppBanner';
 import { useToast } from '../components/ToastProvider';
 import {
   completeGoogleRedirect,
@@ -84,6 +85,7 @@ export function AuthPage() {
       return (
         <main className="page page-center">
           <section className="card auth-card">
+            <img className="auth-logo" src="/brand/logo.svg" alt="Beastly Workout logo" />
             <p className="eyebrow">Beastly Workout</p>
             <h1>Accesso Coach</h1>
             <p className="hero-sub">{completingCoachAccess ? 'Attendi un attimo...' : 'Sto verificando il tuo account.'}</p>
@@ -168,6 +170,7 @@ export function AuthPage() {
   return (
     <main className="page page-center">
       <section className="card auth-card">
+        <img className="auth-logo" src="/brand/logo.svg" alt="Beastly Workout logo" />
         <p className="eyebrow">Beastly Workout</p>
         <h1>Accedi con Google</h1>
         <p className="hero-sub">Entra in pochi secondi e inizia subito il tuo percorso.</p>
@@ -184,6 +187,7 @@ export function AuthPage() {
         </button>
 
         {message ? <p className="message">{message}</p> : null}
+        <InstallAppBanner />
       </section>
     </main>
   );
