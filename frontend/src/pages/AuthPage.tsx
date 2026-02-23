@@ -20,10 +20,39 @@ export function AuthPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [completingCoachAccess, setCompletingCoachAccess] = useState(false);
 
   useEffect(() => {
     void completeGoogleRedirect();
   }, []);
+
+  useEffect(() => {
+    async function completeCoachAccess() {
+      if (!user || role) return;
+      const intent = sessionStorage.getItem(LOGIN_INTENT_KEY);
+      if (intent !== 'coach' || !isAllowedAdminEmail(user.email)) return;
+
+      setCompletingCoachAccess(true);
+      setMessage("Sto completando l'accesso PT/Admin...");
+      try {
+        await bootstrapFirstAdmin();
+        await refreshIdTokenClaims();
+        const nextRole = await getCurrentUserRole(user);
+        if (nextRole === 'admin' || nextRole === 'trainer') {
+          sessionStorage.removeItem(LOGIN_INTENT_KEY);
+          navigate('/app/coach', {replace: true});
+          return;
+        }
+        setMessage('Accesso PT/Admin non pronto, riprova tra pochi secondi.');
+      } catch (error) {
+        setMessage(toMessage(error));
+      } finally {
+        setCompletingCoachAccess(false);
+      }
+    }
+
+    void completeCoachAccess();
+  }, [user, role, navigate]);
 
   if (user && role) {
     sessionStorage.removeItem(LOGIN_INTENT_KEY);
@@ -31,8 +60,21 @@ export function AuthPage() {
   }
   if (user && !role) {
     const intent = sessionStorage.getItem(LOGIN_INTENT_KEY);
-    const isAdminEmail = isAllowedAdminEmail(user.email);
-    if (intent === 'coach' && isAdminEmail) return <Navigate to="/missing-role" replace />;
+    if (intent === 'coach' && isAllowedAdminEmail(user.email)) {
+      return (
+        <main className="page page-center">
+          <section className="card auth-card">
+            <p className="eyebrow">Beastly Workout</p>
+            <h1>Accesso PT/Admin</h1>
+            <p className="hero-sub">{completingCoachAccess ? 'Attendi un attimo...' : 'Sto verificando il tuo profilo.'}</p>
+            {message ? <p className="message">{message}</p> : null}
+            <button className="btn btn-ghost" disabled={completingCoachAccess} onClick={() => void logoutCurrentUser()} type="button">
+              Esci e cambia account
+            </button>
+          </section>
+        </main>
+      );
+    }
     return <Navigate to="/app/client" replace />;
   }
 
@@ -79,6 +121,7 @@ export function AuthPage() {
       await refreshIdTokenClaims();
       const userRole = await getCurrentUserRole(result.user);
       if (userRole === 'admin' || userRole === 'trainer') {
+        sessionStorage.removeItem(LOGIN_INTENT_KEY);
         navigate('/app/coach', { replace: true });
         return;
       }

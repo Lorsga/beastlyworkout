@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 
 import { createUserProfile, logoutCurrentUser, setUserPrivateDoc, useAuthState } from '../lib';
 import { toMessage } from '../utils/firestore';
@@ -94,9 +94,6 @@ export function OnboardingPage() {
           Esci e cambia account
         </button>
 
-        <p className="hint">
-          Sei PT/Admin? Vai a <Link to="/missing-role">accesso area coach</Link>.
-        </p>
         {message ? <p className="message">{message}</p> : null}
       </section>
     </main>

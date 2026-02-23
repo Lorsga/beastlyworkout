@@ -1,7 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
-import { isAllowedAdminEmail } from './config/admin';
 import { useAuthState } from './lib';
 
 const AuthPage = lazy(() => import('./pages/AuthPage').then((module) => ({ default: module.AuthPage })));
@@ -10,9 +9,6 @@ const ClientDashboardPage = lazy(() =>
 );
 const CoachDashboardPage = lazy(() =>
   import('./pages/CoachDashboardPage').then((module) => ({ default: module.CoachDashboardPage })),
-);
-const MissingRolePage = lazy(() =>
-  import('./pages/MissingRolePage').then((module) => ({ default: module.MissingRolePage })),
 );
 const OnboardingPage = lazy(() =>
   import('./pages/OnboardingPage').then((module) => ({ default: module.OnboardingPage })),
@@ -43,8 +39,6 @@ function ProtectedRoleRoute({
   if (!user) return <Navigate to="/auth" replace />;
   if (!role) {
     if (allow.includes('client')) return children;
-    const intent = sessionStorage.getItem(LOGIN_INTENT_KEY);
-    if (intent === 'coach' && isAllowedAdminEmail(user.email)) return <Navigate to="/missing-role" replace />;
     return <Navigate to="/auth" replace />;
   }
   if (!allow.includes(role)) return <Navigate to={role === 'client' ? '/app/client' : '/app/coach'} replace />;
@@ -58,8 +52,6 @@ function HomeRedirect() {
   if (initializing) return <LoadingScreen />;
   if (!user) return <Navigate to="/auth" replace />;
   if (!role) {
-    const intent = sessionStorage.getItem(LOGIN_INTENT_KEY);
-    if (intent === 'coach' && isAllowedAdminEmail(user.email)) return <Navigate to="/missing-role" replace />;
     return <Navigate to="/app/client" replace />;
   }
   return <Navigate to={role === 'client' ? '/app/client' : '/app/coach'} replace />;
@@ -72,7 +64,6 @@ export function App() {
         <Route path="/" element={<HomeRedirect />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
-        <Route path="/missing-role" element={<MissingRolePage />} />
         <Route
           path="/app/coach"
           element={
