@@ -141,6 +141,7 @@ export function CoachDashboardPage() {
   const [planTitle, setPlanTitle] = useState('');
   const [exercises, setExercises] = useState([{name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''}]);
   const isUploadingMedia = uploadingExerciseIndex !== null;
+  const [savingTitle, setSavingTitle] = useState(false);
 
   const existingPlanForClient = plans.find((plan) => plan.id === selectedClientId) ?? plans.find((plan) => plan.clientId === selectedClientId);
   const selectedClientWhatsappUrl = buildClientWhatsappUrl(
@@ -184,6 +185,36 @@ export function CoachDashboardPage() {
       .filter((item) => item.name.trim().length > 0);
     setExercises(nextExercises.length > 0 ? nextExercises : [{name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''}]);
   }, [selectedClientId, existingPlanForClient?.id]);
+
+  useEffect(() => {
+    if (!existingPlanForClient) return;
+    const nextTitle = planTitle.trim();
+    const currentTitle = asText(existingPlanForClient.title).trim();
+    if (!nextTitle || nextTitle === currentTitle) return;
+
+    const timer = window.setTimeout(async () => {
+      try {
+        setSavingTitle(true);
+        await updatePlanAsCoach(existingPlanForClient.id, {title: nextTitle});
+        setPlans((prev) =>
+          prev.map((plan) =>
+            plan.id === existingPlanForClient.id
+              ? {
+                  ...plan,
+                  title: nextTitle,
+                }
+              : plan,
+          ),
+        );
+      } catch (error) {
+        showError(toMessage(error));
+      } finally {
+        setSavingTitle(false);
+      }
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [planTitle, existingPlanForClient?.id]);
 
   async function loadData() {
     if (!role) return;
@@ -375,6 +406,7 @@ export function CoachDashboardPage() {
           Titolo programma
           <input value={planTitle} onChange={(event) => setPlanTitle(event.target.value)} placeholder="Forza 4 settimane" />
         </label>
+        {existingPlanForClient ? <p className="hint">{savingTitle ? 'Salvataggio titolo in corso...' : 'Titolo salvato automaticamente.'}</p> : null}
         <p className="hint">
           {existingPlanForClient ? 'Questo cliente ha già una scheda: puoi modificarla.' : 'Questo cliente non ha ancora una scheda: ne creerai una nuova.'}
         </p>
