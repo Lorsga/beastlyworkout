@@ -14,7 +14,7 @@ export function AuthPage() {
   }, []);
 
   if (user && role) return <Navigate to={role === 'client' ? '/app/client' : '/app/coach'} replace />;
-  if (user && !role) return <Navigate to="/missing-role" replace />;
+  if (user && !role) return <Navigate to="/onboarding" replace />;
 
   async function submitGoogle() {
     setLoading(true);
@@ -42,11 +42,11 @@ export function AuthPage() {
           {loading ? 'Connessione...' : 'Continua con Google'}
         </button>
         <p className="hint">Niente password locale: autenticazione unica con Google.</p>
+        <p className="hint">
+          Sei PT/Admin? Vai a <Link to="/missing-role">setup ruolo admin</Link>.
+        </p>
 
         {message ? <p className="message">{message}</p> : null}
-        <p className="hint">
-          Primo setup admin? Vai a <Link to="/missing-role">bootstrap ruolo</Link>.
-        </p>
       </section>
     </main>
   );

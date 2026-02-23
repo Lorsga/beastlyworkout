@@ -13,6 +13,9 @@ const CoachDashboardPage = lazy(() =>
 const MissingRolePage = lazy(() =>
   import('./pages/MissingRolePage').then((module) => ({ default: module.MissingRolePage })),
 );
+const OnboardingPage = lazy(() =>
+  import('./pages/OnboardingPage').then((module) => ({ default: module.OnboardingPage })),
+);
 
 function LoadingScreen() {
   return (
@@ -36,7 +39,7 @@ function ProtectedRoleRoute({
 
   if (initializing) return <LoadingScreen />;
   if (!user) return <Navigate to="/auth" replace />;
-  if (!role) return <Navigate to="/missing-role" replace />;
+  if (!role) return <Navigate to="/onboarding" replace />;
   if (!allow.includes(role)) return <Navigate to={role === 'client' ? '/app/client' : '/app/coach'} replace />;
 
   return children;
@@ -47,7 +50,7 @@ function HomeRedirect() {
 
   if (initializing) return <LoadingScreen />;
   if (!user) return <Navigate to="/auth" replace />;
-  if (!role) return <Navigate to="/missing-role" replace />;
+  if (!role) return <Navigate to="/onboarding" replace />;
   return <Navigate to={role === 'client' ? '/app/client' : '/app/coach'} replace />;
 }
 
@@ -57,6 +60,7 @@ export function App() {
       <Routes>
         <Route path="/" element={<HomeRedirect />} />
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/missing-role" element={<MissingRolePage />} />
         <Route
           path="/app/coach"

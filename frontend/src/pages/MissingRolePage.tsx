@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 
-import { bootstrapFirstAdmin, refreshIdTokenClaims, useAuthState } from '../lib';
+import { bootstrapFirstAdmin, logoutCurrentUser, refreshIdTokenClaims, useAuthState } from '../lib';
 import { toMessage } from '../utils/firestore';
+
+const ADMIN_BOOTSTRAP_EMAILS = new Set(['lrnz.sga@gmail.com']);
 
 export function MissingRolePage() {
   const { user, role } = useAuthState();
@@ -11,6 +13,7 @@ export function MissingRolePage() {
 
   if (!user) return <Navigate to="/auth" replace />;
   if (role) return <Navigate to={role === 'client' ? '/app/client' : '/app/coach'} replace />;
+  const canBootstrapAdmin = ADMIN_BOOTSTRAP_EMAILS.has((user.email ?? '').toLowerCase());
 
   async function bootstrap() {
     setLoading(true);
@@ -42,18 +45,28 @@ export function MissingRolePage() {
     <main className="page page-center">
       <section className="card auth-card">
         <p className="eyebrow">Ruolo non trovato</p>
-        <h1>Completa bootstrap utente</h1>
+        <h1>Setup ruolo PT/Admin</h1>
         <p className="hero-sub">
-          L&apos;utente è autenticato ma non ha claim di ruolo. Puoi forzare bootstrap primo admin o aggiornare i claim.
+          Sei autenticato come <strong>{user.email}</strong> ma non hai claim ruolo. Da qui puoi completare setup admin o
+          aggiornare i claim.
         </p>
-        <button className="btn" disabled={loading} onClick={() => void bootstrap()} type="button">
-          Bootstrap primo admin
-        </button>
+        {canBootstrapAdmin ? (
+          <button className="btn" disabled={loading} onClick={() => void bootstrap()} type="button">
+            Sono PT: bootstrap admin
+          </button>
+        ) : (
+          <p className="hint">
+            Questo account non è abilitato al bootstrap admin. Usa l&apos;account PT oppure vai su onboarding cliente.
+          </p>
+        )}
         <button className="btn btn-ghost" disabled={loading} onClick={() => void refreshRole()} type="button">
           Aggiorna token ruolo
         </button>
+        <button className="btn btn-ghost" disabled={loading} onClick={() => void logoutCurrentUser()} type="button">
+          Esci e cambia account
+        </button>
         <p className="hint">
-          Dopo assegnazione ruolo via backend, usa refresh token e torna a <Link to="/auth">login</Link>.
+          Utente normale? Vai su <Link to="/onboarding">onboarding cliente</Link>.
         </p>
         {message ? <p className="message">{message}</p> : null}
       </section>
