@@ -145,6 +145,8 @@ export function ClientDashboardPage() {
         .find((item) => new Date(item.startsAt).getTime() > Date.now()),
     [sessions],
   );
+  const topPlan = plans[0];
+  const topPlanExercises = Array.isArray(topPlan?.exercises) ? topPlan.exercises : [];
 
   return (
     <AppShell role="client" subtitle="Tieni traccia di allenamenti e progressi in modo semplice." title="La tua area">
@@ -159,11 +161,11 @@ export function ClientDashboardPage() {
 
       <article className="card">
         <h2>La tua scheda tecnica</h2>
-        {plans[0] ? (
+        {topPlan ? (
           <>
-            <p className="hint"><strong>{plans[0].title}</strong></p>
+            <p className="hint"><strong>{topPlan.title}</strong></p>
             <ul className="list">
-              {(plans[0].exercises ?? []).map((exercise, index) => (
+              {topPlanExercises.map((exercise, index) => (
                 <li key={`plan-ex-${index}`}>
                   <strong>{exercise.name || `Esercizio ${index + 1}`}</strong>
                   {' · '}
