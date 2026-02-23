@@ -11,7 +11,7 @@ function LoadingScreen() {
   return (
     <main className="page page-center">
       <div className="card">
-        <p className="eyebrow">Gym PT</p>
+        <p className="eyebrow">Beastly Workout</p>
         <h1>Caricamento in corso</h1>
       </div>
     </main>
