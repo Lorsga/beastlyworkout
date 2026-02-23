@@ -42,6 +42,27 @@ interface OnboardingDoc {
   notes?: string;
 }
 
+function asText(value: unknown): string {
+  return typeof value === 'string' ? value : value == null ? '' : String(value);
+}
+
+function normalizePlanExercises(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const raw = item as Record<string, unknown>;
+      return {
+        name: asText(raw.name),
+        sets: Number(raw.sets ?? 3) || 3,
+        reps: asText(raw.reps) || '10',
+        weight: asText(raw.weight),
+        mediaUrl: asText(raw.mediaUrl),
+      };
+    })
+    .filter((item): item is {name: string; sets: number; reps: string; weight: string; mediaUrl: string} => Boolean(item));
+}
+
 export function CoachDashboardPage() {
   const { role, user } = useAuthState();
   const { showError, showSuccess } = useToast();
@@ -85,14 +106,7 @@ export function CoachDashboardPage() {
     }
 
     setPlanTitle(existingPlanForClient.title ?? '');
-    const nextExercises = (existingPlanForClient.exercises ?? [])
-      .map((item) => ({
-        name: item.name ?? '',
-        sets: Number(item.sets ?? 3),
-        reps: item.reps ?? '10',
-        weight: item.weight ?? '',
-        mediaUrl: item.mediaUrl ?? '',
-      }))
+    const nextExercises = normalizePlanExercises(existingPlanForClient.exercises)
       .filter((item) => item.name.trim().length > 0);
     setExercises(nextExercises.length > 0 ? nextExercises : [{name: '', sets: 3, reps: '10', weight: '', mediaUrl: ''}]);
   }, [selectedClientId, existingPlanForClient?.id]);
@@ -109,8 +123,8 @@ export function CoachDashboardPage() {
       const candidates = allUsers
         .filter((item) => item.id !== user?.uid)
         .sort((a, b) => {
-          const aLabel = (a.displayName || a.email || a.id).toLowerCase();
-          const bLabel = (b.displayName || b.email || b.id).toLowerCase();
+          const aLabel = asText(a.displayName || a.email || a.id).toLowerCase();
+          const bLabel = asText(b.displayName || b.email || b.id).toLowerCase();
           return aLabel.localeCompare(bLabel);
         });
       setRegisteredClients(candidates);
@@ -231,7 +245,7 @@ export function CoachDashboardPage() {
             {registeredClients.length === 0 ? <option value="">Nessun cliente disponibile</option> : null}
             {registeredClients.map((client) => (
               <option key={client.id} value={client.id}>
-                {client.displayName?.trim() || client.email || client.id}
+                {asText(client.displayName).trim() || asText(client.email) || client.id}
               </option>
             ))}
           </select>

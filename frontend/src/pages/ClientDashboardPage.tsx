@@ -46,6 +46,23 @@ interface MetricDoc {
   measuredAt: string;
 }
 
+function normalizeExercises(value: unknown): Array<{ name: string; sets: number; reps: string; weight: string; mediaUrl: string }> {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const raw = item as Record<string, unknown>;
+      return {
+        name: typeof raw.name === 'string' ? raw.name : '',
+        sets: typeof raw.sets === 'number' ? raw.sets : Number(raw.sets ?? 0) || 0,
+        reps: typeof raw.reps === 'string' ? raw.reps : '',
+        weight: typeof raw.weight === 'string' ? raw.weight : '',
+        mediaUrl: typeof raw.mediaUrl === 'string' ? raw.mediaUrl : '',
+      };
+    })
+    .filter((item): item is { name: string; sets: number; reps: string; weight: string; mediaUrl: string } => Boolean(item));
+}
+
 export function ClientDashboardPage() {
   const { role, user } = useAuthState();
   const navigate = useNavigate();
@@ -146,7 +163,7 @@ export function ClientDashboardPage() {
     [sessions],
   );
   const topPlan = plans[0];
-  const topPlanExercises = Array.isArray(topPlan?.exercises) ? topPlan.exercises : [];
+  const topPlanExercises = normalizeExercises(topPlan?.exercises);
 
   return (
     <AppShell role="client" subtitle="Tieni traccia di allenamenti e progressi in modo semplice." title="La tua area">

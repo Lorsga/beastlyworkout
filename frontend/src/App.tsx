@@ -28,6 +28,10 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: bo
     return {hasError: true};
   }
 
+  componentDidCatch(error: Error) {
+    console.error('App render error:', error);
+  }
+
   render() {
     if (this.state.hasError) {
       return (
@@ -36,6 +40,9 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: bo
             <p className="eyebrow">Beastly Workout</p>
             <h1>Qualcosa non ha funzionato</h1>
             <p className="hero-sub">Ricarica la pagina o esci e rientra nel tuo profilo.</p>
+            <button className="btn btn-ghost" type="button" onClick={() => window.location.assign('/auth')}>
+              Torna all&apos;accesso
+            </button>
           </section>
         </main>
       );
