@@ -219,6 +219,13 @@ textarea {
   cursor: pointer;
 }
 
+a.btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -227,6 +234,16 @@ textarea {
 .btn-ghost {
   background: rgba(24, 33, 38, 0.06);
   color: var(--text);
+}
+
+.btn-whatsapp {
+  background: linear-gradient(120deg, #15803d, #22c55e);
+  color: #fff;
+}
+
+.btn-disabled {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .btn-link {
@@ -291,6 +308,14 @@ textarea {
   padding-left: 18px;
   display: grid;
   gap: 8px;
+}
+
+.mobile-only {
+  display: block;
+}
+
+.desktop-only {
+  display: none;
 }
 
 .mobile-nav {
@@ -388,6 +413,14 @@ textarea {
     left: auto;
     width: min(380px, calc(100vw - 32px));
     bottom: 20px;
+  }
+
+  .mobile-only {
+    display: none;
+  }
+
+  .desktop-only {
+    display: grid;
   }
 }
 

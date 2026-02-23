@@ -9,6 +9,7 @@ import {
   useAuthState,
 } from '../lib';
 import { AppShell } from '../components/AppShell';
+import { buildWhatsAppUrl, HAS_PT_WHATSAPP } from '../config/support';
 import { mapDocs, toMessage } from '../utils/firestore';
 
 interface PlanDoc {
@@ -79,6 +80,7 @@ export function ClientDashboardPage() {
   const [loading, setLoading] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [mediaPreview, setMediaPreview] = useState<{ url: string; label: string } | null>(null);
+  const whatsappMessage = 'Ciao coach, avrei bisogno di un feedback sulla mia scheda.';
 
   useEffect(() => {
     async function checkOnboardingStatus() {
@@ -164,7 +166,43 @@ export function ClientDashboardPage() {
   }
 
   return (
-    <AppShell role="client" subtitle="Tieni traccia di allenamenti e progressi in modo semplice." title="La tua area">
+    <AppShell
+      role="client"
+      subtitle="Tieni traccia di allenamenti e progressi in modo semplice."
+      title="La tua area"
+      headerAction={
+        <div className="mobile-only">
+          <a
+            className={`btn btn-whatsapp ${HAS_PT_WHATSAPP ? '' : 'btn-disabled'}`.trim()}
+            href={HAS_PT_WHATSAPP ? buildWhatsAppUrl(whatsappMessage) : '#'}
+            onClick={(event) => {
+              if (!HAS_PT_WHATSAPP) event.preventDefault();
+            }}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Scrivi al tuo PT su WhatsApp
+          </a>
+        </div>
+      }
+    >
+      <article className="card desktop-only">
+        <h2>Parla con il tuo Personal Trainer</h2>
+        <p className="hint">Per feedback sulla scheda o qualsiasi dubbio, scrivi direttamente su WhatsApp.</p>
+        <a
+          className={`btn btn-whatsapp ${HAS_PT_WHATSAPP ? '' : 'btn-disabled'}`.trim()}
+          href={HAS_PT_WHATSAPP ? buildWhatsAppUrl(whatsappMessage) : '#'}
+          onClick={(event) => {
+            if (!HAS_PT_WHATSAPP) event.preventDefault();
+          }}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Apri chat WhatsApp
+        </a>
+        {!HAS_PT_WHATSAPP ? <p className="message">Numero WhatsApp PT non ancora configurato.</p> : null}
+      </article>
+
       <article className="card">
         <h2>La tua scheda tecnica</h2>
         {topPlan ? (

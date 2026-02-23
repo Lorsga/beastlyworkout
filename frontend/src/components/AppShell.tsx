@@ -8,11 +8,13 @@ export function AppShell({
   role,
   title,
   subtitle,
+  headerAction,
   children,
 }: {
   role: AppRole;
   title: string;
   subtitle: string;
+  headerAction?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -21,6 +23,7 @@ export function AppShell({
         <p className="eyebrow">{role === 'client' ? 'Area Cliente' : 'Area Coach'}</p>
         <h1>{title}</h1>
         <p className="hero-sub">{subtitle}</p>
+        {headerAction}
         <button className="btn btn-ghost" type="button" onClick={() => void logoutCurrentUser()}>
           Esci dal profilo
         </button>
