@@ -18,4 +18,6 @@ npm --prefix frontend run dev
 - Role routing:
   - `/app/coach` for `admin|trainer`
   - `/app/client` for `client`
+- PT/Admin email allowlist is configurable with `frontend/.env`:
+  - `VITE_ADMIN_EMAILS=mail1@example.com,mail2@example.com`
 # beastlyworkout

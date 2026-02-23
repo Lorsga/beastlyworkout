@@ -1,0 +1,1 @@
+const o=["lrnz.sga@gmail.com"];function r(n){return n.trim().toLowerCase()}function t(n){const i=o.join(",");return new Set(i.split(",").map(r).filter(Boolean))}const e=t();function a(n){return n?e.has(r(n)):!1}export{a as i};

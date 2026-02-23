@@ -9,9 +9,9 @@ import {
   refreshIdTokenClaims,
   useAuthState,
 } from '../lib';
+import { isAllowedAdminEmail } from '../config/admin';
 import { toMessage } from '../utils/firestore';
 
-const ADMIN_EMAILS = new Set(['lrnz.sga@gmail.com']);
 const LOGIN_INTENT_KEY = 'bw_login_intent';
 
 export function AuthPage() {
@@ -30,7 +30,7 @@ export function AuthPage() {
   }
   if (user && !role) {
     const intent = sessionStorage.getItem(LOGIN_INTENT_KEY);
-    const isAdminEmail = ADMIN_EMAILS.has((user.email ?? '').toLowerCase());
+    const isAdminEmail = isAllowedAdminEmail(user.email);
     if (intent === 'coach' && isAdminEmail) return <Navigate to="/missing-role" replace />;
     return <Navigate to="/onboarding" replace />;
   }
@@ -68,8 +68,7 @@ export function AuthPage() {
         return;
       }
 
-      const email = result.user.email?.toLowerCase() ?? '';
-      if (!ADMIN_EMAILS.has(email)) {
+      if (!isAllowedAdminEmail(result.user.email)) {
         await logoutCurrentUser();
         setMessage('Questo account non è abilitato come PT/Admin. Usa accesso utente.');
         return;

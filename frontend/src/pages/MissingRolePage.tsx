@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 
+import { isAllowedAdminEmail } from '../config/admin';
 import { bootstrapFirstAdmin, logoutCurrentUser, refreshIdTokenClaims, useAuthState } from '../lib';
 import { toMessage } from '../utils/firestore';
-
-const ADMIN_BOOTSTRAP_EMAILS = new Set(['lrnz.sga@gmail.com']);
 
 export function MissingRolePage() {
   const { user, role } = useAuthState();
@@ -13,7 +12,7 @@ export function MissingRolePage() {
 
   if (!user) return <Navigate to="/auth" replace />;
   if (role) return <Navigate to={role === 'client' ? '/app/client' : '/app/coach'} replace />;
-  const canBootstrapAdmin = ADMIN_BOOTSTRAP_EMAILS.has((user.email ?? '').toLowerCase());
+  const canBootstrapAdmin = isAllowedAdminEmail(user.email);
 
   async function bootstrap() {
     setLoading(true);
