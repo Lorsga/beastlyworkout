@@ -222,7 +222,7 @@ export function ClientDashboardPage() {
                     <>
                       {' · '}
                       <button className="btn-link" type="button" onClick={() => setMediaPreview({ url: exercise.mediaUrl, label: exercise.name || `Esercizio ${index + 1}` })}>
-                        Apri media
+                        {toYouTubeEmbedUrl(exercise.mediaUrl) || isVideoUrl(exercise.mediaUrl) ? 'Apri video' : isImageUrl(exercise.mediaUrl) ? 'Apri immagine' : 'Apri link'}
                       </button>
                     </>
                   ) : null}
