@@ -6,11 +6,9 @@ import {
   getUserPrivateDoc,
   listPlansForRole,
   listRegisteredUsers,
-  setUserRole,
   uploadWorkoutMediaAsCoach,
   updatePlanAsCoach,
   useAuthState,
-  type AppRole,
 } from '../lib';
 import { AppShell } from '../components/AppShell';
 import { toMessage } from '../utils/firestore';
@@ -116,8 +114,6 @@ export function CoachDashboardPage() {
   const [planTitle, setPlanTitle] = useState('');
   const [exercises, setExercises] = useState([{name: '', sets: 3, reps: '10', weight: '', mediaUrl: ''}]);
 
-  const [targetUid, setTargetUid] = useState('');
-  const [targetRole, setTargetRole] = useState<AppRole>('client');
   const existingPlanForClient = plans.find((plan) => plan.id === selectedClientId) ?? plans.find((plan) => plan.clientId === selectedClientId);
 
   useEffect(() => {
@@ -440,27 +436,6 @@ export function CoachDashboardPage() {
             </button>
           </article>
         </section>
-      ) : null}
-
-      {role === 'admin' ? (
-        <article className="card">
-          <h2>Gestione accessi</h2>
-          <label>
-            Codice utente
-            <input value={targetUid} onChange={(event) => setTargetUid(event.target.value)} placeholder="Inserisci il codice utente" />
-          </label>
-          <label>
-            Profilo accesso
-            <select value={targetRole} onChange={(event) => setTargetRole(event.target.value as AppRole)}>
-              <option value="admin">Admin</option>
-              <option value="trainer">Coach</option>
-              <option value="client">Cliente</option>
-            </select>
-          </label>
-          <button className="btn" disabled={!targetUid || loading} onClick={() => void runAction(() => setUserRole(targetUid, targetRole), 'Accesso aggiornato.')} type="button">
-            Aggiorna accesso
-          </button>
-        </article>
       ) : null}
 
       <article className="card">

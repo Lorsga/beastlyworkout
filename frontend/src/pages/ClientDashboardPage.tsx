@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 import { useToast } from '../components/ToastProvider';
 import {
   getPlanByClientId,
   getUserProfile,
-  listMetricsForClient,
   listPlansForRole,
-  listSessionsForRole,
-  listWorkoutLogsForClient,
   useAuthState,
 } from '../lib';
 import { AppShell } from '../components/AppShell';
@@ -25,24 +22,6 @@ interface PlanDoc {
     weight?: string;
     mediaUrl?: string;
   }>;
-}
-
-interface SessionDoc {
-  startsAt: string;
-  type: string;
-}
-
-interface WorkoutLogDoc {
-  sessionDate: string;
-  notes: string;
-  trainerFeedback?: string;
-}
-
-interface MetricDoc {
-  metricType: string;
-  value: number;
-  unit: string;
-  measuredAt: string;
 }
 
 interface UserProfileDoc {
@@ -97,9 +76,6 @@ export function ClientDashboardPage() {
   const navigate = useNavigate();
   const { showError } = useToast();
   const [plans, setPlans] = useState<Array<PlanDoc & { id: string }>>([]);
-  const [sessions, setSessions] = useState<Array<SessionDoc & { id: string }>>([]);
-  const [logs, setLogs] = useState<Array<WorkoutLogDoc & { id: string }>>([]);
-  const [metrics, setMetrics] = useState<Array<MetricDoc & { id: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [mediaPreview, setMediaPreview] = useState<{ url: string; label: string } | null>(null);
@@ -160,20 +136,6 @@ export function ClientDashboardPage() {
         return aIsDirect - bIsDirect;
       });
       setPlans(mergedPlans);
-
-      const [sessionsResult, logsResult, metricsResult] = await Promise.allSettled([
-        listSessionsForRole('client'),
-        listWorkoutLogsForClient(),
-        listMetricsForClient(),
-      ]);
-
-      setSessions(sessionsResult.status === 'fulfilled' ? mapDocs<SessionDoc>(sessionsResult.value.docs) : []);
-      setLogs(logsResult.status === 'fulfilled' ? mapDocs<WorkoutLogDoc>(logsResult.value.docs) : []);
-      setMetrics(metricsResult.status === 'fulfilled' ? mapDocs<MetricDoc>(metricsResult.value.docs) : []);
-
-      if (sessionsResult.status === 'rejected' || logsResult.status === 'rejected' || metricsResult.status === 'rejected') {
-        showError('Alcune sezioni non sono ancora pronte, ma la tua scheda tecnica è disponibile.');
-      }
     } catch (error) {
       showError(toMessage(error));
     } finally {
@@ -185,13 +147,6 @@ export function ClientDashboardPage() {
     if (user && (role === 'client' || role === null)) void loadData();
   }, [role, user?.uid]);
 
-  const nextSession = useMemo(
-    () =>
-      [...sessions]
-        .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
-        .find((item) => new Date(item.startsAt).getTime() > Date.now()),
-    [sessions],
-  );
   const topPlan = plans[0];
   const topPlanExercises = normalizeExercises(topPlan?.exercises);
 
@@ -210,15 +165,6 @@ export function ClientDashboardPage() {
 
   return (
     <AppShell role="client" subtitle="Tieni traccia di allenamenti e progressi in modo semplice." title="La tua area">
-      <article className="card">
-        <h2>Riepilogo</h2>
-        <p className="hint">Programmi ricevuti: {plans.length}</p>
-        <p className="hint">Sessioni prenotate: {sessions.length}</p>
-        <p className="hint">Allenamenti registrati: {logs.length}</p>
-        <p className="hint">Progressi inseriti: {metrics.length}</p>
-        {nextSession ? <p className="message success">Prossima sessione: {new Date(nextSession.startsAt).toLocaleString('it-IT')}</p> : null}
-      </article>
-
       <article className="card">
         <h2>La tua scheda tecnica</h2>
         {topPlan ? (
