@@ -448,7 +448,12 @@ export function CoachDashboardPage() {
             <p className="hint">Aggiungi esercizi uno alla volta per completare il programma.</p>
             {exercises.map((exercise, index) => (
               <article className="card" key={`exercise-${index}`} style={{boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)'}}>
-                <h2>Esercizio {index + 1}</h2>
+                <div className="exercise-head">
+                  <h2>Esercizio {index + 1}</h2>
+                  <button className="icon-btn" type="button" onClick={() => resetExercise(index)} aria-label={`Reset esercizio ${index + 1}`} title="Reset esercizio">
+                    ↻
+                  </button>
+                </div>
                 <label>
                   Nome esercizio
                   <input value={exercise.name} onChange={(event) => updateExercise(index, {name: event.target.value})} placeholder="Es. Squat bilanciere" />
@@ -506,9 +511,6 @@ export function CoachDashboardPage() {
                   </p>
                 ) : null}
                 {uploadingExerciseIndex === index ? <p className="hint">Caricamento media in corso...</p> : null}
-                <button className="btn btn-ghost" type="button" onClick={() => resetExercise(index)}>
-                  Reset esercizio
-                </button>
                 <button className="btn btn-ghost" type="button" onClick={() => removeExercise(index)}>
                   Rimuovi esercizio
                 </button>
