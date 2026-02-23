@@ -3,8 +3,6 @@ import { Navigate, useNavigate } from 'react-router-dom';
 
 import { useToast } from '../components/ToastProvider';
 import {
-  createMetricAsClient,
-  createWorkoutLogAsClient,
   getUserProfile,
   listMetricsForClient,
   listPlansForRole,
@@ -66,20 +64,12 @@ function normalizeExercises(value: unknown): Array<{ name: string; sets: number;
 export function ClientDashboardPage() {
   const { role, user } = useAuthState();
   const navigate = useNavigate();
-  const { showError, showSuccess } = useToast();
+  const { showError } = useToast();
   const [plans, setPlans] = useState<Array<PlanDoc & { id: string }>>([]);
   const [sessions, setSessions] = useState<Array<SessionDoc & { id: string }>>([]);
   const [logs, setLogs] = useState<Array<WorkoutLogDoc & { id: string }>>([]);
   const [metrics, setMetrics] = useState<Array<MetricDoc & { id: string }>>([]);
   const [loading, setLoading] = useState(false);
-
-  const [trainerId, setTrainerId] = useState('');
-  const [logDate, setLogDate] = useState('');
-  const [logNotes, setLogNotes] = useState('');
-  const [metricType, setMetricType] = useState('weight');
-  const [metricValue, setMetricValue] = useState<number>(0);
-  const [metricUnit, setMetricUnit] = useState('kg');
-  const [metricDate, setMetricDate] = useState('');
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
   useEffect(() => {
@@ -117,7 +107,6 @@ export function ClientDashboardPage() {
       setSessions(mapDocs<SessionDoc>(sessionsSnap.docs));
       setLogs(mapDocs<WorkoutLogDoc>(logsSnap.docs));
       setMetrics(mapDocs<MetricDoc>(metricsSnap.docs));
-      if (!trainerId && mappedPlans[0]?.trainerId) setTrainerId(mappedPlans[0].trainerId);
     } catch (error) {
       showError(toMessage(error));
     } finally {
@@ -150,19 +139,6 @@ export function ClientDashboardPage() {
         </section>
       </main>
     );
-  }
-
-  async function runAction(action: () => Promise<unknown>, okMessage: string) {
-    setLoading(true);
-    try {
-      await action();
-      showSuccess(okMessage);
-      await loadData();
-    } catch (error) {
-      showError(toMessage(error));
-    } finally {
-      setLoading(false);
-    }
   }
 
   return (
@@ -206,84 +182,6 @@ export function ClientDashboardPage() {
         ) : (
           <p className="hint">La tua scheda non è ancora disponibile. Il coach la pubblicherà a breve.</p>
         )}
-      </article>
-
-      <article className="card">
-        <h2>Codice Coach</h2>
-        <label>
-          Codice del tuo coach
-          <input value={trainerId} onChange={(event) => setTrainerId(event.target.value)} placeholder="Inserisci il codice coach" />
-        </label>
-      </article>
-
-      <article className="card">
-        <h2>Registra allenamento</h2>
-        <label>
-          Data allenamento
-          <input value={logDate} onChange={(event) => setLogDate(event.target.value)} type="date" />
-        </label>
-        <label>
-          Com'è andata?
-          <textarea value={logNotes} onChange={(event) => setLogNotes(event.target.value)} placeholder="Scrivi come ti sei sentito durante l'allenamento" />
-        </label>
-        <button
-          className="btn"
-          disabled={!trainerId || !logDate || loading}
-          onClick={() =>
-            void runAction(
-              () =>
-                createWorkoutLogAsClient({
-                  trainerId,
-                  sessionDate: logDate,
-                  notes: logNotes,
-                }),
-              'Allenamento salvato.',
-            )
-          }
-          type="button"
-        >
-          Salva allenamento
-        </button>
-      </article>
-
-      <article className="card">
-        <h2>Aggiorna progressi</h2>
-        <label>
-          Tipo di dato
-          <input value={metricType} onChange={(event) => setMetricType(event.target.value)} placeholder="Es. peso, massa grassa, frequenza" />
-        </label>
-        <label>
-          Valore
-          <input value={metricValue} onChange={(event) => setMetricValue(Number(event.target.value))} type="number" />
-        </label>
-        <label>
-          Unità
-          <input value={metricUnit} onChange={(event) => setMetricUnit(event.target.value)} placeholder="Es. kg, %, bpm" />
-        </label>
-        <label>
-          Data
-          <input value={metricDate} onChange={(event) => setMetricDate(event.target.value)} type="date" />
-        </label>
-        <button
-          className="btn"
-          disabled={!trainerId || !metricDate || loading}
-          onClick={() =>
-            void runAction(
-              () =>
-                createMetricAsClient({
-                  trainerId,
-                  metricType,
-                  value: metricValue,
-                  unit: metricUnit,
-                  measuredAt: metricDate,
-                }),
-              'Progresso salvato.',
-            )
-          }
-          type="button"
-        >
-          Salva progresso
-        </button>
       </article>
 
       <article className="card">
