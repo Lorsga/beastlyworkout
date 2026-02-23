@@ -129,6 +129,16 @@ export function ClientDashboardPage() {
     if (role === 'client') void loadData();
   }, [role]);
 
+  const nextSession = useMemo(
+    () =>
+      [...sessions]
+        .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+        .find((item) => new Date(item.startsAt).getTime() > Date.now()),
+    [sessions],
+  );
+  const topPlan = plans[0];
+  const topPlanExercises = normalizeExercises(topPlan?.exercises);
+
   if (!user) return <Navigate to="/auth" replace />;
   if (checkingOnboarding) {
     return (
@@ -154,16 +164,6 @@ export function ClientDashboardPage() {
       setLoading(false);
     }
   }
-
-  const nextSession = useMemo(
-    () =>
-      [...sessions]
-        .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
-        .find((item) => new Date(item.startsAt).getTime() > Date.now()),
-    [sessions],
-  );
-  const topPlan = plans[0];
-  const topPlanExercises = normalizeExercises(topPlan?.exercises);
 
   return (
     <AppShell role="client" subtitle="Tieni traccia di allenamenti e progressi in modo semplice." title="La tua area">
