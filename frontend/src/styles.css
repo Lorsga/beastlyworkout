@@ -24,6 +24,10 @@ body,
   min-height: 100%;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   font-family: 'Sora', sans-serif;
   color: var(--text);
@@ -202,6 +206,7 @@ select {
   border-radius: 12px;
   color: var(--text);
   padding: 11px 12px;
+  font-size: 16px;
 }
 
 textarea {
