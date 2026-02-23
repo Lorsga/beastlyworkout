@@ -239,6 +239,7 @@ a.btn {
 .btn-whatsapp {
   background: linear-gradient(120deg, #15803d, #22c55e);
   color: #fff;
+  width: 100%;
 }
 
 .btn-disabled {
