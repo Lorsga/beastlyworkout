@@ -50,7 +50,7 @@ export const createUserProfile = onDocumentCreated('users/{uid}', async (event) 
   }
 });
 
-export const setUserRole = onCall({region: 'us-central1', cors: allowedOrigins}, async (request) => {
+export const setUserRole = onCall({region: 'us-central1', cors: allowedOrigins, invoker: 'public'}, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');
   }
@@ -85,7 +85,9 @@ export const setUserRole = onCall({region: 'us-central1', cors: allowedOrigins},
   return {ok: true, uid: payload.uid, role: payload.role};
 });
 
-export const bootstrapFirstAdmin = onCall({region: 'us-central1', cors: allowedOrigins}, async (request) => {
+export const bootstrapFirstAdmin = onCall(
+  {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
+  async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');
   }
@@ -117,4 +119,5 @@ export const bootstrapFirstAdmin = onCall({region: 'us-central1', cors: allowedO
   );
 
   return {ok: true, uid, role: 'admin'};
-});
+  },
+);
