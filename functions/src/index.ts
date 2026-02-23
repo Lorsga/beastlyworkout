@@ -72,7 +72,6 @@ export const syncAdminRoleByEmail = onDocumentWritten('users/{uid}', async (even
   const currentClaims = userRecord.customClaims ?? {};
   if (currentClaims.role !== 'admin') {
     await admin.auth().setCustomUserClaims(uid, {...currentClaims, role: 'admin'});
-    await admin.auth().revokeRefreshTokens(uid);
   }
 });
 
