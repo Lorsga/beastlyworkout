@@ -115,6 +115,10 @@ export async function listRegisteredUsers() {
   return getDocs(collection(db, 'users'));
 }
 
+export async function getUserPrivateDoc(uid: string, docId: string) {
+  return getDoc(doc(db, 'users', uid, 'private', docId));
+}
+
 export async function createPlanAsCoach(input: PlanInput) {
   const trainerId = requireUid();
   return addDoc(collection(db, 'plans'), {

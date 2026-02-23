@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 import {
   createMetricAsClient,
   createWorkoutLogAsClient,
+  getUserProfile,
   listMetricsForClient,
   listPlansForRole,
   listSessionsForRole,
@@ -37,7 +39,8 @@ interface MetricDoc {
 }
 
 export function ClientDashboardPage() {
-  const { role } = useAuthState();
+  const { role, user } = useAuthState();
+  const navigate = useNavigate();
   const [plans, setPlans] = useState<Array<PlanDoc & { id: string }>>([]);
   const [sessions, setSessions] = useState<Array<SessionDoc & { id: string }>>([]);
   const [logs, setLogs] = useState<Array<WorkoutLogDoc & { id: string }>>([]);
@@ -53,6 +56,28 @@ export function ClientDashboardPage() {
   const [metricValue, setMetricValue] = useState<number>(0);
   const [metricUnit, setMetricUnit] = useState('kg');
   const [metricDate, setMetricDate] = useState('');
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+
+  useEffect(() => {
+    async function checkOnboardingStatus() {
+      if (!user) return;
+      try {
+        const profileSnap = await getUserProfile(user.uid);
+        const profile = profileSnap.data() as { onboardingCompleted?: boolean } | undefined;
+        if (!profile?.onboardingCompleted) {
+          navigate('/onboarding', { replace: true });
+          return;
+        }
+      } catch {
+        navigate('/onboarding', { replace: true });
+        return;
+      } finally {
+        setCheckingOnboarding(false);
+      }
+    }
+
+    void checkOnboardingStatus();
+  }, [user, navigate]);
 
   async function loadData() {
     setLoading(true);
@@ -80,6 +105,19 @@ export function ClientDashboardPage() {
   useEffect(() => {
     if (role === 'client') void loadData();
   }, [role]);
+
+  if (!user) return <Navigate to="/auth" replace />;
+  if (checkingOnboarding) {
+    return (
+      <main className="page page-center">
+        <section className="card auth-card">
+          <p className="eyebrow">Beastly Workout</p>
+          <h1>Prepariamo la tua area</h1>
+          <p className="hero-sub">Sto verificando le informazioni del tuo profilo...</p>
+        </section>
+      </main>
+    );
+  }
 
   async function runAction(action: () => Promise<unknown>, okMessage: string) {
     setSuccessMessage('');

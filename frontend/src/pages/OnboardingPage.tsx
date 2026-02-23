@@ -15,7 +15,7 @@ export function OnboardingPage() {
   const [message, setMessage] = useState('');
 
   if (!user) return <Navigate to="/auth" replace />;
-  if (role) return <Navigate to={role === 'client' ? '/app/client' : '/app/coach'} replace />;
+  if (role === 'admin' || role === 'trainer') return <Navigate to="/app/coach" replace />;
   const userEmail = user.email ?? '';
 
   async function submitOnboarding() {
@@ -25,8 +25,10 @@ export function OnboardingPage() {
       await createUserProfile({
         displayName: displayName.trim(),
         email: userEmail,
+        role: 'client',
         requestedRole: 'client',
-        onboardingStatus: 'pending-role',
+        onboardingStatus: 'completed',
+        onboardingCompleted: true,
         onboardingUpdatedAt: new Date().toISOString(),
       });
       await setUserPrivateDoc('onboarding', {

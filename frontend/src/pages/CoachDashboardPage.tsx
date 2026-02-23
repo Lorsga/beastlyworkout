@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import {
   createPlanAsCoach,
   createSessionAsCoach,
+  getUserPrivateDoc,
   listPlansForRole,
   listRegisteredUsers,
   listSessionsForRole,
@@ -33,6 +34,13 @@ interface UserProfileDoc {
   requestedRole?: string;
 }
 
+interface OnboardingDoc {
+  goal?: string;
+  experienceLevel?: string;
+  trainingDaysPerWeek?: number;
+  notes?: string;
+}
+
 export function CoachDashboardPage() {
   const { role } = useAuthState();
   const [registeredClients, setRegisteredClients] = useState<Array<UserProfileDoc & { id: string }>>([]);
@@ -41,6 +49,7 @@ export function CoachDashboardPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [selectedClientOnboarding, setSelectedClientOnboarding] = useState<OnboardingDoc | null>(null);
 
   const [selectedClientId, setSelectedClientId] = useState('');
   const [planTitle, setPlanTitle] = useState('');
@@ -50,6 +59,23 @@ export function CoachDashboardPage() {
 
   const [targetUid, setTargetUid] = useState('');
   const [targetRole, setTargetRole] = useState<AppRole>('client');
+
+  useEffect(() => {
+    async function loadSelectedClientOnboarding() {
+      if (!selectedClientId) {
+        setSelectedClientOnboarding(null);
+        return;
+      }
+      try {
+        const onboardingSnap = await getUserPrivateDoc(selectedClientId, 'onboarding');
+        setSelectedClientOnboarding((onboardingSnap.data() as OnboardingDoc | undefined) ?? null);
+      } catch {
+        setSelectedClientOnboarding(null);
+      }
+    }
+
+    void loadSelectedClientOnboarding();
+  }, [selectedClientId]);
 
   async function loadData() {
     if (!role) return;
@@ -65,7 +91,7 @@ export function CoachDashboardPage() {
         id: docItem.id,
         ...(docItem.data() as UserProfileDoc),
       }));
-      const candidates = allUsers.filter((item) => item.role === 'client' || item.requestedRole === 'client');
+      const candidates = allUsers.filter((item) => item.role !== 'admin' && item.role !== 'trainer');
       setRegisteredClients(candidates);
       if (!selectedClientId && candidates[0]?.id) setSelectedClientId(candidates[0].id);
 
@@ -114,7 +140,7 @@ export function CoachDashboardPage() {
       title="Area Coach"
     >
       <article className="card">
-        <h2>Scegli un cliente</h2>
+        <h2>Crea scheda cliente</h2>
         <label>
           Clienti registrati
           <select value={selectedClientId} onChange={(event) => setSelectedClientId(event.target.value)}>
@@ -126,15 +152,25 @@ export function CoachDashboardPage() {
             ))}
           </select>
         </label>
-        <p className="hint">Il cliente scelto sarà usato per creare schede e sessioni.</p>
-      </article>
-
-      <article className="card">
-        <h2>Crea un programma</h2>
         <label>
           Titolo programma
           <input value={planTitle} onChange={(event) => setPlanTitle(event.target.value)} placeholder="Forza 4 settimane" />
         </label>
+        <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
+          <h2>Informazioni del cliente</h2>
+          <p className="hint">
+            Obiettivo: {selectedClientOnboarding?.goal?.trim() || 'Non disponibile'}
+          </p>
+          <p className="hint">
+            Livello: {selectedClientOnboarding?.experienceLevel || 'Non disponibile'}
+          </p>
+          <p className="hint">
+            Allenamenti a settimana: {selectedClientOnboarding?.trainingDaysPerWeek ?? 'Non disponibile'}
+          </p>
+          <p className="hint">
+            Note: {selectedClientOnboarding?.notes?.trim() || 'Nessuna nota inserita'}
+          </p>
+        </article>
         <button
           className="btn"
           disabled={!selectedClientId || !planTitle || loading}
