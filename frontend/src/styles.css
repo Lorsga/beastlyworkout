@@ -257,6 +257,52 @@ a.btn {
   padding: 0;
 }
 
+.plan-head {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(120deg, rgba(214, 40, 40, 0.1), rgba(255, 122, 0, 0.08));
+  border: 1px solid rgba(214, 40, 40, 0.15);
+}
+
+.plan-head h3 {
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.exercise-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.exercise-card {
+  border: 1px solid rgba(18, 18, 18, 0.1);
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.exercise-name {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.exercise-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.exercise-meta span {
+  font-size: 13px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: rgba(18, 18, 18, 0.07);
+}
+
 .hint {
   color: var(--muted);
   font-size: 14px;
@@ -422,6 +468,11 @@ a.btn {
 
   .desktop-only {
     display: grid;
+  }
+
+  .exercise-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
 }
 

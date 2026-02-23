@@ -207,28 +207,29 @@ export function ClientDashboardPage() {
         <h2>La tua scheda tecnica</h2>
         {topPlan ? (
           <>
-            <p className="hint"><strong>{topPlan.title}</strong></p>
-            <ul className="list">
+            <div className="plan-head">
+              <p className="hint">Programma attivo</p>
+              <h3>{topPlan.title}</h3>
+            </div>
+            <div className="exercise-grid">
               {topPlanExercises.map((exercise, index) => (
-                <li key={`plan-ex-${index}`}>
-                  <strong>{exercise.name || `Esercizio ${index + 1}`}</strong>
-                  {' · '}
-                  {exercise.sets ?? '-'} serie
-                  {' · '}
-                  {exercise.reps || '-'} reps
-                  {' · '}
-                  {exercise.weight || '-'}
+                <article className="exercise-card" key={`plan-ex-${index}`}>
+                  <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
+                  <div className="exercise-meta">
+                    <span>{exercise.sets ?? '-'} serie</span>
+                    <span>{exercise.reps || '-'} reps</span>
+                    <span>{exercise.weight || 'Peso libero'}</span>
+                  </div>
                   {exercise.mediaUrl ? (
-                    <>
-                      {' · '}
-                      <button className="btn-link" type="button" onClick={() => setMediaPreview({ url: exercise.mediaUrl, label: exercise.name || `Esercizio ${index + 1}` })}>
-                        {toYouTubeEmbedUrl(exercise.mediaUrl) || isVideoUrl(exercise.mediaUrl) ? 'Apri video' : isImageUrl(exercise.mediaUrl) ? 'Apri immagine' : 'Apri link'}
-                      </button>
-                    </>
-                  ) : null}
-                </li>
+                    <button className="btn-link" type="button" onClick={() => setMediaPreview({ url: exercise.mediaUrl, label: exercise.name || `Esercizio ${index + 1}` })}>
+                      {toYouTubeEmbedUrl(exercise.mediaUrl) || isVideoUrl(exercise.mediaUrl) ? 'Apri video' : isImageUrl(exercise.mediaUrl) ? 'Apri immagine' : 'Apri link'}
+                    </button>
+                  ) : (
+                    <p className="hint">Nessun media allegato</p>
+                  )}
+                </article>
               ))}
-            </ul>
+            </div>
           </>
         ) : (
           <p className="hint">La tua scheda non è ancora disponibile. Il coach la pubblicherà a breve.</p>
