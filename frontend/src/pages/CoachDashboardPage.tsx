@@ -3,11 +3,9 @@ import { useEffect, useState } from 'react';
 import { useToast } from '../components/ToastProvider';
 import {
   createPlanAsCoach,
-  createSessionAsCoach,
   getUserPrivateDoc,
   listPlansForRole,
   listRegisteredUsers,
-  listSessionsForRole,
   setUserRole,
   useAuthState,
   type AppRole,
@@ -19,12 +17,13 @@ interface PlanDoc {
   clientId: string;
   title: string;
   status: string;
-}
-
-interface SessionDoc {
-  clientId: string;
-  startsAt: string;
-  type: string;
+  exercises?: Array<{
+    name?: string;
+    sets?: number;
+    reps?: string;
+    weight?: string;
+    mediaUrl?: string;
+  }>;
 }
 
 interface UserProfileDoc {
@@ -47,15 +46,12 @@ export function CoachDashboardPage() {
   const { showError, showSuccess } = useToast();
   const [registeredClients, setRegisteredClients] = useState<Array<UserProfileDoc & { id: string }>>([]);
   const [plans, setPlans] = useState<Array<PlanDoc & { id: string }>>([]);
-  const [sessions, setSessions] = useState<Array<SessionDoc & { id: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [selectedClientOnboarding, setSelectedClientOnboarding] = useState<OnboardingDoc | null>(null);
 
   const [selectedClientId, setSelectedClientId] = useState('');
   const [planTitle, setPlanTitle] = useState('');
-  const [sessionType, setSessionType] = useState('check-in');
-  const [startsAt, setStartsAt] = useState('');
-  const [endsAt, setEndsAt] = useState('');
+  const [exercises, setExercises] = useState([{name: '', sets: 3, reps: '10', weight: '', mediaUrl: ''}]);
 
   const [targetUid, setTargetUid] = useState('');
   const [targetRole, setTargetRole] = useState<AppRole>('client');
@@ -81,10 +77,9 @@ export function CoachDashboardPage() {
     if (!role) return;
     setLoading(true);
     try {
-      const [usersSnap, plansSnap, sessionsSnap] = await Promise.all([
+      const [usersSnap, plansSnap] = await Promise.all([
         listRegisteredUsers(),
         listPlansForRole(role),
-        listSessionsForRole(role),
       ]);
       const allUsers = usersSnap.docs.map((docItem) => ({
         id: docItem.id,
@@ -98,12 +93,6 @@ export function CoachDashboardPage() {
         plansSnap.docs.map((docItem) => ({
           id: docItem.id,
           ...(docItem.data() as PlanDoc),
-        })),
-      );
-      setSessions(
-        sessionsSnap.docs.map((docItem) => ({
-          id: docItem.id,
-          ...(docItem.data() as SessionDoc),
         })),
       );
     } catch (error) {
@@ -130,6 +119,48 @@ export function CoachDashboardPage() {
     }
   }
 
+  function addExercise() {
+    setExercises((prev) => [...prev, {name: '', sets: 3, reps: '10', weight: '', mediaUrl: ''}]);
+  }
+
+  function removeExercise(index: number) {
+    setExercises((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== index)));
+  }
+
+  function updateExercise(index: number, patch: Partial<{name: string; sets: number; reps: string; weight: string; mediaUrl: string}>) {
+    setExercises((prev) => prev.map((item, idx) => (idx === index ? {...item, ...patch} : item)));
+  }
+
+  async function savePlan() {
+    const preparedExercises = exercises
+      .map((item) => ({
+        name: item.name.trim(),
+        sets: Number(item.sets) || 0,
+        reps: item.reps.trim(),
+        weight: item.weight.trim(),
+        mediaUrl: item.mediaUrl.trim(),
+      }))
+      .filter((item) => item.name.length > 0);
+
+    if (preparedExercises.length === 0) {
+      showError('Aggiungi almeno un esercizio con nome.');
+      return;
+    }
+
+    await runAction(
+      () =>
+        createPlanAsCoach({
+          clientId: selectedClientId,
+          title: planTitle,
+          status: 'active',
+          exercises: preparedExercises,
+        }),
+      'Scheda salvata e subito visibile al cliente.',
+    );
+    setPlanTitle('');
+    setExercises([{name: '', sets: 3, reps: '10', weight: '', mediaUrl: ''}]);
+  }
+
   return (
     <AppShell
       role={role === 'trainer' ? 'trainer' : 'admin'}
@@ -153,6 +184,42 @@ export function CoachDashboardPage() {
           Titolo programma
           <input value={planTitle} onChange={(event) => setPlanTitle(event.target.value)} placeholder="Forza 4 settimane" />
         </label>
+        {exercises.map((exercise, index) => (
+          <article className="card" key={`exercise-${index}`} style={{boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)'}}>
+            <h2>Esercizio {index + 1}</h2>
+            <label>
+              Nome esercizio
+              <input value={exercise.name} onChange={(event) => updateExercise(index, {name: event.target.value})} placeholder="Es. Squat bilanciere" />
+            </label>
+            <label>
+              Numero serie
+              <input
+                type="number"
+                min={1}
+                value={exercise.sets}
+                onChange={(event) => updateExercise(index, {sets: Number(event.target.value)})}
+              />
+            </label>
+            <label>
+              Ripetizioni
+              <input value={exercise.reps} onChange={(event) => updateExercise(index, {reps: event.target.value})} placeholder="Es. 8-10" />
+            </label>
+            <label>
+              Peso
+              <input value={exercise.weight} onChange={(event) => updateExercise(index, {weight: event.target.value})} placeholder="Es. 40kg o corpo libero" />
+            </label>
+            <label>
+              URL video o immagine
+              <input value={exercise.mediaUrl} onChange={(event) => updateExercise(index, {mediaUrl: event.target.value})} placeholder="https://..." />
+            </label>
+            <button className="btn btn-ghost" type="button" onClick={() => removeExercise(index)}>
+              Rimuovi esercizio
+            </button>
+          </article>
+        ))}
+        <button className="btn btn-ghost" type="button" onClick={addExercise}>
+          Aggiungi esercizio
+        </button>
         <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
           <h2>Informazioni del cliente</h2>
           <p className="hint">
@@ -171,50 +238,10 @@ export function CoachDashboardPage() {
         <button
           className="btn"
           disabled={!selectedClientId || !planTitle || loading}
-          onClick={() =>
-            void runAction(
-              () =>
-                createPlanAsCoach({
-                  clientId: selectedClientId,
-                  title: planTitle,
-                  status: 'active',
-                }),
-              'Scheda creata e già disponibile al cliente.',
-            )
-          }
+          onClick={() => void savePlan()}
           type="button"
         >
-          Salva programma
-        </button>
-      </article>
-
-      <article className="card">
-        <h2>Agenda sessioni (opzionale)</h2>
-        <p className="hint">Ti aiuta a segnare appuntamenti, check-in e richiami con il cliente.</p>
-        <label>
-          Data e ora inizio
-          <input value={startsAt} onChange={(event) => setStartsAt(event.target.value)} type="datetime-local" />
-        </label>
-        <label>
-          Data e ora fine
-          <input value={endsAt} onChange={(event) => setEndsAt(event.target.value)} type="datetime-local" />
-        </label>
-        <label>
-          Tipo sessione
-          <input value={sessionType} onChange={(event) => setSessionType(event.target.value)} placeholder="Es. allenamento, check-in" />
-        </label>
-        <button
-          className="btn"
-          disabled={!selectedClientId || !startsAt || !endsAt || loading}
-          onClick={() =>
-            void runAction(
-              () => createSessionAsCoach({ clientId: selectedClientId, startsAt, endsAt, type: sessionType }),
-              'Sessione pianificata con successo.',
-            )
-          }
-          type="button"
-        >
-          Salva sessione
+          Salva scheda tecnica
         </button>
       </article>
 
@@ -243,11 +270,10 @@ export function CoachDashboardPage() {
         <h2>Panoramica</h2>
         <p className="hint">Clienti registrati: {registeredClients.length}</p>
         <p className="hint">Programmi creati: {plans.length}</p>
-        <p className="hint">Sessioni in agenda: {sessions.length}</p>
         <ul className="list">
           {plans.slice(0, 5).map((plan) => (
             <li key={plan.id}>
-              <strong>{plan.title}</strong> · {plan.status} · cliente {plan.clientId}
+              <strong>{plan.title}</strong> · {plan.exercises?.length ?? 0} esercizi · cliente {plan.clientId}
             </li>
           ))}
         </ul>

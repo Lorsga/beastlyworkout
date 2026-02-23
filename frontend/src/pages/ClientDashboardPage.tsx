@@ -19,6 +19,13 @@ interface PlanDoc {
   trainerId: string;
   title: string;
   status: string;
+  exercises?: Array<{
+    name?: string;
+    sets?: number;
+    reps?: string;
+    weight?: string;
+    mediaUrl?: string;
+  }>;
 }
 
 interface SessionDoc {
@@ -148,6 +155,38 @@ export function ClientDashboardPage() {
         <p className="hint">Allenamenti registrati: {logs.length}</p>
         <p className="hint">Progressi inseriti: {metrics.length}</p>
         {nextSession ? <p className="message success">Prossima sessione: {new Date(nextSession.startsAt).toLocaleString('it-IT')}</p> : null}
+      </article>
+
+      <article className="card">
+        <h2>La tua scheda tecnica</h2>
+        {plans[0] ? (
+          <>
+            <p className="hint"><strong>{plans[0].title}</strong></p>
+            <ul className="list">
+              {(plans[0].exercises ?? []).map((exercise, index) => (
+                <li key={`plan-ex-${index}`}>
+                  <strong>{exercise.name || `Esercizio ${index + 1}`}</strong>
+                  {' · '}
+                  {exercise.sets ?? '-'} serie
+                  {' · '}
+                  {exercise.reps || '-'} reps
+                  {' · '}
+                  {exercise.weight || '-'}
+                  {exercise.mediaUrl ? (
+                    <>
+                      {' · '}
+                      <a href={exercise.mediaUrl} target="_blank" rel="noreferrer">
+                        Video/Immagine
+                      </a>
+                    </>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p className="hint">La tua scheda non è ancora disponibile. Il coach la pubblicherà a breve.</p>
+        )}
       </article>
 
       <article className="card">

@@ -30,6 +30,15 @@ export interface PlanInput {
   status: PlanStatus;
   title: string;
   description?: string;
+  exercises: PlanExerciseInput[];
+}
+
+export interface PlanExerciseInput {
+  name: string;
+  sets: number;
+  reps: string;
+  weight: string;
+  mediaUrl?: string;
 }
 
 export interface WorkoutLogInput {
@@ -127,6 +136,7 @@ export async function createPlanAsCoach(input: PlanInput) {
     status: input.status,
     title: input.title,
     description: input.description ?? '',
+    exercises: input.exercises,
     clientNotes: '',
     lastViewedAt: null,
     ...newWriteTimestamps(),

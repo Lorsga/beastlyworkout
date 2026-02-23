@@ -36,13 +36,14 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isCoach();
       allow create: if isOwner(userId) && request.resource.data.uid == request.auth.uid;
       allow update: if isOwner(userId) || isAdmin();
       allow delete: if isAdmin();
 
       match /private/{docId} {
-        allow read, write: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin() || (isCoach() && docId == 'onboarding');
+        allow write: if isOwner(userId) || isAdmin();
       }
     }
 
