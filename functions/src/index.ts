@@ -5,6 +5,11 @@ import {onDocumentCreated} from 'firebase-functions/v2/firestore';
 admin.initializeApp();
 
 const db = admin.firestore();
+const allowedOrigins = [
+  'https://beastlyworkout-lorsga.netlify.app',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+];
 
 type AppRole = 'admin' | 'trainer' | 'client';
 
@@ -33,7 +38,7 @@ export const createUserProfile = onDocumentCreated('users/{uid}', async (event) 
   }
 });
 
-export const setUserRole = onCall({region: 'us-central1', cors: true}, async (request) => {
+export const setUserRole = onCall({region: 'us-central1', cors: allowedOrigins}, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');
   }
@@ -68,7 +73,7 @@ export const setUserRole = onCall({region: 'us-central1', cors: true}, async (re
   return {ok: true, uid: payload.uid, role: payload.role};
 });
 
-export const bootstrapFirstAdmin = onCall({region: 'us-central1', cors: true}, async (request) => {
+export const bootstrapFirstAdmin = onCall({region: 'us-central1', cors: allowedOrigins}, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');
   }
