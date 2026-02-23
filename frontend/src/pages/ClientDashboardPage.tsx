@@ -45,6 +45,11 @@ interface MetricDoc {
   measuredAt: string;
 }
 
+interface UserProfileDoc {
+  uid?: string;
+  clientId?: string;
+}
+
 function toYouTubeEmbedUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
@@ -123,15 +128,37 @@ export function ClientDashboardPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const plansSnap = await listPlansForRole('client');
-      const mappedPlans = mapDocs<PlanDoc>(plansSnap.docs);
-      const directPlanSnap = await getPlanByClientId();
-      const directPlan = directPlanSnap.exists()
-        ? ({ id: directPlanSnap.id, ...(directPlanSnap.data() as PlanDoc) } as PlanDoc & { id: string })
-        : null;
-      const mergedPlans = directPlan
-        ? [directPlan, ...mappedPlans.filter((plan) => plan.id !== directPlan.id)]
-        : mappedPlans;
+      const authUid = user?.uid ?? '';
+      const profileSnap = authUid ? await getUserProfile(authUid) : null;
+      const profile = (profileSnap?.data() as UserProfileDoc | undefined) ?? {};
+
+      const candidateIds = Array.from(
+        new Set([authUid, (profile.uid ?? '').trim(), (profile.clientId ?? '').trim()].filter((value) => value.length > 0)),
+      );
+
+      const planResults = await Promise.allSettled(
+        candidateIds.flatMap((candidateId) => [listPlansForRole('client', candidateId), getPlanByClientId(candidateId)]),
+      );
+
+      const mergedMap = new Map<string, PlanDoc & { id: string }>();
+      for (const result of planResults) {
+        if (result.status !== 'fulfilled') continue;
+        const value = result.value;
+        if ('docs' in value) {
+          for (const plan of mapDocs<PlanDoc>(value.docs)) {
+            mergedMap.set(plan.id, plan);
+          }
+        } else if (value.exists()) {
+          const plan = { id: value.id, ...(value.data() as PlanDoc) } as PlanDoc & { id: string };
+          mergedMap.set(plan.id, plan);
+        }
+      }
+
+      const mergedPlans = Array.from(mergedMap.values()).sort((a, b) => {
+        const aIsDirect = candidateIds.includes(a.id) ? 0 : 1;
+        const bIsDirect = candidateIds.includes(b.id) ? 0 : 1;
+        return aIsDirect - bIsDirect;
+      });
       setPlans(mergedPlans);
 
       const [sessionsResult, logsResult, metricsResult] = await Promise.allSettled([

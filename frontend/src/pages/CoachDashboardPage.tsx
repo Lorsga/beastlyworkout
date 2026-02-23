@@ -48,6 +48,11 @@ function asText(value: unknown): string {
   return typeof value === 'string' ? value : value == null ? '' : String(value);
 }
 
+function getClientAuthUid(profile: UserProfileDoc & { id: string }): string {
+  const uid = asText(profile.uid).trim();
+  return uid || profile.id;
+}
+
 function normalizePlanExercises(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value
@@ -137,7 +142,7 @@ export function CoachDashboardPage() {
           return aLabel.localeCompare(bLabel);
         });
       setRegisteredClients(candidates);
-      if (!selectedClientId && candidates[0]?.id) setSelectedClientId(candidates[0].id);
+      if (!selectedClientId && candidates[0]) setSelectedClientId(getClientAuthUid(candidates[0]));
 
       try {
         const plansSnap = await listPlansForRole(role);
@@ -277,7 +282,7 @@ export function CoachDashboardPage() {
           <select value={selectedClientId} onChange={(event) => setSelectedClientId(event.target.value)}>
             {registeredClients.length === 0 ? <option value="">Nessun cliente disponibile</option> : null}
             {registeredClients.map((client) => (
-              <option key={client.id} value={client.id}>
+              <option key={client.id} value={getClientAuthUid(client)}>
                 {asText(client.displayName).trim() || asText(client.email) || client.id}
               </option>
             ))}
