@@ -243,6 +243,10 @@ export function CoachDashboardPage() {
 
   async function onUploadMedia(index: number, file: File | null) {
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showError('Puoi caricare solo immagini. Per i video usa il campo URL.');
+      return;
+    }
     if (!selectedClientId) {
       showError('Seleziona prima un cliente.');
       return;
@@ -347,10 +351,10 @@ export function CoachDashboardPage() {
                   <input value={exercise.mediaUrl} onChange={(event) => updateExercise(index, {mediaUrl: event.target.value})} placeholder="https://..." />
                 </label>
                 <label>
-                  Oppure carica immagine/video
+                  Oppure carica un&apos;immagine
                   <input
                     type="file"
-                    accept="image/*,video/*"
+                    accept="image/*"
                     onChange={(event) => void onUploadMedia(index, event.target.files?.[0] ?? null)}
                     disabled={uploadingExerciseIndex === index}
                   />
