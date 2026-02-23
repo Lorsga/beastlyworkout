@@ -127,6 +127,10 @@ function isImageMediaUrl(url: string): boolean {
   return /\.(jpg|jpeg|png|gif|webp|avif|svg)(\?.*)?$/i.test(url);
 }
 
+function defaultExercise() {
+  return {name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''};
+}
+
 export function CoachDashboardPage() {
   const { role, user } = useAuthState();
   const { showError, showSuccess } = useToast();
@@ -139,7 +143,7 @@ export function CoachDashboardPage() {
 
   const [selectedClientId, setSelectedClientId] = useState('');
   const [planTitle, setPlanTitle] = useState('');
-  const [exercises, setExercises] = useState([{name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''}]);
+  const [exercises, setExercises] = useState([defaultExercise()]);
   const isUploadingMedia = uploadingExerciseIndex !== null;
   const [savingTitle, setSavingTitle] = useState(false);
 
@@ -176,14 +180,14 @@ export function CoachDashboardPage() {
     if (!selectedClientId) return;
     if (!existingPlanForClient) {
       setPlanTitle('');
-      setExercises([{name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''}]);
+      setExercises([defaultExercise()]);
       return;
     }
 
     setPlanTitle(existingPlanForClient.title ?? '');
     const nextExercises = normalizePlanExercises(existingPlanForClient.exercises)
       .filter((item) => item.name.trim().length > 0);
-    setExercises(nextExercises.length > 0 ? nextExercises : [{name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''}]);
+    setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
   }, [selectedClientId, existingPlanForClient?.id]);
 
   useEffect(() => {
@@ -279,7 +283,7 @@ export function CoachDashboardPage() {
   }
 
   function addExercise() {
-    setExercises((prev) => [...prev, {name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''}]);
+    setExercises((prev) => [...prev, defaultExercise()]);
   }
 
   function removeExercise(index: number) {
@@ -287,11 +291,22 @@ export function CoachDashboardPage() {
   }
 
   function resetExercise(index: number) {
-    updateExercise(index, {name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''});
+    updateExercise(index, defaultExercise());
   }
 
   function updateExercise(index: number, patch: Partial<{name: string; sets: number; reps: number; weight: string; mediaUrl: string}>) {
     setExercises((prev) => prev.map((item, idx) => (idx === index ? {...item, ...patch} : item)));
+  }
+
+  function reloadModalDraftFromServer() {
+    if (!existingPlanForClient) {
+      setPlanTitle('');
+      setExercises([defaultExercise()]);
+      return;
+    }
+    setPlanTitle(existingPlanForClient.title ?? '');
+    const nextExercises = normalizePlanExercises(existingPlanForClient.exercises).filter((item) => item.name.trim().length > 0);
+    setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
   }
 
   async function savePlan() {
@@ -344,7 +359,13 @@ export function CoachDashboardPage() {
       showError('Inserisci un titolo per la scheda.');
       return;
     }
+    reloadModalDraftFromServer();
     setIsPlanModalOpen(true);
+  }
+
+  function closePlanModalWithoutSaving() {
+    reloadModalDraftFromServer();
+    setIsPlanModalOpen(false);
   }
 
   async function onUploadMedia(index: number, file: File | null) {
@@ -376,7 +397,7 @@ export function CoachDashboardPage() {
     if (!confirmDelete) return;
     await runAction(() => deletePlanAsCoach(existingPlanForClient.id), 'Scheda eliminata con successo.');
     setPlanTitle('');
-    setExercises([{name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''}]);
+    setExercises([defaultExercise()]);
     setIsPlanModalOpen(false);
   }
 
@@ -552,7 +573,7 @@ export function CoachDashboardPage() {
             <button className="btn" type="button" disabled={loading || isUploadingMedia} onClick={() => void savePlan()}>
               {isUploadingMedia ? 'Attendi caricamento media...' : existingPlanForClient ? 'Salva modifiche' : 'Salva scheda tecnica'}
             </button>
-            <button className="btn btn-ghost" type="button" onClick={() => setIsPlanModalOpen(false)}>
+            <button className="btn btn-ghost" type="button" onClick={closePlanModalWithoutSaving}>
               Chiudi
             </button>
           </article>
