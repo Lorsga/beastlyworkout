@@ -101,6 +101,24 @@ function onboardingValue(value: unknown): string {
   return text || 'Non compilato';
 }
 
+function normalizeWhatsappPhone(raw: string): string {
+  const digits = raw.replace(/[^\d+]/g, '').replace(/\s+/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('+')) return digits.slice(1);
+  if (digits.startsWith('00')) return digits.slice(2);
+  if (digits.startsWith('39')) return digits;
+  // Default IT fallback for local mobile numbers (es. 340...)
+  if (digits.length >= 9) return `39${digits}`;
+  return digits;
+}
+
+function buildClientWhatsappUrl(phone: string, clientName?: string): string {
+  const normalized = normalizeWhatsappPhone(phone);
+  const intro = clientName?.trim() ? `Ciao ${clientName.trim()},` : 'Ciao,';
+  const text = encodeURIComponent(`${intro} la tua scheda tecnica è pronta. Quando vuoi possiamo rivederla insieme.`);
+  return normalized ? `https://wa.me/${normalized}?text=${text}` : '';
+}
+
 function isVideoMediaUrl(url: string): boolean {
   return url.includes('youtube.com') || url.includes('youtu.be') || /\.(mp4|webm|mov|m4v|ogg)(\?.*)?$/i.test(url);
 }
@@ -125,6 +143,10 @@ export function CoachDashboardPage() {
   const isUploadingMedia = uploadingExerciseIndex !== null;
 
   const existingPlanForClient = plans.find((plan) => plan.id === selectedClientId) ?? plans.find((plan) => plan.clientId === selectedClientId);
+  const selectedClientWhatsappUrl = buildClientWhatsappUrl(
+    asText(selectedClientOnboarding?.phone),
+    asText(selectedClientOnboarding?.fullName),
+  );
   const clientLabelById = registeredClients.reduce<Record<string, string>>((acc, client) => {
     const label = asText(client.displayName).trim() || asText(client.email).trim() || client.id;
     acc[getClientAuthUid(client)] = label;
@@ -358,6 +380,13 @@ export function CoachDashboardPage() {
         </p>
         <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
           <h2>Informazioni del cliente</h2>
+          {selectedClientWhatsappUrl ? (
+            <a className="btn btn-whatsapp" href={selectedClientWhatsappUrl} target="_blank" rel="noreferrer">
+              Scrivi al cliente su WhatsApp
+            </a>
+          ) : (
+            <p className="hint">Numero WhatsApp cliente non disponibile.</p>
+          )}
           <div className="client-info-block">
             <h3>Anagrafica</h3>
             <p className="hint"><strong>Nome:</strong> {onboardingValue(selectedClientOnboarding?.fullName)}</p>
