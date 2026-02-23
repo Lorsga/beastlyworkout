@@ -1,7 +1,7 @@
 import {
   GoogleAuthProvider,
   getRedirectResult,
-  onAuthStateChanged,
+  onIdTokenChanged,
   signInWithPopup,
   signInWithRedirect,
   signOut,
@@ -25,7 +25,7 @@ export function useAuthState(): AuthState {
   const [role, setRole] = useState<AppRole | null>(null);
 
   useEffect(() => {
-    return onAuthStateChanged(auth, async (nextUser) => {
+    return onIdTokenChanged(auth, async (nextUser) => {
       try {
         setUser(nextUser);
         if (!nextUser) {

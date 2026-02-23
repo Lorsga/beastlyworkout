@@ -63,6 +63,7 @@ function ProtectedRoleRoute({
   if (initializing) return <LoadingScreen />;
   if (!user) return <Navigate to="/auth" replace />;
   if (!role) {
+    if (allow.includes('client')) return children;
     return <Navigate to="/onboarding" replace />;
   }
   if (!allow.includes(role)) return <Navigate to={role === 'client' ? '/app/client' : '/app/coach'} replace />;
@@ -76,7 +77,7 @@ function HomeRedirect() {
   if (initializing) return <LoadingScreen />;
   if (!user) return <Navigate to="/auth" replace />;
   if (!role) {
-    return <Navigate to="/onboarding" replace />;
+    return <Navigate to="/app/client" replace />;
   }
   return <Navigate to={role === 'client' ? '/app/client' : '/app/coach'} replace />;
 }

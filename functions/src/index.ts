@@ -57,21 +57,30 @@ export const syncAdminRoleByEmail = onDocumentWritten('users/{uid}', async (even
   const uid = event.params.uid;
   const data = after.data();
   if (!data) return;
-  if (!isAllowedAdminEmail(data.email)) return;
-
+  const userRecord = await admin.auth().getUser(uid);
+  const currentClaims = userRecord.customClaims ?? {};
   const updates: Record<string, unknown> = {};
-  if (data.role !== 'admin') updates.role = 'admin';
-  if (!data.roleAssignedBy) updates.roleAssignedBy = uid;
-  if (!data.roleAssignedAt) updates.roleAssignedAt = admin.firestore.FieldValue.serverTimestamp();
+
+  if (isAllowedAdminEmail(data.email)) {
+    if (data.role !== 'admin') updates.role = 'admin';
+    if (!data.roleAssignedBy) updates.roleAssignedBy = uid;
+    if (!data.roleAssignedAt) updates.roleAssignedAt = admin.firestore.FieldValue.serverTimestamp();
+    if (currentClaims.role !== 'admin') {
+      await admin.auth().setCustomUserClaims(uid, {...currentClaims, role: 'admin'});
+    }
+  } else {
+    const canBecomeClient = data.role === 'client' || data.onboardingCompleted === true || data.requestedRole === 'client';
+    if (canBecomeClient) {
+      if (data.role !== 'client') updates.role = 'client';
+      if (currentClaims.role !== 'client') {
+        await admin.auth().setCustomUserClaims(uid, {...currentClaims, role: 'client'});
+      }
+    }
+  }
+
   if (Object.keys(updates).length > 0) {
     updates.updatedAt = admin.firestore.FieldValue.serverTimestamp();
     await after.ref.set(updates, {merge: true});
-  }
-
-  const userRecord = await admin.auth().getUser(uid);
-  const currentClaims = userRecord.customClaims ?? {};
-  if (currentClaims.role !== 'admin') {
-    await admin.auth().setCustomUserClaims(uid, {...currentClaims, role: 'admin'});
   }
 });
 
