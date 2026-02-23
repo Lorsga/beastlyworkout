@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 import {
+  bootstrapFirstAdmin,
   completeGoogleRedirect,
   getCurrentUserRole,
   loginWithGoogle,
@@ -74,6 +75,7 @@ export function AuthPage() {
         return;
       }
 
+      await bootstrapFirstAdmin();
       await refreshIdTokenClaims();
       const userRole = await getCurrentUserRole(result.user);
       if (userRole === 'admin' || userRole === 'trainer') {
@@ -81,7 +83,7 @@ export function AuthPage() {
         return;
       }
 
-      navigate('/missing-role', { replace: true });
+      setMessage('Accesso PT/Admin non completato. Riprova tra qualche secondo.');
     } catch (error) {
       setMessage(toMessage(error));
     } finally {

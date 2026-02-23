@@ -7,9 +7,16 @@ admin.initializeApp();
 const db = admin.firestore();
 const allowedOrigins = [
   'https://beastlyworkout-lorsga.netlify.app',
+  /^https:\/\/.*--beastlyworkout-lorsga\.netlify\.app$/,
   'http://localhost:5173',
   'http://127.0.0.1:5173',
 ];
+const adminEmails = new Set(
+  (process.env.ADMIN_EMAILS ?? 'lrnz.sga@gmail.com')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean),
+);
 
 type AppRole = 'admin' | 'trainer' | 'client';
 
@@ -17,6 +24,11 @@ function assertRole(value: unknown): asserts value is AppRole {
   if (value !== 'admin' && value !== 'trainer' && value !== 'client') {
     throw new HttpsError('invalid-argument', 'role must be one of: admin, trainer, client');
   }
+}
+
+function isAllowedAdminEmail(email: unknown): boolean {
+  if (typeof email !== 'string') return false;
+  return adminEmails.has(email.trim().toLowerCase());
 }
 
 export const createUserProfile = onDocumentCreated('users/{uid}', async (event) => {
@@ -80,13 +92,13 @@ export const bootstrapFirstAdmin = onCall({region: 'us-central1', cors: allowedO
 
   const uid = request.auth.uid;
   const currentClaims = request.auth.token;
-  if (currentClaims.role === 'admin') {
-    return {ok: true, alreadyAdmin: true};
+  const email = request.auth.token.email;
+  if (!isAllowedAdminEmail(email)) {
+    throw new HttpsError('permission-denied', 'Account is not allowed to become admin.');
   }
 
-  const adminsSnapshot = await db.collection('users').where('role', '==', 'admin').limit(1).get();
-  if (!adminsSnapshot.empty) {
-    throw new HttpsError('permission-denied', 'Admin already exists. Use setUserRole.');
+  if (currentClaims.role === 'admin') {
+    return {ok: true, alreadyAdmin: true};
   }
 
   await admin.auth().setCustomUserClaims(uid, {role: 'admin'});
