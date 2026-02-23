@@ -123,12 +123,7 @@ export function ClientDashboardPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [plansSnap, sessionsSnap, logsSnap, metricsSnap] = await Promise.all([
-        listPlansForRole('client'),
-        listSessionsForRole('client'),
-        listWorkoutLogsForClient(),
-        listMetricsForClient(),
-      ]);
+      const plansSnap = await listPlansForRole('client');
       const mappedPlans = mapDocs<PlanDoc>(plansSnap.docs);
       const directPlanSnap = await getPlanByClientId();
       const directPlan = directPlanSnap.exists()
@@ -138,9 +133,20 @@ export function ClientDashboardPage() {
         ? [directPlan, ...mappedPlans.filter((plan) => plan.id !== directPlan.id)]
         : mappedPlans;
       setPlans(mergedPlans);
-      setSessions(mapDocs<SessionDoc>(sessionsSnap.docs));
-      setLogs(mapDocs<WorkoutLogDoc>(logsSnap.docs));
-      setMetrics(mapDocs<MetricDoc>(metricsSnap.docs));
+
+      const [sessionsResult, logsResult, metricsResult] = await Promise.allSettled([
+        listSessionsForRole('client'),
+        listWorkoutLogsForClient(),
+        listMetricsForClient(),
+      ]);
+
+      setSessions(sessionsResult.status === 'fulfilled' ? mapDocs<SessionDoc>(sessionsResult.value.docs) : []);
+      setLogs(logsResult.status === 'fulfilled' ? mapDocs<WorkoutLogDoc>(logsResult.value.docs) : []);
+      setMetrics(metricsResult.status === 'fulfilled' ? mapDocs<MetricDoc>(metricsResult.value.docs) : []);
+
+      if (sessionsResult.status === 'rejected' || logsResult.status === 'rejected' || metricsResult.status === 'rejected') {
+        showError('Alcune sezioni non sono ancora pronte, ma la tua scheda tecnica è disponibile.');
+      }
     } catch (error) {
       showError(toMessage(error));
     } finally {
