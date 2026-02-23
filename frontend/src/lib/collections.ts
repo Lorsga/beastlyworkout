@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -162,6 +163,10 @@ export async function updatePlanAsCoach(planId: string, patch: Record<string, un
     ...patch,
     ...updateTimestamp(),
   });
+}
+
+export async function deletePlanAsCoach(planId: string) {
+  await deleteDoc(doc(db, 'plans', planId));
 }
 
 export async function uploadWorkoutMediaAsCoach(clientId: string, file: File): Promise<string> {

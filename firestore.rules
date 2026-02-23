@@ -81,7 +81,7 @@ service cloud.firestore {
         );
 
       allow delete: if isAdmin() ||
-        (isCoach() && request.auth.uid == resource.data.trainerId && resource.data.status != 'active');
+        (isCoach() && request.auth.uid == resource.data.trainerId);
     }
 
     match /workoutLogs/{logId} {

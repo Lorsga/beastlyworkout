@@ -236,6 +236,11 @@ a.btn {
   color: var(--text);
 }
 
+.btn-danger {
+  background: linear-gradient(120deg, #b42318, #dc2626);
+  color: #fff;
+}
+
 .btn-whatsapp {
   background: linear-gradient(120deg, #15803d, #22c55e);
   color: #fff;

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useToast } from '../components/ToastProvider';
 import {
   createPlanAsCoach,
+  deletePlanAsCoach,
   getUserPrivateDoc,
   listPlansForRole,
   listRegisteredUsers,
@@ -224,6 +225,10 @@ export function CoachDashboardPage() {
     setExercises((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== index)));
   }
 
+  function resetExercise(index: number) {
+    updateExercise(index, {name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''});
+  }
+
   function updateExercise(index: number, patch: Partial<{name: string; sets: number; reps: number; weight: string; mediaUrl: string}>) {
     setExercises((prev) => prev.map((item, idx) => (idx === index ? {...item, ...patch} : item)));
   }
@@ -302,6 +307,16 @@ export function CoachDashboardPage() {
     } finally {
       setUploadingExerciseIndex(null);
     }
+  }
+
+  async function deleteCurrentPlan() {
+    if (!existingPlanForClient) return;
+    const confirmDelete = window.confirm('Vuoi davvero eliminare tutta la scheda tecnica di questo cliente?');
+    if (!confirmDelete) return;
+    await runAction(() => deletePlanAsCoach(existingPlanForClient.id), 'Scheda eliminata con successo.');
+    setPlanTitle('');
+    setExercises([{name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''}]);
+    setIsPlanModalOpen(false);
   }
 
   return (
@@ -383,6 +398,11 @@ export function CoachDashboardPage() {
         >
           {existingPlanForClient ? 'Modifica scheda' : 'Crea scheda'}
         </button>
+        {existingPlanForClient ? (
+          <button className="btn btn-danger" disabled={loading} onClick={() => void deleteCurrentPlan()} type="button">
+            Elimina scheda
+          </button>
+        ) : null}
       </article>
       {isPlanModalOpen ? (
         <section className="modal-overlay" role="dialog" aria-modal="true">
@@ -433,6 +453,9 @@ export function CoachDashboardPage() {
                   />
                 </label>
                 {uploadingExerciseIndex === index ? <p className="hint">Caricamento media in corso...</p> : null}
+                <button className="btn btn-ghost" type="button" onClick={() => resetExercise(index)}>
+                  Reset esercizio
+                </button>
                 <button className="btn btn-ghost" type="button" onClick={() => removeExercise(index)}>
                   Rimuovi esercizio
                 </button>
