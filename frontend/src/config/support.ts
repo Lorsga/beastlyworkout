@@ -2,7 +2,7 @@ function normalizeDigits(value: string): string {
   return value.replace(/[^\d]/g, '');
 }
 
-const rawNumber = String(import.meta.env.VITE_PT_WHATSAPP_NUMBER ?? '').trim();
+const rawNumber = String(import.meta.env.VITE_PT_WHATSAPP_NUMBER ?? '393405882404').trim();
 
 export const PT_WHATSAPP_NUMBER = normalizeDigits(rawNumber);
 export const HAS_PT_WHATSAPP = PT_WHATSAPP_NUMBER.length > 6;
