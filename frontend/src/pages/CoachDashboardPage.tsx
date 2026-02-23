@@ -113,6 +113,7 @@ export function CoachDashboardPage() {
   const [selectedClientId, setSelectedClientId] = useState('');
   const [planTitle, setPlanTitle] = useState('');
   const [exercises, setExercises] = useState([{name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''}]);
+  const isUploadingMedia = uploadingExerciseIndex !== null;
 
   const existingPlanForClient = plans.find((plan) => plan.id === selectedClientId) ?? plans.find((plan) => plan.clientId === selectedClientId);
 
@@ -434,8 +435,8 @@ export function CoachDashboardPage() {
             <button className="btn btn-ghost" type="button" onClick={addExercise}>
               Aggiungi esercizio
             </button>
-            <button className="btn" type="button" disabled={loading} onClick={() => void savePlan()}>
-              {existingPlanForClient ? 'Salva modifiche' : 'Salva scheda tecnica'}
+            <button className="btn" type="button" disabled={loading || isUploadingMedia} onClick={() => void savePlan()}>
+              {isUploadingMedia ? 'Attendi caricamento media...' : existingPlanForClient ? 'Salva modifiche' : 'Salva scheda tecnica'}
             </button>
             <button className="btn btn-ghost" type="button" onClick={() => setIsPlanModalOpen(false)}>
               Chiudi
