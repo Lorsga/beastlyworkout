@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
+import { useToast } from '../components/ToastProvider';
 import {
   createMetricAsClient,
   createWorkoutLogAsClient,
@@ -41,12 +42,11 @@ interface MetricDoc {
 export function ClientDashboardPage() {
   const { role, user } = useAuthState();
   const navigate = useNavigate();
+  const { showError, showSuccess } = useToast();
   const [plans, setPlans] = useState<Array<PlanDoc & { id: string }>>([]);
   const [sessions, setSessions] = useState<Array<SessionDoc & { id: string }>>([]);
   const [logs, setLogs] = useState<Array<WorkoutLogDoc & { id: string }>>([]);
   const [metrics, setMetrics] = useState<Array<MetricDoc & { id: string }>>([]);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
   const [trainerId, setTrainerId] = useState('');
@@ -81,7 +81,6 @@ export function ClientDashboardPage() {
 
   async function loadData() {
     setLoading(true);
-    setErrorMessage('');
     try {
       const [plansSnap, sessionsSnap, logsSnap, metricsSnap] = await Promise.all([
         listPlansForRole('client'),
@@ -96,7 +95,7 @@ export function ClientDashboardPage() {
       setMetrics(mapDocs<MetricDoc>(metricsSnap.docs));
       if (!trainerId && mappedPlans[0]?.trainerId) setTrainerId(mappedPlans[0].trainerId);
     } catch (error) {
-      setErrorMessage(toMessage(error));
+      showError(toMessage(error));
     } finally {
       setLoading(false);
     }
@@ -120,15 +119,13 @@ export function ClientDashboardPage() {
   }
 
   async function runAction(action: () => Promise<unknown>, okMessage: string) {
-    setSuccessMessage('');
-    setErrorMessage('');
     setLoading(true);
     try {
       await action();
-      setSuccessMessage(okMessage);
+      showSuccess(okMessage);
       await loadData();
     } catch (error) {
-      setErrorMessage(toMessage(error));
+      showError(toMessage(error));
     } finally {
       setLoading(false);
     }
@@ -243,8 +240,6 @@ export function ClientDashboardPage() {
       </article>
 
       {loading ? <p className="message">Caricamento...</p> : null}
-      {successMessage ? <p className="message success">{successMessage}</p> : null}
-      {errorMessage ? <p className="message">{errorMessage}</p> : null}
     </AppShell>
   );
 }

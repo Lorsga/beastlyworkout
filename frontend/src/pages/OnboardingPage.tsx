@@ -1,18 +1,20 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 
+import { useToast } from '../components/ToastProvider';
 import { createUserProfile, logoutCurrentUser, setUserPrivateDoc, useAuthState } from '../lib';
 import { toMessage } from '../utils/firestore';
 
 export function OnboardingPage() {
   const { user, role } = useAuthState();
+  const navigate = useNavigate();
+  const { showError, showSuccess } = useToast();
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [goal, setGoal] = useState('');
   const [experienceLevel, setExperienceLevel] = useState<'beginner' | 'intermediate' | 'advanced'>('beginner');
   const [trainingDaysPerWeek, setTrainingDaysPerWeek] = useState<number>(3);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
 
   if (!user) return <Navigate to="/auth" replace />;
   if (role === 'admin' || role === 'trainer') return <Navigate to="/app/coach" replace />;
@@ -20,7 +22,6 @@ export function OnboardingPage() {
 
   async function submitOnboarding() {
     setLoading(true);
-    setMessage('');
     try {
       await createUserProfile({
         displayName: displayName.trim(),
@@ -37,9 +38,10 @@ export function OnboardingPage() {
         trainingDaysPerWeek,
         notes: notes.trim(),
       });
-      setMessage('Perfetto, informazioni salvate. Sei pronto a iniziare.');
+      showSuccess('Perfetto, profilo salvato.');
+      navigate('/app/client', { replace: true });
     } catch (error) {
-      setMessage(toMessage(error));
+      showError(toMessage(error));
     } finally {
       setLoading(false);
     }
@@ -95,8 +97,6 @@ export function OnboardingPage() {
         <button className="btn btn-ghost" type="button" onClick={() => void logoutCurrentUser()}>
           Esci e cambia account
         </button>
-
-        {message ? <p className="message">{message}</p> : null}
       </section>
     </main>
   );

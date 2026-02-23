@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { useToast } from '../components/ToastProvider';
 import {
   createPlanAsCoach,
   createSessionAsCoach,
@@ -43,11 +44,10 @@ interface OnboardingDoc {
 
 export function CoachDashboardPage() {
   const { role } = useAuthState();
+  const { showError, showSuccess } = useToast();
   const [registeredClients, setRegisteredClients] = useState<Array<UserProfileDoc & { id: string }>>([]);
   const [plans, setPlans] = useState<Array<PlanDoc & { id: string }>>([]);
   const [sessions, setSessions] = useState<Array<SessionDoc & { id: string }>>([]);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedClientOnboarding, setSelectedClientOnboarding] = useState<OnboardingDoc | null>(null);
 
@@ -80,7 +80,6 @@ export function CoachDashboardPage() {
   async function loadData() {
     if (!role) return;
     setLoading(true);
-    setErrorMessage('');
     try {
       const [usersSnap, plansSnap, sessionsSnap] = await Promise.all([
         listRegisteredUsers(),
@@ -108,7 +107,7 @@ export function CoachDashboardPage() {
         })),
       );
     } catch (error) {
-      setErrorMessage(toMessage(error));
+      showError(toMessage(error));
     } finally {
       setLoading(false);
     }
@@ -119,15 +118,13 @@ export function CoachDashboardPage() {
   }, [role]);
 
   async function runAction(action: () => Promise<unknown>, okMessage: string) {
-    setSuccessMessage('');
-    setErrorMessage('');
     setLoading(true);
     try {
       await action();
-      setSuccessMessage(okMessage);
+      showSuccess(okMessage);
       await loadData();
     } catch (error) {
-      setErrorMessage(toMessage(error));
+      showError(toMessage(error));
     } finally {
       setLoading(false);
     }
@@ -257,8 +254,6 @@ export function CoachDashboardPage() {
       </article>
 
       {loading ? <p className="message">Caricamento...</p> : null}
-      {successMessage ? <p className="message success">{successMessage}</p> : null}
-      {errorMessage ? <p className="message">{errorMessage}</p> : null}
     </AppShell>
   );
 }

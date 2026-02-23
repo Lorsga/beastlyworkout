@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
+import { useToast } from '../components/ToastProvider';
 import {
   completeGoogleRedirect,
   createUserProfile,
@@ -18,6 +19,7 @@ const LOGIN_INTENT_KEY = 'bw_login_intent';
 export function AuthPage() {
   const { user, role } = useAuthState();
   const navigate = useNavigate();
+  const { showError } = useToast();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [completingCoachAccess, setCompletingCoachAccess] = useState(false);
@@ -52,7 +54,9 @@ export function AuthPage() {
         }
         setMessage('Sto ancora completando l’accesso. Riprova tra pochi secondi.');
       } catch (error) {
-        setMessage(toMessage(error));
+        const nextMessage = toMessage(error);
+        setMessage(nextMessage);
+        showError(nextMessage);
       } finally {
         setCompletingCoachAccess(false);
       }
@@ -97,7 +101,9 @@ export function AuthPage() {
       }
       navigate('/app/client', { replace: true });
     } catch (error) {
-      setMessage(toMessage(error));
+      const nextMessage = toMessage(error);
+      setMessage(nextMessage);
+      showError(nextMessage);
     } finally {
       setLoading(false);
     }
@@ -121,6 +127,7 @@ export function AuthPage() {
       if (!isAllowedAdminEmail(result.user.email)) {
         await logoutCurrentUser();
         setMessage('Questo account non è abilitato per l’area coach. Usa accesso utente.');
+        showError('Questo account non è abilitato per l’area coach.');
         return;
       }
       await createUserProfile({
@@ -141,7 +148,9 @@ export function AuthPage() {
       }
       setMessage('Sto ancora completando l’accesso coach. Riprova tra qualche secondo.');
     } catch (error) {
-      setMessage(toMessage(error));
+      const nextMessage = toMessage(error);
+      setMessage(nextMessage);
+      showError(nextMessage);
     } finally {
       setLoading(false);
     }
