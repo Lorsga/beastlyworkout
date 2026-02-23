@@ -30,9 +30,11 @@ service cloud.firestore {
     }
 
     function canAccessPair(trainerId, clientId) {
-      return isAdmin() ||
-        (isCoach() && request.auth.uid == trainerId) ||
-        (isClient() && request.auth.uid == clientId);
+      return isSignedIn() && (
+        isAdmin() ||
+        request.auth.uid == trainerId ||
+        request.auth.uid == clientId
+      );
     }
 
     match /users/{userId} {
