@@ -182,8 +182,8 @@ export function ClientDashboardPage() {
   }
 
   useEffect(() => {
-    if (role === 'client') void loadData();
-  }, [role]);
+    if (user && (role === 'client' || role === null)) void loadData();
+  }, [role, user?.uid]);
 
   const nextSession = useMemo(
     () =>
