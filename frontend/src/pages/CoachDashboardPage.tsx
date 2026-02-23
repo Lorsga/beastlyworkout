@@ -42,12 +42,13 @@ interface OnboardingDoc {
 }
 
 export function CoachDashboardPage() {
-  const { role } = useAuthState();
+  const { role, user } = useAuthState();
   const { showError, showSuccess } = useToast();
   const [registeredClients, setRegisteredClients] = useState<Array<UserProfileDoc & { id: string }>>([]);
   const [plans, setPlans] = useState<Array<PlanDoc & { id: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [selectedClientOnboarding, setSelectedClientOnboarding] = useState<OnboardingDoc | null>(null);
+  const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
 
   const [selectedClientId, setSelectedClientId] = useState('');
   const [planTitle, setPlanTitle] = useState('');
@@ -85,7 +86,13 @@ export function CoachDashboardPage() {
         id: docItem.id,
         ...(docItem.data() as UserProfileDoc),
       }));
-      const candidates = allUsers.filter((item) => item.role !== 'admin' && item.role !== 'trainer');
+      const candidates = allUsers
+        .filter((item) => item.id !== user?.uid)
+        .sort((a, b) => {
+          const aLabel = (a.displayName || a.email || a.id).toLowerCase();
+          const bLabel = (b.displayName || b.email || b.id).toLowerCase();
+          return aLabel.localeCompare(bLabel);
+        });
       setRegisteredClients(candidates);
       if (!selectedClientId && candidates[0]?.id) setSelectedClientId(candidates[0].id);
 
@@ -104,7 +111,7 @@ export function CoachDashboardPage() {
 
   useEffect(() => {
     void loadData();
-  }, [role]);
+  }, [role, user?.uid]);
 
   async function runAction(action: () => Promise<unknown>, okMessage: string) {
     setLoading(true);
@@ -159,6 +166,19 @@ export function CoachDashboardPage() {
     );
     setPlanTitle('');
     setExercises([{name: '', sets: 3, reps: '10', weight: '', mediaUrl: ''}]);
+    setIsPlanModalOpen(false);
+  }
+
+  function openCreatePlanModal() {
+    if (!selectedClientId) {
+      showError('Seleziona prima un cliente.');
+      return;
+    }
+    if (!planTitle.trim()) {
+      showError('Inserisci un titolo per la scheda.');
+      return;
+    }
+    setIsPlanModalOpen(true);
   }
 
   return (
@@ -180,46 +200,13 @@ export function CoachDashboardPage() {
             ))}
           </select>
         </label>
+        <button className="btn btn-ghost" type="button" onClick={() => void loadData()}>
+          Aggiorna lista clienti
+        </button>
         <label>
           Titolo programma
           <input value={planTitle} onChange={(event) => setPlanTitle(event.target.value)} placeholder="Forza 4 settimane" />
         </label>
-        {exercises.map((exercise, index) => (
-          <article className="card" key={`exercise-${index}`} style={{boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)'}}>
-            <h2>Esercizio {index + 1}</h2>
-            <label>
-              Nome esercizio
-              <input value={exercise.name} onChange={(event) => updateExercise(index, {name: event.target.value})} placeholder="Es. Squat bilanciere" />
-            </label>
-            <label>
-              Numero serie
-              <input
-                type="number"
-                min={1}
-                value={exercise.sets}
-                onChange={(event) => updateExercise(index, {sets: Number(event.target.value)})}
-              />
-            </label>
-            <label>
-              Ripetizioni
-              <input value={exercise.reps} onChange={(event) => updateExercise(index, {reps: event.target.value})} placeholder="Es. 8-10" />
-            </label>
-            <label>
-              Peso
-              <input value={exercise.weight} onChange={(event) => updateExercise(index, {weight: event.target.value})} placeholder="Es. 40kg o corpo libero" />
-            </label>
-            <label>
-              URL video o immagine
-              <input value={exercise.mediaUrl} onChange={(event) => updateExercise(index, {mediaUrl: event.target.value})} placeholder="https://..." />
-            </label>
-            <button className="btn btn-ghost" type="button" onClick={() => removeExercise(index)}>
-              Rimuovi esercizio
-            </button>
-          </article>
-        ))}
-        <button className="btn btn-ghost" type="button" onClick={addExercise}>
-          Aggiungi esercizio
-        </button>
         <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
           <h2>Informazioni del cliente</h2>
           <p className="hint">
@@ -238,12 +225,62 @@ export function CoachDashboardPage() {
         <button
           className="btn"
           disabled={!selectedClientId || !planTitle || loading}
-          onClick={() => void savePlan()}
+          onClick={openCreatePlanModal}
           type="button"
         >
-          Salva scheda tecnica
+          Crea scheda
         </button>
       </article>
+      {isPlanModalOpen ? (
+        <section className="modal-overlay" role="dialog" aria-modal="true">
+          <article className="card modal-card">
+            <h2>Compila la scheda</h2>
+            <p className="hint">Aggiungi esercizi uno alla volta per completare il programma.</p>
+            {exercises.map((exercise, index) => (
+              <article className="card" key={`exercise-${index}`} style={{boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)'}}>
+                <h2>Esercizio {index + 1}</h2>
+                <label>
+                  Nome esercizio
+                  <input value={exercise.name} onChange={(event) => updateExercise(index, {name: event.target.value})} placeholder="Es. Squat bilanciere" />
+                </label>
+                <label>
+                  Numero serie
+                  <input
+                    type="number"
+                    min={1}
+                    value={exercise.sets}
+                    onChange={(event) => updateExercise(index, {sets: Number(event.target.value)})}
+                  />
+                </label>
+                <label>
+                  Ripetizioni
+                  <input value={exercise.reps} onChange={(event) => updateExercise(index, {reps: event.target.value})} placeholder="Es. 8-10" />
+                </label>
+                <label>
+                  Peso
+                  <input value={exercise.weight} onChange={(event) => updateExercise(index, {weight: event.target.value})} placeholder="Es. 40kg o corpo libero" />
+                </label>
+                <label>
+                  URL video o immagine
+                  <input value={exercise.mediaUrl} onChange={(event) => updateExercise(index, {mediaUrl: event.target.value})} placeholder="https://..." />
+                </label>
+                <button className="btn btn-ghost" type="button" onClick={() => removeExercise(index)}>
+                  Rimuovi esercizio
+                </button>
+              </article>
+            ))}
+            <button className="btn btn-ghost" type="button" onClick={addExercise}>
+              Aggiungi esercizio
+            </button>
+            <button className="btn" type="button" disabled={loading} onClick={() => void savePlan()}>
+              Salva scheda tecnica
+            </button>
+            <button className="btn btn-ghost" type="button" onClick={() => setIsPlanModalOpen(false)}>
+              Chiudi
+            </button>
+          </article>
+        </section>
+      ) : null}
 
       {role === 'admin' ? (
         <article className="card">
