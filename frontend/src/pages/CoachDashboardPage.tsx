@@ -101,6 +101,14 @@ function onboardingValue(value: unknown): string {
   return text || 'Non compilato';
 }
 
+function isVideoMediaUrl(url: string): boolean {
+  return url.includes('youtube.com') || url.includes('youtu.be') || /\.(mp4|webm|mov|m4v|ogg)(\?.*)?$/i.test(url);
+}
+
+function isImageMediaUrl(url: string): boolean {
+  return /\.(jpg|jpeg|png|gif|webp|avif|svg)(\?.*)?$/i.test(url);
+}
+
 export function CoachDashboardPage() {
   const { role, user } = useAuthState();
   const { showError, showSuccess } = useToast();
@@ -441,7 +449,11 @@ export function CoachDashboardPage() {
                 </label>
                 <label>
                   URL video (YouTube o link diretto)
-                  <input value={exercise.mediaUrl} onChange={(event) => updateExercise(index, {mediaUrl: event.target.value})} placeholder="https://..." />
+                  <input
+                    value={isVideoMediaUrl(exercise.mediaUrl) ? exercise.mediaUrl : ''}
+                    onChange={(event) => updateExercise(index, {mediaUrl: event.target.value})}
+                    placeholder="https://..."
+                  />
                 </label>
                 <label>
                   Oppure carica un&apos;immagine
@@ -452,6 +464,18 @@ export function CoachDashboardPage() {
                     disabled={uploadingExerciseIndex === index}
                   />
                 </label>
+                {isImageMediaUrl(exercise.mediaUrl) ? (
+                  <p className="hint">
+                    Immagine caricata.{' '}
+                    <a href={exercise.mediaUrl} target="_blank" rel="noreferrer">
+                      Apri
+                    </a>{' '}
+                    ·{' '}
+                    <button className="btn-link" type="button" onClick={() => updateExercise(index, {mediaUrl: ''})}>
+                      Rimuovi
+                    </button>
+                  </p>
+                ) : null}
                 {uploadingExerciseIndex === index ? <p className="hint">Caricamento media in corso...</p> : null}
                 <button className="btn btn-ghost" type="button" onClick={() => resetExercise(index)}>
                   Reset esercizio
