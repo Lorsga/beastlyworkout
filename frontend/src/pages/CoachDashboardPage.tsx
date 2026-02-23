@@ -92,36 +92,36 @@ export function CoachDashboardPage() {
   return (
     <AppShell
       role={role === 'trainer' ? 'trainer' : 'admin'}
-      subtitle="Gestione clienti, piani e sessioni in un unico pannello operativo."
-      title="Dashboard Coach"
+      subtitle="Gestisci clienti, programmi e appuntamenti da un unico posto."
+      title="Area Coach"
     >
       <article className="card">
-        <h2>Associa Cliente</h2>
+        <h2>Collega un cliente</h2>
         <label>
-          Client UID
-          <input value={clientUid} onChange={(event) => setClientUid(event.target.value)} placeholder="uid cliente" />
+          Codice cliente
+          <input value={clientUid} onChange={(event) => setClientUid(event.target.value)} placeholder="Inserisci il codice cliente" />
         </label>
         <button className="btn" disabled={!clientUid || loading} onClick={() => void runAction(() => createTrainerClient(clientUid), 'Cliente associato.')} type="button">
-          Associa
+          Collega cliente
         </button>
       </article>
 
       <article className="card">
-        <h2>Nuovo Piano</h2>
+        <h2>Crea un programma</h2>
         <label>
-          Client UID
-          <input value={clientUid} onChange={(event) => setClientUid(event.target.value)} placeholder="uid cliente" />
+          Codice cliente
+          <input value={clientUid} onChange={(event) => setClientUid(event.target.value)} placeholder="Inserisci il codice cliente" />
         </label>
         <label>
-          Titolo piano
+          Titolo programma
           <input value={planTitle} onChange={(event) => setPlanTitle(event.target.value)} placeholder="Forza 4 settimane" />
         </label>
         <label>
-          Stato
+          Stato programma
           <select value={planStatus} onChange={(event) => setPlanStatus(event.target.value as 'draft' | 'active' | 'archived')}>
-            <option value="draft">draft</option>
-            <option value="active">active</option>
-            <option value="archived">archived</option>
+            <option value="draft">Bozza</option>
+            <option value="active">Attivo</option>
+            <option value="archived">Archiviato</option>
           </select>
         </label>
         <button
@@ -135,32 +135,32 @@ export function CoachDashboardPage() {
                   title: planTitle,
                   status: planStatus,
                 }),
-              'Piano creato.',
+              'Programma creato con successo.',
             )
           }
           type="button"
         >
-          Crea piano
+          Salva programma
         </button>
       </article>
 
       <article className="card">
-        <h2>Nuova Sessione</h2>
+        <h2>Pianifica una sessione</h2>
         <label>
-          Client UID
-          <input value={clientUid} onChange={(event) => setClientUid(event.target.value)} placeholder="uid cliente" />
+          Codice cliente
+          <input value={clientUid} onChange={(event) => setClientUid(event.target.value)} placeholder="Inserisci il codice cliente" />
         </label>
         <label>
-          Inizio
+          Data e ora inizio
           <input value={startsAt} onChange={(event) => setStartsAt(event.target.value)} type="datetime-local" />
         </label>
         <label>
-          Fine
+          Data e ora fine
           <input value={endsAt} onChange={(event) => setEndsAt(event.target.value)} type="datetime-local" />
         </label>
         <label>
-          Tipo
-          <input value={sessionType} onChange={(event) => setSessionType(event.target.value)} placeholder="workout o check-in" />
+          Tipo sessione
+          <input value={sessionType} onChange={(event) => setSessionType(event.target.value)} placeholder="Es. allenamento, check-in" />
         </label>
         <button
           className="btn"
@@ -168,45 +168,45 @@ export function CoachDashboardPage() {
           onClick={() =>
             void runAction(
               () => createSessionAsCoach({ clientId: clientUid, startsAt, endsAt, type: sessionType }),
-              'Sessione creata.',
+              'Sessione pianificata con successo.',
             )
           }
           type="button"
         >
-          Crea sessione
+          Salva sessione
         </button>
       </article>
 
       {role === 'admin' ? (
         <article className="card">
-          <h2>Assegna ruolo utente</h2>
+          <h2>Gestione accessi</h2>
           <label>
-            User UID
-            <input value={targetUid} onChange={(event) => setTargetUid(event.target.value)} placeholder="uid utente" />
+            Codice utente
+            <input value={targetUid} onChange={(event) => setTargetUid(event.target.value)} placeholder="Inserisci il codice utente" />
           </label>
           <label>
-            Ruolo
+            Profilo accesso
             <select value={targetRole} onChange={(event) => setTargetRole(event.target.value as AppRole)}>
-              <option value="admin">admin</option>
-              <option value="trainer">trainer</option>
-              <option value="client">client</option>
+              <option value="admin">Admin</option>
+              <option value="trainer">Coach</option>
+              <option value="client">Cliente</option>
             </select>
           </label>
-          <button className="btn" disabled={!targetUid || loading} onClick={() => void runAction(() => setUserRole(targetUid, targetRole), 'Ruolo aggiornato.')} type="button">
-            Applica ruolo
+          <button className="btn" disabled={!targetUid || loading} onClick={() => void runAction(() => setUserRole(targetUid, targetRole), 'Accesso aggiornato.')} type="button">
+            Aggiorna accesso
           </button>
         </article>
       ) : null}
 
       <article className="card">
-        <h2>Dati operativi</h2>
-        <p className="hint">Clienti associati: {clients.length}</p>
-        <p className="hint">Piani: {plans.length}</p>
-        <p className="hint">Sessioni: {sessions.length}</p>
+        <h2>Panoramica</h2>
+        <p className="hint">Clienti collegati: {clients.length}</p>
+        <p className="hint">Programmi creati: {plans.length}</p>
+        <p className="hint">Sessioni in agenda: {sessions.length}</p>
         <ul className="list">
           {plans.slice(0, 5).map((plan) => (
             <li key={plan.id}>
-              <strong>{plan.title}</strong> · {plan.status} · client {plan.clientId}
+              <strong>{plan.title}</strong> · {plan.status} · cliente {plan.clientId}
             </li>
           ))}
         </ul>

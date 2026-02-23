@@ -10,11 +10,19 @@ export function mapDocs<T>(docs: QueryDocumentSnapshot[]): Array<T & { id: strin
 export function toMessage(error: unknown): string {
   if (typeof error === 'object' && error && 'code' in error) {
     const code = String((error as { code: unknown }).code);
-    if (code.includes('permission-denied')) return 'Permessi insufficienti per questa operazione.';
-    if (code.includes('unauthenticated')) return 'Sessione non valida. Effettua il login di nuovo.';
-    if (code.includes('invalid-argument')) return 'Dati non validi. Controlla i campi e riprova.';
+    if (code.includes('permission-denied')) return 'Non hai i permessi per questa azione.';
+    if (code.includes('unauthenticated')) return 'La sessione è scaduta. Accedi di nuovo.';
+    if (code.includes('invalid-argument')) return 'Alcuni dati non sono corretti. Controlla e riprova.';
+    if (code.includes('internal')) return 'Qualcosa non ha funzionato. Riprova tra pochi secondi.';
+    return 'Operazione non completata. Riprova.';
   }
 
-  if (error instanceof Error) return error.message;
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    if (message.includes('token') || message.includes('credential')) {
+      return 'Sessione non valida. Esci e accedi di nuovo.';
+    }
+    return 'Si è verificato un problema. Riprova.';
+  }
   return 'Operazione non riuscita.';
 }

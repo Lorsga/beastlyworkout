@@ -35,7 +35,7 @@ export function OnboardingPage() {
         trainingDaysPerWeek,
         notes: notes.trim(),
       });
-      setMessage('Perfetto, dati salvati. Il tuo percorso iniziale è stato registrato.');
+      setMessage('Perfetto, informazioni salvate. Sei pronto a iniziare.');
     } catch (error) {
       setMessage(toMessage(error));
     } finally {
@@ -53,26 +53,26 @@ export function OnboardingPage() {
         </p>
 
         <label>
-          Nome visualizzato
+          Come ti chiami?
           <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Nome e cognome" />
         </label>
 
         <label>
-          Obiettivo principale
-          <input value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="es. Dimagrire, forza, ricomposizione" />
+          Qual è il tuo obiettivo?
+          <input value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="Es. perdere peso, aumentare forza, tonificare" />
         </label>
 
         <label>
-          Livello
+          Livello di allenamento
           <select value={experienceLevel} onChange={(event) => setExperienceLevel(event.target.value as 'beginner' | 'intermediate' | 'advanced')}>
-            <option value="beginner">beginner</option>
-            <option value="intermediate">intermediate</option>
-            <option value="advanced">advanced</option>
+            <option value="beginner">Principiante</option>
+            <option value="intermediate">Intermedio</option>
+            <option value="advanced">Avanzato</option>
           </select>
         </label>
 
         <label>
-          Giorni di allenamento a settimana
+          Quanti giorni ti alleni a settimana?
           <input
             value={trainingDaysPerWeek}
             onChange={(event) => setTrainingDaysPerWeek(Number(event.target.value))}
@@ -83,12 +83,12 @@ export function OnboardingPage() {
         </label>
 
         <label>
-          Note aggiuntive
-          <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="infortuni, preferenze, disponibilità..." />
+          Informazioni utili
+          <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Es. infortuni, orari preferiti, esigenze specifiche" />
         </label>
 
         <button className="btn" disabled={loading || !displayName || !goal} type="button" onClick={() => void submitOnboarding()}>
-          {loading ? 'Salvataggio...' : 'Salva onboarding'}
+          {loading ? 'Salvataggio...' : 'Continua'}
         </button>
         <button className="btn btn-ghost" type="button" onClick={() => void logoutCurrentUser()}>
           Esci e cambia account

@@ -13,14 +13,13 @@ const CoachDashboardPage = lazy(() =>
 const OnboardingPage = lazy(() =>
   import('./pages/OnboardingPage').then((module) => ({ default: module.OnboardingPage })),
 );
-const LOGIN_INTENT_KEY = 'bw_login_intent';
 
 function LoadingScreen() {
   return (
     <main className="page page-center">
       <div className="card">
         <p className="eyebrow">Gym PT</p>
-        <h1>Caricamento sessione</h1>
+        <h1>Caricamento in corso</h1>
       </div>
     </main>
   );

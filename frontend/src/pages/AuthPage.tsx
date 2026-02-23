@@ -33,7 +33,7 @@ export function AuthPage() {
       if (intent !== 'coach' || !isAllowedAdminEmail(user.email)) return;
 
       setCompletingCoachAccess(true);
-      setMessage("Sto completando l'accesso PT/Admin...");
+      setMessage("Sto preparando il tuo accesso coach...");
       try {
         await createUserProfile({
           email: user.email ?? '',
@@ -50,7 +50,7 @@ export function AuthPage() {
           }
           await new Promise((resolve) => setTimeout(resolve, 700));
         }
-        setMessage('Accesso PT/Admin non pronto, riprova tra pochi secondi.');
+        setMessage('Sto ancora completando l’accesso. Riprova tra pochi secondi.');
       } catch (error) {
         setMessage(toMessage(error));
       } finally {
@@ -72,8 +72,8 @@ export function AuthPage() {
         <main className="page page-center">
           <section className="card auth-card">
             <p className="eyebrow">Beastly Workout</p>
-            <h1>Accesso PT/Admin</h1>
-            <p className="hero-sub">{completingCoachAccess ? 'Attendi un attimo...' : 'Sto verificando il tuo profilo.'}</p>
+            <h1>Accesso Coach</h1>
+            <p className="hero-sub">{completingCoachAccess ? 'Attendi un attimo...' : 'Sto verificando il tuo account.'}</p>
             {message ? <p className="message">{message}</p> : null}
             <button className="btn btn-ghost" disabled={completingCoachAccess} onClick={() => void logoutCurrentUser()} type="button">
               Esci e cambia account
@@ -92,7 +92,7 @@ export function AuthPage() {
       sessionStorage.setItem(LOGIN_INTENT_KEY, 'client');
       const result = await loginWithGoogle();
       if (result.redirected) {
-        setMessage('Apertura accesso Google...');
+        setMessage('Ti sto reindirizzando a Google...');
         return;
       }
       navigate('/app/client', { replace: true });
@@ -110,7 +110,7 @@ export function AuthPage() {
       sessionStorage.setItem(LOGIN_INTENT_KEY, 'coach');
       const result = await loginWithGoogle();
       if (result.redirected) {
-        setMessage('Apertura accesso Google...');
+        setMessage('Ti sto reindirizzando a Google...');
         return;
       }
       if (!result.user) {
@@ -120,7 +120,7 @@ export function AuthPage() {
 
       if (!isAllowedAdminEmail(result.user.email)) {
         await logoutCurrentUser();
-        setMessage('Questo account non è abilitato come PT/Admin. Usa accesso utente.');
+        setMessage('Questo account non è abilitato per l’area coach. Usa accesso utente.');
         return;
       }
       await createUserProfile({
@@ -139,7 +139,7 @@ export function AuthPage() {
         }
         await new Promise((resolve) => setTimeout(resolve, 700));
       }
-      setMessage('Attivazione PT/Admin in corso. Riprova tra qualche secondo.');
+      setMessage('Sto ancora completando l’accesso coach. Riprova tra qualche secondo.');
     } catch (error) {
       setMessage(toMessage(error));
     } finally {
@@ -152,17 +152,17 @@ export function AuthPage() {
       <section className="card auth-card">
         <p className="eyebrow">Beastly Workout</p>
         <h1>Accedi con Google</h1>
-        <p className="hero-sub">Inizia subito: entra come utente e completa il tuo percorso iniziale.</p>
+        <p className="hero-sub">Entra in pochi secondi e inizia subito il tuo percorso.</p>
 
         <button className="btn" disabled={loading} onClick={() => void signInAsClient()} type="button">
           {loading ? 'Connessione...' : 'Continua con Google'}
         </button>
 
         <div className="divider" />
-        <h2>Sei PT/Admin?</h2>
-        <p className="hint">Usa il tuo account autorizzato per entrare nell&apos;area coach.</p>
+        <h2>Sei un Coach?</h2>
+        <p className="hint">Usa il tuo account coach per entrare nell&apos;area professionale.</p>
         <button className="btn btn-ghost" disabled={loading} onClick={() => void signInAsCoach()} type="button">
-          Continua con Google (PT/Admin)
+          Continua come Coach
         </button>
 
         {message ? <p className="message">{message}</p> : null}

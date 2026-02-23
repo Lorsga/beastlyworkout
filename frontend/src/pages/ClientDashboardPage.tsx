@@ -105,33 +105,33 @@ export function ClientDashboardPage() {
   );
 
   return (
-    <AppShell role="client" subtitle="Allenamenti, log e metriche, ottimizzati per uso da telefono." title="Dashboard Cliente">
+    <AppShell role="client" subtitle="Tieni traccia di allenamenti e progressi in modo semplice." title="La tua area">
       <article className="card">
-        <h2>Riepilogo rapido</h2>
-        <p className="hint">Piani assegnati: {plans.length}</p>
-        <p className="hint">Sessioni pianificate: {sessions.length}</p>
-        <p className="hint">Log inviati: {logs.length}</p>
-        <p className="hint">Metriche: {metrics.length}</p>
+        <h2>Riepilogo</h2>
+        <p className="hint">Programmi ricevuti: {plans.length}</p>
+        <p className="hint">Sessioni prenotate: {sessions.length}</p>
+        <p className="hint">Allenamenti registrati: {logs.length}</p>
+        <p className="hint">Progressi inseriti: {metrics.length}</p>
         {nextSession ? <p className="message success">Prossima sessione: {new Date(nextSession.startsAt).toLocaleString('it-IT')}</p> : null}
       </article>
 
       <article className="card">
-        <h2>Trainer UID</h2>
+        <h2>Codice Coach</h2>
         <label>
-          Trainer assegnato
-          <input value={trainerId} onChange={(event) => setTrainerId(event.target.value)} placeholder="uid coach" />
+          Codice del tuo coach
+          <input value={trainerId} onChange={(event) => setTrainerId(event.target.value)} placeholder="Inserisci il codice coach" />
         </label>
       </article>
 
       <article className="card">
-        <h2>Nuovo Workout Log</h2>
+        <h2>Registra allenamento</h2>
         <label>
-          Data sessione
+          Data allenamento
           <input value={logDate} onChange={(event) => setLogDate(event.target.value)} type="date" />
         </label>
         <label>
-          Note
-          <textarea value={logNotes} onChange={(event) => setLogNotes(event.target.value)} placeholder="come è andato l'allenamento" />
+          Com'è andata?
+          <textarea value={logNotes} onChange={(event) => setLogNotes(event.target.value)} placeholder="Scrivi come ti sei sentito durante l'allenamento" />
         </label>
         <button
           className="btn"
@@ -144,20 +144,20 @@ export function ClientDashboardPage() {
                   sessionDate: logDate,
                   notes: logNotes,
                 }),
-              'Workout log salvato.',
+              'Allenamento salvato.',
             )
           }
           type="button"
         >
-          Salva log
+          Salva allenamento
         </button>
       </article>
 
       <article className="card">
-        <h2>Nuova metrica</h2>
+        <h2>Aggiorna progressi</h2>
         <label>
-          Tipo metrica
-          <input value={metricType} onChange={(event) => setMetricType(event.target.value)} placeholder="weight, bf, vo2..." />
+          Tipo di dato
+          <input value={metricType} onChange={(event) => setMetricType(event.target.value)} placeholder="Es. peso, massa grassa, frequenza" />
         </label>
         <label>
           Valore
@@ -165,10 +165,10 @@ export function ClientDashboardPage() {
         </label>
         <label>
           Unità
-          <input value={metricUnit} onChange={(event) => setMetricUnit(event.target.value)} placeholder="kg, %, bpm..." />
+          <input value={metricUnit} onChange={(event) => setMetricUnit(event.target.value)} placeholder="Es. kg, %, bpm" />
         </label>
         <label>
-          Data misurazione
+          Data
           <input value={metricDate} onChange={(event) => setMetricDate(event.target.value)} type="date" />
         </label>
         <button
@@ -184,17 +184,17 @@ export function ClientDashboardPage() {
                   unit: metricUnit,
                   measuredAt: metricDate,
                 }),
-              'Metrica salvata.',
+              'Progresso salvato.',
             )
           }
           type="button"
         >
-          Salva metrica
+          Salva progresso
         </button>
       </article>
 
       <article className="card">
-        <h2>Ultimi log</h2>
+        <h2>Ultimi allenamenti</h2>
         <ul className="list">
           {logs.slice(0, 5).map((log) => (
             <li key={log.id}>

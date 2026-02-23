@@ -22,14 +22,14 @@ export function AppShell({
         <h1>{title}</h1>
         <p className="hero-sub">{subtitle}</p>
         <button className="btn btn-ghost" type="button" onClick={() => void logoutCurrentUser()}>
-          Logout
+          Esci dal profilo
         </button>
       </section>
 
       <section className="stack">{children}</section>
 
       <nav className="mobile-nav">
-        <Link to={role === 'client' ? '/app/client' : '/app/coach'}>Dashboard</Link>
+        <Link to={role === 'client' ? '/app/client' : '/app/coach'}>Home</Link>
         <button type="button" onClick={() => void logoutCurrentUser()}>
           Esci
         </button>
