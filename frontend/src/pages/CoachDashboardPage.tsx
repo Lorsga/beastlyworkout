@@ -20,7 +20,7 @@ interface PlanDoc {
   exercises?: Array<{
     name?: string;
     sets?: number;
-    reps?: string;
+    reps?: number;
     weight?: string;
     mediaUrl?: string;
   }>;
@@ -87,12 +87,12 @@ function normalizePlanExercises(value: unknown) {
       return {
         name: asText(raw.name),
         sets: Number(raw.sets ?? 3) || 3,
-        reps: asText(raw.reps) || '10',
+        reps: Number(raw.reps ?? 10) || 10,
         weight: asText(raw.weight),
         mediaUrl: asText(raw.mediaUrl),
       };
     })
-    .filter((item): item is {name: string; sets: number; reps: string; weight: string; mediaUrl: string} => Boolean(item));
+    .filter((item): item is {name: string; sets: number; reps: number; weight: string; mediaUrl: string} => Boolean(item));
 }
 
 function onboardingValue(value: unknown): string {
@@ -112,7 +112,7 @@ export function CoachDashboardPage() {
 
   const [selectedClientId, setSelectedClientId] = useState('');
   const [planTitle, setPlanTitle] = useState('');
-  const [exercises, setExercises] = useState([{name: '', sets: 3, reps: '10', weight: '', mediaUrl: ''}]);
+  const [exercises, setExercises] = useState([{name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''}]);
 
   const existingPlanForClient = plans.find((plan) => plan.id === selectedClientId) ?? plans.find((plan) => plan.clientId === selectedClientId);
 
@@ -137,14 +137,14 @@ export function CoachDashboardPage() {
     if (!selectedClientId) return;
     if (!existingPlanForClient) {
       setPlanTitle('');
-      setExercises([{name: '', sets: 3, reps: '10', weight: '', mediaUrl: ''}]);
+      setExercises([{name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''}]);
       return;
     }
 
     setPlanTitle(existingPlanForClient.title ?? '');
     const nextExercises = normalizePlanExercises(existingPlanForClient.exercises)
       .filter((item) => item.name.trim().length > 0);
-    setExercises(nextExercises.length > 0 ? nextExercises : [{name: '', sets: 3, reps: '10', weight: '', mediaUrl: ''}]);
+    setExercises(nextExercises.length > 0 ? nextExercises : [{name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''}]);
   }, [selectedClientId, existingPlanForClient?.id]);
 
   async function loadData() {
@@ -210,14 +210,14 @@ export function CoachDashboardPage() {
   }
 
   function addExercise() {
-    setExercises((prev) => [...prev, {name: '', sets: 3, reps: '10', weight: '', mediaUrl: ''}]);
+    setExercises((prev) => [...prev, {name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''}]);
   }
 
   function removeExercise(index: number) {
     setExercises((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== index)));
   }
 
-  function updateExercise(index: number, patch: Partial<{name: string; sets: number; reps: string; weight: string; mediaUrl: string}>) {
+  function updateExercise(index: number, patch: Partial<{name: string; sets: number; reps: number; weight: string; mediaUrl: string}>) {
     setExercises((prev) => prev.map((item, idx) => (idx === index ? {...item, ...patch} : item)));
   }
 
@@ -226,7 +226,7 @@ export function CoachDashboardPage() {
       .map((item) => ({
         name: item.name.trim(),
         sets: Number(item.sets) || 0,
-        reps: item.reps.trim(),
+        reps: Number(item.reps) || 0,
         weight: item.weight.trim(),
         mediaUrl: item.mediaUrl.trim(),
       }))
@@ -400,7 +400,13 @@ export function CoachDashboardPage() {
                 </label>
                 <label>
                   Ripetizioni
-                  <input value={exercise.reps} onChange={(event) => updateExercise(index, {reps: event.target.value})} placeholder="Es. 8-10" />
+                  <input
+                    type="number"
+                    min={1}
+                    value={exercise.reps}
+                    onChange={(event) => updateExercise(index, {reps: Number(event.target.value)})}
+                    placeholder="10"
+                  />
                 </label>
                 <label>
                   Peso

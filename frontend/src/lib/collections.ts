@@ -36,7 +36,7 @@ export interface PlanInput {
 export interface PlanExerciseInput {
   name: string;
   sets: number;
-  reps: string;
+  reps: number;
   weight: string;
   mediaUrl?: string;
 }

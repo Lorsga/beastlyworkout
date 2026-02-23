@@ -240,7 +240,13 @@ export function OnboardingPage() {
             </label>
             <label>
               Numero di telefono *
-              <input value={form.phone} onChange={(event) => updateField('phone', event.target.value)} placeholder="+39..." />
+              <input
+                value={form.phone}
+                onChange={(event) => updateField('phone', event.target.value)}
+                type="tel"
+                inputMode="numeric"
+                placeholder="Es. 3405882404"
+              />
             </label>
             <label>
               Come mi hai conosciuto? *
