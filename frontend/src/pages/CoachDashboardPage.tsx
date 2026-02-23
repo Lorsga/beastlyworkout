@@ -38,6 +38,33 @@ interface UserProfileDoc {
 }
 
 interface OnboardingDoc {
+  fullName?: string;
+  age?: string;
+  sex?: string;
+  email?: string;
+  phone?: string;
+  discoverySource?: string;
+  heightCm?: string;
+  weightKg?: string;
+  pastProgram?: string;
+  trainingFrequency?: string;
+  workoutDuration?: string;
+  workoutLocation?: string;
+  equipment?: string;
+  trainingTypeHistory?: string;
+  hasInjuries?: string;
+  injuryDetails?: string;
+  objectivePrimary?: string;
+  objectiveReason?: string;
+  expectedTimeline?: string;
+  supportPreference?: string;
+  supportPreferenceOther?: string;
+  investmentRange?: string;
+  whatBlockedSoFar?: string;
+  oneThingToImprove?: string;
+  importanceScore?: number;
+  riskIfNoChange?: string;
+  readiness?: string;
   goal?: string;
   experienceLevel?: string;
   trainingDaysPerWeek?: number;
@@ -68,6 +95,11 @@ function normalizePlanExercises(value: unknown) {
       };
     })
     .filter((item): item is {name: string; sets: number; reps: string; weight: string; mediaUrl: string} => Boolean(item));
+}
+
+function onboardingValue(value: unknown): string {
+  const text = asText(value).trim();
+  return text || 'Non compilato';
 }
 
 export function CoachDashboardPage() {
@@ -300,18 +332,45 @@ export function CoachDashboardPage() {
         </p>
         <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
           <h2>Informazioni del cliente</h2>
-          <p className="hint">
-            Obiettivo: {selectedClientOnboarding?.goal?.trim() || 'Non disponibile'}
-          </p>
-          <p className="hint">
-            Livello: {selectedClientOnboarding?.experienceLevel || 'Non disponibile'}
-          </p>
-          <p className="hint">
-            Allenamenti a settimana: {selectedClientOnboarding?.trainingDaysPerWeek ?? 'Non disponibile'}
-          </p>
-          <p className="hint">
-            Note: {selectedClientOnboarding?.notes?.trim() || 'Nessuna nota inserita'}
-          </p>
+          <div className="client-info-block">
+            <h3>Anagrafica</h3>
+            <p className="hint"><strong>Nome:</strong> {onboardingValue(selectedClientOnboarding?.fullName)}</p>
+            <p className="hint"><strong>Età:</strong> {onboardingValue(selectedClientOnboarding?.age)}</p>
+            <p className="hint"><strong>Sesso:</strong> {onboardingValue(selectedClientOnboarding?.sex)}</p>
+            <p className="hint"><strong>Email:</strong> {onboardingValue(selectedClientOnboarding?.email)}</p>
+            <p className="hint"><strong>Telefono:</strong> {onboardingValue(selectedClientOnboarding?.phone)}</p>
+            <p className="hint"><strong>Come ci ha conosciuto:</strong> {onboardingValue(selectedClientOnboarding?.discoverySource)}</p>
+          </div>
+          <div className="client-info-block">
+            <h3>Stato fisico e allenamento</h3>
+            <p className="hint"><strong>Altezza:</strong> {onboardingValue(selectedClientOnboarding?.heightCm)} cm</p>
+            <p className="hint"><strong>Peso:</strong> {onboardingValue(selectedClientOnboarding?.weightKg)} kg</p>
+            <p className="hint"><strong>Esperienza programmi:</strong> {onboardingValue(selectedClientOnboarding?.pastProgram || selectedClientOnboarding?.experienceLevel)}</p>
+            <p className="hint"><strong>Allenamenti settimanali:</strong> {onboardingValue(selectedClientOnboarding?.trainingFrequency || selectedClientOnboarding?.trainingDaysPerWeek)}</p>
+            <p className="hint"><strong>Durata sessione:</strong> {onboardingValue(selectedClientOnboarding?.workoutDuration)}</p>
+            <p className="hint"><strong>Luogo allenamento:</strong> {onboardingValue(selectedClientOnboarding?.workoutLocation)}</p>
+            <p className="hint"><strong>Attrezzatura:</strong> {onboardingValue(selectedClientOnboarding?.equipment)}</p>
+            <p className="hint"><strong>Allenamenti svolti:</strong> {onboardingValue(selectedClientOnboarding?.trainingTypeHistory)}</p>
+            <p className="hint"><strong>Infortuni/problemi:</strong> {onboardingValue(selectedClientOnboarding?.hasInjuries)}</p>
+            <p className="hint"><strong>Dettagli infortuni:</strong> {onboardingValue(selectedClientOnboarding?.injuryDetails)}</p>
+          </div>
+          <div className="client-info-block">
+            <h3>Obiettivi</h3>
+            <p className="hint"><strong>Obiettivo principale:</strong> {onboardingValue(selectedClientOnboarding?.objectivePrimary || selectedClientOnboarding?.goal)}</p>
+            <p className="hint"><strong>Perché:</strong> {onboardingValue(selectedClientOnboarding?.objectiveReason)}</p>
+            <p className="hint"><strong>Timeline risultati:</strong> {onboardingValue(selectedClientOnboarding?.expectedTimeline)}</p>
+            <p className="hint"><strong>Cosa lo ha bloccato:</strong> {onboardingValue(selectedClientOnboarding?.whatBlockedSoFar || selectedClientOnboarding?.notes)}</p>
+            <p className="hint"><strong>Miglioramento desiderato (3 mesi):</strong> {onboardingValue(selectedClientOnboarding?.oneThingToImprove)}</p>
+            <p className="hint"><strong>Importanza obiettivo:</strong> {onboardingValue(selectedClientOnboarding?.importanceScore)} / 10</p>
+            <p className="hint"><strong>Rischio se non cambia:</strong> {onboardingValue(selectedClientOnboarding?.riskIfNoChange)}</p>
+          </div>
+          <div className="client-info-block">
+            <h3>Supporto e decisione</h3>
+            <p className="hint"><strong>Supporto preferito:</strong> {onboardingValue(selectedClientOnboarding?.supportPreference)}</p>
+            <p className="hint"><strong>Altro supporto:</strong> {onboardingValue(selectedClientOnboarding?.supportPreferenceOther)}</p>
+            <p className="hint"><strong>Fascia investimento:</strong> {onboardingValue(selectedClientOnboarding?.investmentRange)}</p>
+            <p className="hint"><strong>Disponibilità a partire:</strong> {onboardingValue(selectedClientOnboarding?.readiness)}</p>
+          </div>
         </article>
         <button
           className="btn"

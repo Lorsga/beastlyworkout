@@ -119,6 +119,19 @@ p {
   gap: 10px;
 }
 
+.client-info-block {
+  border: 1px solid rgba(18, 18, 18, 0.1);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.client-info-block h3 {
+  font-size: 16px;
+}
+
 .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.08em;
