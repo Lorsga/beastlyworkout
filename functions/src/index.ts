@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin';
 import {onCall, HttpsError} from 'firebase-functions/v2/https';
-import {onDocumentCreated} from 'firebase-functions/v2/firestore';
+import {onDocumentCreated, onDocumentWritten} from 'firebase-functions/v2/firestore';
 
 admin.initializeApp();
 
@@ -47,6 +47,32 @@ export const createUserProfile = onDocumentCreated('users/{uid}', async (event) 
       },
       {merge: true},
     );
+  }
+});
+
+export const syncAdminRoleByEmail = onDocumentWritten('users/{uid}', async (event) => {
+  const after = event.data?.after;
+  if (!after?.exists) return;
+
+  const uid = event.params.uid;
+  const data = after.data();
+  if (!data) return;
+  if (!isAllowedAdminEmail(data.email)) return;
+
+  const updates: Record<string, unknown> = {};
+  if (data.role !== 'admin') updates.role = 'admin';
+  if (!data.roleAssignedBy) updates.roleAssignedBy = uid;
+  if (!data.roleAssignedAt) updates.roleAssignedAt = admin.firestore.FieldValue.serverTimestamp();
+  if (Object.keys(updates).length > 0) {
+    updates.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+    await after.ref.set(updates, {merge: true});
+  }
+
+  const userRecord = await admin.auth().getUser(uid);
+  const currentClaims = userRecord.customClaims ?? {};
+  if (currentClaims.role !== 'admin') {
+    await admin.auth().setCustomUserClaims(uid, {...currentClaims, role: 'admin'});
+    await admin.auth().revokeRefreshTokens(uid);
   }
 });
 

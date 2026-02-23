@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 import {
-  bootstrapFirstAdmin,
   completeGoogleRedirect,
+  createUserProfile,
   getCurrentUserRole,
   loginWithGoogle,
   logoutCurrentUser,
@@ -35,13 +35,20 @@ export function AuthPage() {
       setCompletingCoachAccess(true);
       setMessage("Sto completando l'accesso PT/Admin...");
       try {
-        await bootstrapFirstAdmin();
-        await refreshIdTokenClaims();
-        const nextRole = await getCurrentUserRole(user);
-        if (nextRole === 'admin' || nextRole === 'trainer') {
-          sessionStorage.removeItem(LOGIN_INTENT_KEY);
-          navigate('/app/coach', {replace: true});
-          return;
+        await createUserProfile({
+          email: user.email ?? '',
+          displayName: user.displayName ?? '',
+          coachAccessRequestedAt: new Date().toISOString(),
+        });
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          await refreshIdTokenClaims();
+          const nextRole = await getCurrentUserRole(user);
+          if (nextRole === 'admin' || nextRole === 'trainer') {
+            sessionStorage.removeItem(LOGIN_INTENT_KEY);
+            navigate('/app/coach', {replace: true});
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 700));
         }
         setMessage('Accesso PT/Admin non pronto, riprova tra pochi secondi.');
       } catch (error) {
@@ -116,17 +123,23 @@ export function AuthPage() {
         setMessage('Questo account non è abilitato come PT/Admin. Usa accesso utente.');
         return;
       }
+      await createUserProfile({
+        email: result.user.email ?? '',
+        displayName: result.user.displayName ?? '',
+        coachAccessRequestedAt: new Date().toISOString(),
+      });
 
-      await bootstrapFirstAdmin();
-      await refreshIdTokenClaims();
-      const userRole = await getCurrentUserRole(result.user);
-      if (userRole === 'admin' || userRole === 'trainer') {
-        sessionStorage.removeItem(LOGIN_INTENT_KEY);
-        navigate('/app/coach', { replace: true });
-        return;
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        await refreshIdTokenClaims();
+        const userRole = await getCurrentUserRole(result.user);
+        if (userRole === 'admin' || userRole === 'trainer') {
+          sessionStorage.removeItem(LOGIN_INTENT_KEY);
+          navigate('/app/coach', {replace: true});
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 700));
       }
-
-      setMessage('Accesso PT/Admin non completato. Riprova tra qualche secondo.');
+      setMessage('Attivazione PT/Admin in corso. Riprova tra qualche secondo.');
     } catch (error) {
       setMessage(toMessage(error));
     } finally {
