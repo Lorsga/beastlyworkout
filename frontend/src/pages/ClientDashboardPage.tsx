@@ -224,17 +224,6 @@ export function ClientDashboardPage() {
         )}
       </article>
 
-      <article className="card">
-        <h2>Ultimi allenamenti</h2>
-        <ul className="list">
-          {logs.slice(0, 5).map((log) => (
-            <li key={log.id}>
-              <strong>{log.sessionDate}</strong> · {log.notes || 'Nessuna nota'}
-            </li>
-          ))}
-        </ul>
-      </article>
-
       {loading ? <p className="message">Caricamento...</p> : null}
 
       {mediaPreview ? (
