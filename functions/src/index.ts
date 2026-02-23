@@ -12,7 +12,7 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
 ];
 const adminEmails = new Set(
-  (process.env.ADMIN_EMAILS ?? 'lrnz.sga@gmail.com')
+  (process.env.ADMIN_EMAILS ?? 'lrnz.sga@gmail.com,beastlyworkoutideas@gmail.com')
     .split(',')
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean),
