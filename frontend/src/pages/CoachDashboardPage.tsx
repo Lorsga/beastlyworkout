@@ -7,6 +7,7 @@ import {
   listPlansForRole,
   listRegisteredUsers,
   setUserRole,
+  updatePlanAsCoach,
   useAuthState,
   type AppRole,
 } from '../lib';
@@ -56,6 +57,7 @@ export function CoachDashboardPage() {
 
   const [targetUid, setTargetUid] = useState('');
   const [targetRole, setTargetRole] = useState<AppRole>('client');
+  const existingPlanForClient = plans.find((plan) => plan.clientId === selectedClientId);
 
   useEffect(() => {
     async function loadSelectedClientOnboarding() {
@@ -73,6 +75,27 @@ export function CoachDashboardPage() {
 
     void loadSelectedClientOnboarding();
   }, [selectedClientId]);
+
+  useEffect(() => {
+    if (!selectedClientId) return;
+    if (!existingPlanForClient) {
+      setPlanTitle('');
+      setExercises([{name: '', sets: 3, reps: '10', weight: '', mediaUrl: ''}]);
+      return;
+    }
+
+    setPlanTitle(existingPlanForClient.title ?? '');
+    const nextExercises = (existingPlanForClient.exercises ?? [])
+      .map((item) => ({
+        name: item.name ?? '',
+        sets: Number(item.sets ?? 3),
+        reps: item.reps ?? '10',
+        weight: item.weight ?? '',
+        mediaUrl: item.mediaUrl ?? '',
+      }))
+      .filter((item) => item.name.trim().length > 0);
+    setExercises(nextExercises.length > 0 ? nextExercises : [{name: '', sets: 3, reps: '10', weight: '', mediaUrl: ''}]);
+  }, [selectedClientId, existingPlanForClient?.id]);
 
   async function loadData() {
     if (!role) return;
@@ -157,18 +180,28 @@ export function CoachDashboardPage() {
       return;
     }
 
-    await runAction(
-      () =>
-        createPlanAsCoach({
-          clientId: selectedClientId,
-          title: planTitle,
-          status: 'active',
-          exercises: preparedExercises,
-        }),
-      'Scheda salvata e subito visibile al cliente.',
-    );
-    setPlanTitle('');
-    setExercises([{name: '', sets: 3, reps: '10', weight: '', mediaUrl: ''}]);
+    if (existingPlanForClient) {
+      await runAction(
+        () =>
+          updatePlanAsCoach(existingPlanForClient.id, {
+            title: planTitle,
+            status: 'active',
+            exercises: preparedExercises,
+          }),
+        'Scheda aggiornata con successo.',
+      );
+    } else {
+      await runAction(
+        () =>
+          createPlanAsCoach({
+            clientId: selectedClientId,
+            title: planTitle,
+            status: 'active',
+            exercises: preparedExercises,
+          }),
+        'Scheda creata e subito visibile al cliente.',
+      );
+    }
     setIsPlanModalOpen(false);
   }
 
@@ -210,6 +243,9 @@ export function CoachDashboardPage() {
           Titolo programma
           <input value={planTitle} onChange={(event) => setPlanTitle(event.target.value)} placeholder="Forza 4 settimane" />
         </label>
+        <p className="hint">
+          {existingPlanForClient ? 'Questo cliente ha già una scheda: puoi modificarla.' : 'Questo cliente non ha ancora una scheda: ne creerai una nuova.'}
+        </p>
         <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
           <h2>Informazioni del cliente</h2>
           <p className="hint">
@@ -231,13 +267,13 @@ export function CoachDashboardPage() {
           onClick={openCreatePlanModal}
           type="button"
         >
-          Crea scheda
+          {existingPlanForClient ? 'Modifica scheda' : 'Crea scheda'}
         </button>
       </article>
       {isPlanModalOpen ? (
         <section className="modal-overlay" role="dialog" aria-modal="true">
           <article className="card modal-card">
-            <h2>Compila la scheda</h2>
+            <h2>{existingPlanForClient ? 'Modifica scheda' : 'Compila la scheda'}</h2>
             <p className="hint">Aggiungi esercizi uno alla volta per completare il programma.</p>
             {exercises.map((exercise, index) => (
               <article className="card" key={`exercise-${index}`} style={{boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)'}}>
@@ -276,7 +312,7 @@ export function CoachDashboardPage() {
               Aggiungi esercizio
             </button>
             <button className="btn" type="button" disabled={loading} onClick={() => void savePlan()}>
-              Salva scheda tecnica
+              {existingPlanForClient ? 'Salva modifiche' : 'Salva scheda tecnica'}
             </button>
             <button className="btn btn-ghost" type="button" onClick={() => setIsPlanModalOpen(false)}>
               Chiudi
