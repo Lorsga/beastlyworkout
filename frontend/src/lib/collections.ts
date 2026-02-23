@@ -146,7 +146,7 @@ export async function createPlanAsCoach(input: PlanInput) {
 export async function listPlansForRole(role: AppRole, userId?: string) {
   const uid = userId ?? requireUid();
   const field = role === 'client' ? 'clientId' : 'trainerId';
-  const q = query(collection(db, 'plans'), where(field, '==', uid), orderBy('createdAt', 'desc'));
+  const q = query(collection(db, 'plans'), where(field, '==', uid));
   return getDocs(q);
 }
 

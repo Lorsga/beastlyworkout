@@ -78,10 +78,7 @@ export function CoachDashboardPage() {
     if (!role) return;
     setLoading(true);
     try {
-      const [usersSnap, plansSnap] = await Promise.all([
-        listRegisteredUsers(),
-        listPlansForRole(role),
-      ]);
+      const usersSnap = await listRegisteredUsers();
       const allUsers = usersSnap.docs.map((docItem) => ({
         id: docItem.id,
         ...(docItem.data() as UserProfileDoc),
@@ -96,12 +93,18 @@ export function CoachDashboardPage() {
       setRegisteredClients(candidates);
       if (!selectedClientId && candidates[0]?.id) setSelectedClientId(candidates[0].id);
 
-      setPlans(
-        plansSnap.docs.map((docItem) => ({
-          id: docItem.id,
-          ...(docItem.data() as PlanDoc),
-        })),
-      );
+      try {
+        const plansSnap = await listPlansForRole(role);
+        setPlans(
+          plansSnap.docs.map((docItem) => ({
+            id: docItem.id,
+            ...(docItem.data() as PlanDoc),
+          })),
+        );
+      } catch (error) {
+        setPlans([]);
+        showError(toMessage(error));
+      }
     } catch (error) {
       showError(toMessage(error));
     } finally {
