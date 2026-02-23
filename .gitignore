@@ -1,0 +1,12 @@
+# Firebase
+.firebase/
+firestore-debug.log
+ui-debug.log
+
+# Functions
+functions/lib/
+functions/node_modules/
+
+# Node
+node_modules/
+npm-debug.log*

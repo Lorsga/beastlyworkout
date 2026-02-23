@@ -1,0 +1,116 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(role) {
+      return isSignedIn() && request.auth.token.role == role;
+    }
+
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    function isTrainer() {
+      return hasRole('trainer');
+    }
+
+    function isCoach() {
+      return isAdmin() || isTrainer();
+    }
+
+    function isClient() {
+      return hasRole('client');
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function canAccessPair(trainerId, clientId) {
+      return isAdmin() ||
+        (isCoach() && request.auth.uid == trainerId) ||
+        (isClient() && request.auth.uid == clientId);
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && request.resource.data.uid == request.auth.uid;
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+
+      match /private/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    match /trainerClients/{pairId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        request.auth.uid == resource.data.trainerId ||
+        request.auth.uid == resource.data.clientId
+      );
+
+      allow create: if isCoach() &&
+        request.resource.data.trainerId == request.auth.uid &&
+        request.resource.data.clientId is string;
+
+      allow update: if isAdmin() ||
+        (isCoach() && request.auth.uid == resource.data.trainerId);
+
+      allow delete: if isAdmin();
+    }
+
+    match /plans/{planId} {
+      allow read: if isSignedIn() && canAccessPair(resource.data.trainerId, resource.data.clientId);
+
+      allow create: if isCoach() &&
+        request.resource.data.trainerId == request.auth.uid &&
+        request.resource.data.clientId is string &&
+        request.resource.data.status in ['draft', 'active', 'archived'];
+
+      allow update: if isAdmin() ||
+        (isCoach() && request.auth.uid == resource.data.trainerId) ||
+        (isClient() && request.auth.uid == resource.data.clientId &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['clientNotes', 'lastViewedAt'])
+        );
+
+      allow delete: if isAdmin() ||
+        (isCoach() && request.auth.uid == resource.data.trainerId && resource.data.status != 'active');
+    }
+
+    match /workoutLogs/{logId} {
+      allow read: if isSignedIn() && canAccessPair(resource.data.trainerId, resource.data.clientId);
+
+      allow create: if isClient() &&
+        request.resource.data.clientId == request.auth.uid &&
+        request.resource.data.trainerId is string;
+
+      allow update: if isAdmin() ||
+        (isClient() && request.auth.uid == resource.data.clientId) ||
+        (isCoach() && request.auth.uid == resource.data.trainerId &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['trainerFeedback', 'updatedAt'])
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isSignedIn() && canAccessPair(resource.data.trainerId, resource.data.clientId);
+      allow create, update: if isCoach() && request.auth.uid == request.resource.data.trainerId;
+      allow delete: if isAdmin() || (isCoach() && request.auth.uid == resource.data.trainerId);
+    }
+
+    match /metrics/{metricId} {
+      allow read: if isSignedIn() && canAccessPair(resource.data.trainerId, resource.data.clientId);
+      allow create, update: if isClient() && request.auth.uid == request.resource.data.clientId;
+      allow delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

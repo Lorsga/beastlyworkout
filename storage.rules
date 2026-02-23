@@ -1,0 +1,53 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(role) {
+      return isSignedIn() && request.auth.token.role == role;
+    }
+
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    function isTrainer() {
+      return hasRole('trainer');
+    }
+
+    function isCoach() {
+      return isAdmin() || isTrainer();
+    }
+
+    function isClient() {
+      return hasRole('client');
+    }
+
+    match /profile-images/{uid}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.uid == uid;
+      allow delete: if isSignedIn() && request.auth.uid == uid || isAdmin();
+    }
+
+    match /workout-media/{trainerId}/{clientId}/{fileName} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        (isCoach() && request.auth.uid == trainerId) ||
+        (isClient() && request.auth.uid == clientId)
+      );
+
+      allow create, update: if isSignedIn() && (
+        (isCoach() && request.auth.uid == trainerId) ||
+        (isClient() && request.auth.uid == clientId)
+      ) && request.resource.size < 15 * 1024 * 1024;
+
+      allow delete: if isAdmin() || (isCoach() && request.auth.uid == trainerId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
