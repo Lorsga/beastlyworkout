@@ -529,14 +529,12 @@ export function CoachDashboardPage() {
                     onChange={(event) => void onUploadMedia(index, event.target.files?.[0] ?? null)}
                     disabled={uploadingExerciseIndex === index}
                   />
+                  {isImageMediaUrl(exercise.mediaUrl) ? <img src={exercise.mediaUrl} alt={`Anteprima esercizio ${index + 1}`} className="exercise-upload-preview" /> : null}
                 </label>
                 {isImageMediaUrl(exercise.mediaUrl) ? (
                   <p className="hint">
-                    Immagine caricata.{' '}
-                    <a href={exercise.mediaUrl} target="_blank" rel="noreferrer">
-                      Apri
-                    </a>{' '}
-                    ·{' '}
+                    Immagine caricata.
+                    {' '}
                     <button className="btn-link" type="button" onClick={() => updateExercise(index, {mediaUrl: ''})}>
                       Rimuovi
                     </button>
