@@ -3,6 +3,7 @@ import {
   browserLocalPersistence,
   getAuth,
   setPersistence,
+  signOut,
   type User,
 } from 'firebase/auth';
 import { getFirestore, serverTimestamp } from 'firebase/firestore';
@@ -58,9 +59,25 @@ export async function getCurrentUserRole(user?: User | null): Promise<AppRole | 
   const current = user ?? auth.currentUser;
   if (!current) return null;
 
-  const tokenResult = await current.getIdTokenResult();
-  const role = tokenResult.claims.role;
-  return role === 'admin' || role === 'trainer' || role === 'client' ? role : null;
+  try {
+    const tokenResult = await current.getIdTokenResult();
+    const role = tokenResult.claims.role;
+    return role === 'admin' || role === 'trainer' || role === 'client' ? role : null;
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error ? String((error as { code: unknown }).code) : '';
+    if (code.includes('user-token-expired')) {
+      try {
+        await current.getIdToken(true);
+        const refreshedToken = await current.getIdTokenResult();
+        const refreshedRole = refreshedToken.claims.role;
+        return refreshedRole === 'admin' || refreshedRole === 'trainer' || refreshedRole === 'client' ? refreshedRole : null;
+      } catch {
+        await signOut(auth);
+        return null;
+      }
+    }
+    throw error;
+  }
 }
 
 export function newWriteTimestamps() {

@@ -27,6 +27,7 @@ export function useAuthState(): AuthState {
   useEffect(() => {
     return onIdTokenChanged(auth, async (nextUser) => {
       try {
+        setInitializing(true);
         setUser(nextUser);
         if (!nextUser) {
           setRole(null);
@@ -36,7 +37,12 @@ export function useAuthState(): AuthState {
         await ensureUserProfile(nextUser);
         const nextRole = await getCurrentUserRole(nextUser);
         setRole(nextRole);
-      } catch {
+      } catch (error) {
+        const code = typeof error === 'object' && error && 'code' in error ? String((error as { code: unknown }).code) : '';
+        if (code.includes('user-token-expired')) {
+          await signOut(auth);
+          setUser(null);
+        }
         setRole(null);
       } finally {
         setInitializing(false);
@@ -83,9 +89,18 @@ export async function loginWithGoogle() {
 }
 
 export async function completeGoogleRedirect() {
-  const result = await getRedirectResult(auth);
-  if (result?.user) await ensureUserProfile(result.user);
-  return result;
+  try {
+    const result = await getRedirectResult(auth);
+    if (result?.user) await ensureUserProfile(result.user);
+    return result;
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error ? String((error as { code: unknown }).code) : '';
+    if (code.includes('user-token-expired')) {
+      await signOut(auth);
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function logoutCurrentUser() {

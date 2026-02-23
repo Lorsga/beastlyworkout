@@ -25,8 +25,17 @@ export function AuthPage() {
   const [completingCoachAccess, setCompletingCoachAccess] = useState(false);
 
   useEffect(() => {
-    void completeGoogleRedirect();
-  }, []);
+    async function resolveRedirect() {
+      try {
+        await completeGoogleRedirect();
+      } catch (error) {
+        const nextMessage = toMessage(error);
+        setMessage(nextMessage);
+        showError(nextMessage);
+      }
+    }
+    void resolveRedirect();
+  }, [showError]);
 
   useEffect(() => {
     async function completeCoachAccess() {

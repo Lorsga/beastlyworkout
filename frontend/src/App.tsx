@@ -1,18 +1,11 @@
-import { Component, Suspense, lazy, type ReactNode } from 'react';
+import { Component, type ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
+import { AuthPage } from './pages/AuthPage';
+import { ClientDashboardPage } from './pages/ClientDashboardPage';
+import { CoachDashboardPage } from './pages/CoachDashboardPage';
+import { OnboardingPage } from './pages/OnboardingPage';
 import { useAuthState } from './lib';
-
-const AuthPage = lazy(() => import('./pages/AuthPage').then((module) => ({ default: module.AuthPage })));
-const ClientDashboardPage = lazy(() =>
-  import('./pages/ClientDashboardPage').then((module) => ({ default: module.ClientDashboardPage })),
-);
-const CoachDashboardPage = lazy(() =>
-  import('./pages/CoachDashboardPage').then((module) => ({ default: module.CoachDashboardPage })),
-);
-const OnboardingPage = lazy(() =>
-  import('./pages/OnboardingPage').then((module) => ({ default: module.OnboardingPage })),
-);
 
 function LoadingScreen() {
   return (
@@ -85,30 +78,28 @@ function HomeRedirect() {
 export function App() {
   return (
     <AppErrorBoundary>
-      <Suspense fallback={<LoadingScreen />}>
-        <Routes>
-          <Route path="/" element={<HomeRedirect />} />
-          <Route path="/auth" element={<AuthPage />} />
-          <Route path="/onboarding" element={<OnboardingPage />} />
-          <Route
-            path="/app/coach"
-            element={
-              <ProtectedRoleRoute allow={['admin', 'trainer']}>
-                <CoachDashboardPage />
-              </ProtectedRoleRoute>
-            }
-          />
-          <Route
-            path="/app/client"
-            element={
-              <ProtectedRoleRoute allow={['client']}>
-                <ClientDashboardPage />
-              </ProtectedRoleRoute>
-            }
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+      <Routes>
+        <Route path="/" element={<HomeRedirect />} />
+        <Route path="/auth" element={<AuthPage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route
+          path="/app/coach"
+          element={
+            <ProtectedRoleRoute allow={['admin', 'trainer']}>
+              <CoachDashboardPage />
+            </ProtectedRoleRoute>
+          }
+        />
+        <Route
+          path="/app/client"
+          element={
+            <ProtectedRoleRoute allow={['client']}>
+              <ClientDashboardPage />
+            </ProtectedRoleRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </AppErrorBoundary>
   );
 }
