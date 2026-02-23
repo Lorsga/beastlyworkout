@@ -3,21 +3,15 @@ import { useEffect, useState } from 'react';
 import {
   createPlanAsCoach,
   createSessionAsCoach,
-  createTrainerClient,
   listPlansForRole,
+  listRegisteredUsers,
   listSessionsForRole,
-  listTrainerClients,
   setUserRole,
   useAuthState,
   type AppRole,
 } from '../lib';
 import { AppShell } from '../components/AppShell';
-import { mapDocs, toMessage } from '../utils/firestore';
-
-interface TrainerClientDoc {
-  trainerId: string;
-  clientId: string;
-}
+import { toMessage } from '../utils/firestore';
 
 interface PlanDoc {
   clientId: string;
@@ -31,18 +25,25 @@ interface SessionDoc {
   type: string;
 }
 
+interface UserProfileDoc {
+  uid?: string;
+  email?: string;
+  displayName?: string;
+  role?: string;
+  requestedRole?: string;
+}
+
 export function CoachDashboardPage() {
   const { role } = useAuthState();
-  const [clients, setClients] = useState<Array<TrainerClientDoc & { id: string }>>([]);
+  const [registeredClients, setRegisteredClients] = useState<Array<UserProfileDoc & { id: string }>>([]);
   const [plans, setPlans] = useState<Array<PlanDoc & { id: string }>>([]);
   const [sessions, setSessions] = useState<Array<SessionDoc & { id: string }>>([]);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const [clientUid, setClientUid] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [planTitle, setPlanTitle] = useState('');
-  const [planStatus, setPlanStatus] = useState<'draft' | 'active' | 'archived'>('active');
   const [sessionType, setSessionType] = useState('check-in');
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
@@ -55,14 +56,31 @@ export function CoachDashboardPage() {
     setLoading(true);
     setErrorMessage('');
     try {
-      const [trainerClientsSnap, plansSnap, sessionsSnap] = await Promise.all([
-        listTrainerClients(),
+      const [usersSnap, plansSnap, sessionsSnap] = await Promise.all([
+        listRegisteredUsers(),
         listPlansForRole(role),
         listSessionsForRole(role),
       ]);
-      setClients(mapDocs<TrainerClientDoc>(trainerClientsSnap.docs));
-      setPlans(mapDocs<PlanDoc>(plansSnap.docs));
-      setSessions(mapDocs<SessionDoc>(sessionsSnap.docs));
+      const allUsers = usersSnap.docs.map((docItem) => ({
+        id: docItem.id,
+        ...(docItem.data() as UserProfileDoc),
+      }));
+      const candidates = allUsers.filter((item) => item.role === 'client' || item.requestedRole === 'client');
+      setRegisteredClients(candidates);
+      if (!selectedClientId && candidates[0]?.id) setSelectedClientId(candidates[0].id);
+
+      setPlans(
+        plansSnap.docs.map((docItem) => ({
+          id: docItem.id,
+          ...(docItem.data() as PlanDoc),
+        })),
+      );
+      setSessions(
+        sessionsSnap.docs.map((docItem) => ({
+          id: docItem.id,
+          ...(docItem.data() as SessionDoc),
+        })),
+      );
     } catch (error) {
       setErrorMessage(toMessage(error));
     } finally {
@@ -96,46 +114,39 @@ export function CoachDashboardPage() {
       title="Area Coach"
     >
       <article className="card">
-        <h2>Collega un cliente</h2>
+        <h2>Scegli un cliente</h2>
         <label>
-          Codice cliente
-          <input value={clientUid} onChange={(event) => setClientUid(event.target.value)} placeholder="Inserisci il codice cliente" />
+          Clienti registrati
+          <select value={selectedClientId} onChange={(event) => setSelectedClientId(event.target.value)}>
+            {registeredClients.length === 0 ? <option value="">Nessun cliente disponibile</option> : null}
+            {registeredClients.map((client) => (
+              <option key={client.id} value={client.id}>
+                {client.displayName?.trim() || client.email || client.id}
+              </option>
+            ))}
+          </select>
         </label>
-        <button className="btn" disabled={!clientUid || loading} onClick={() => void runAction(() => createTrainerClient(clientUid), 'Cliente associato.')} type="button">
-          Collega cliente
-        </button>
+        <p className="hint">Il cliente scelto sarà usato per creare schede e sessioni.</p>
       </article>
 
       <article className="card">
         <h2>Crea un programma</h2>
         <label>
-          Codice cliente
-          <input value={clientUid} onChange={(event) => setClientUid(event.target.value)} placeholder="Inserisci il codice cliente" />
-        </label>
-        <label>
           Titolo programma
           <input value={planTitle} onChange={(event) => setPlanTitle(event.target.value)} placeholder="Forza 4 settimane" />
         </label>
-        <label>
-          Stato programma
-          <select value={planStatus} onChange={(event) => setPlanStatus(event.target.value as 'draft' | 'active' | 'archived')}>
-            <option value="draft">Bozza</option>
-            <option value="active">Attivo</option>
-            <option value="archived">Archiviato</option>
-          </select>
-        </label>
         <button
           className="btn"
-          disabled={!clientUid || !planTitle || loading}
+          disabled={!selectedClientId || !planTitle || loading}
           onClick={() =>
             void runAction(
               () =>
                 createPlanAsCoach({
-                  clientId: clientUid,
+                  clientId: selectedClientId,
                   title: planTitle,
-                  status: planStatus,
+                  status: 'active',
                 }),
-              'Programma creato con successo.',
+              'Scheda creata e già disponibile al cliente.',
             )
           }
           type="button"
@@ -145,11 +156,8 @@ export function CoachDashboardPage() {
       </article>
 
       <article className="card">
-        <h2>Pianifica una sessione</h2>
-        <label>
-          Codice cliente
-          <input value={clientUid} onChange={(event) => setClientUid(event.target.value)} placeholder="Inserisci il codice cliente" />
-        </label>
+        <h2>Agenda sessioni (opzionale)</h2>
+        <p className="hint">Ti aiuta a segnare appuntamenti, check-in e richiami con il cliente.</p>
         <label>
           Data e ora inizio
           <input value={startsAt} onChange={(event) => setStartsAt(event.target.value)} type="datetime-local" />
@@ -164,10 +172,10 @@ export function CoachDashboardPage() {
         </label>
         <button
           className="btn"
-          disabled={!clientUid || !startsAt || !endsAt || loading}
+          disabled={!selectedClientId || !startsAt || !endsAt || loading}
           onClick={() =>
             void runAction(
-              () => createSessionAsCoach({ clientId: clientUid, startsAt, endsAt, type: sessionType }),
+              () => createSessionAsCoach({ clientId: selectedClientId, startsAt, endsAt, type: sessionType }),
               'Sessione pianificata con successo.',
             )
           }
@@ -200,7 +208,7 @@ export function CoachDashboardPage() {
 
       <article className="card">
         <h2>Panoramica</h2>
-        <p className="hint">Clienti collegati: {clients.length}</p>
+        <p className="hint">Clienti registrati: {registeredClients.length}</p>
         <p className="hint">Programmi creati: {plans.length}</p>
         <p className="hint">Sessioni in agenda: {sessions.length}</p>
         <ul className="list">

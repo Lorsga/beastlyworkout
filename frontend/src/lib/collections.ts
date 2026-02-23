@@ -107,12 +107,12 @@ export async function createTrainerClient(clientId: string, extra: Record<string
 
 export async function listTrainerClients(trainerId?: string) {
   const trainer = trainerId ?? requireUid();
-  const q = query(
-    collection(db, 'trainerClients'),
-    where('trainerId', '==', trainer),
-    orderBy('createdAt', 'desc'),
-  );
+  const q = query(collection(db, 'trainerClients'), where('trainerId', '==', trainer));
   return getDocs(q);
+}
+
+export async function listRegisteredUsers() {
+  return getDocs(collection(db, 'users'));
 }
 
 export async function createPlanAsCoach(input: PlanInput) {
