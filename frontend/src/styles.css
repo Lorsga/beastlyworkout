@@ -156,6 +156,16 @@ textarea {
   color: var(--text);
 }
 
+.btn-link {
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
 .hint {
   color: var(--muted);
   font-size: 14px;
@@ -249,6 +259,21 @@ textarea {
   width: min(720px, 100%);
   max-height: 86vh;
   overflow-y: auto;
+}
+
+.media-frame {
+  width: 100%;
+  min-height: 300px;
+  border: 1px solid rgba(24, 33, 38, 0.12);
+  border-radius: 12px;
+  background: #000;
+}
+
+.media-image {
+  min-height: 0;
+  max-height: 70vh;
+  object-fit: contain;
+  background: #111;
 }
 
 .card,

@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 
 import { useToast } from '../components/ToastProvider';
 import {
+  getPlanByClientId,
   getUserProfile,
   listMetricsForClient,
   listPlansForRole,
@@ -44,6 +45,31 @@ interface MetricDoc {
   measuredAt: string;
 }
 
+function toYouTubeEmbedUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes('youtu.be')) {
+      const id = parsed.pathname.replace('/', '').trim();
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+    if (parsed.hostname.includes('youtube.com')) {
+      const id = parsed.searchParams.get('v');
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function isImageUrl(url: string): boolean {
+  return /\.(jpg|jpeg|png|gif|webp|avif|svg)(\?.*)?$/i.test(url);
+}
+
+function isVideoUrl(url: string): boolean {
+  return /\.(mp4|webm|mov|m4v|ogg)(\?.*)?$/i.test(url);
+}
+
 function normalizeExercises(value: unknown): Array<{ name: string; sets: number; reps: string; weight: string; mediaUrl: string }> {
   if (!Array.isArray(value)) return [];
   return value
@@ -71,6 +97,7 @@ export function ClientDashboardPage() {
   const [metrics, setMetrics] = useState<Array<MetricDoc & { id: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+  const [mediaPreview, setMediaPreview] = useState<{ url: string; label: string } | null>(null);
 
   useEffect(() => {
     async function checkOnboardingStatus() {
@@ -103,7 +130,14 @@ export function ClientDashboardPage() {
         listMetricsForClient(),
       ]);
       const mappedPlans = mapDocs<PlanDoc>(plansSnap.docs);
-      setPlans(mappedPlans);
+      const directPlanSnap = await getPlanByClientId();
+      const directPlan = directPlanSnap.exists()
+        ? ({ id: directPlanSnap.id, ...(directPlanSnap.data() as PlanDoc) } as PlanDoc & { id: string })
+        : null;
+      const mergedPlans = directPlan
+        ? [directPlan, ...mappedPlans.filter((plan) => plan.id !== directPlan.id)]
+        : mappedPlans;
+      setPlans(mergedPlans);
       setSessions(mapDocs<SessionDoc>(sessionsSnap.docs));
       setLogs(mapDocs<WorkoutLogDoc>(logsSnap.docs));
       setMetrics(mapDocs<MetricDoc>(metricsSnap.docs));
@@ -170,9 +204,9 @@ export function ClientDashboardPage() {
                   {exercise.mediaUrl ? (
                     <>
                       {' · '}
-                      <a href={exercise.mediaUrl} target="_blank" rel="noreferrer">
-                        Video/Immagine
-                      </a>
+                      <button className="btn-link" type="button" onClick={() => setMediaPreview({ url: exercise.mediaUrl, label: exercise.name || `Esercizio ${index + 1}` })}>
+                        Apri media
+                      </button>
                     </>
                   ) : null}
                 </li>
@@ -196,6 +230,37 @@ export function ClientDashboardPage() {
       </article>
 
       {loading ? <p className="message">Caricamento...</p> : null}
+
+      {mediaPreview ? (
+        <section className="modal-overlay" role="dialog" aria-modal="true">
+          <article className="card modal-card">
+            <h2>{mediaPreview.label}</h2>
+            {toYouTubeEmbedUrl(mediaPreview.url) ? (
+              <iframe
+                title={mediaPreview.label}
+                src={toYouTubeEmbedUrl(mediaPreview.url) ?? undefined}
+                className="media-frame"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            ) : isImageUrl(mediaPreview.url) ? (
+              <img src={mediaPreview.url} alt={mediaPreview.label} className="media-frame media-image" />
+            ) : isVideoUrl(mediaPreview.url) ? (
+              <video src={mediaPreview.url} controls className="media-frame" />
+            ) : (
+              <p className="hint">
+                Anteprima non disponibile.{' '}
+                <a href={mediaPreview.url} target="_blank" rel="noreferrer">
+                  Apri il link
+                </a>
+              </p>
+            )}
+            <button className="btn btn-ghost" type="button" onClick={() => setMediaPreview(null)}>
+              Chiudi
+            </button>
+          </article>
+        </section>
+      ) : null}
     </AppShell>
   );
 }

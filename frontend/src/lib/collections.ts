@@ -12,7 +12,7 @@ import {
   where,
   type DocumentData,
 } from 'firebase/firestore';
-import { ref, type StorageReference } from 'firebase/storage';
+import { getDownloadURL, ref, uploadBytes, type StorageReference } from 'firebase/storage';
 
 import {
   auth,
@@ -130,7 +130,8 @@ export async function getUserPrivateDoc(uid: string, docId: string) {
 
 export async function createPlanAsCoach(input: PlanInput) {
   const trainerId = requireUid();
-  return addDoc(collection(db, 'plans'), {
+  const planRef = doc(db, 'plans', input.clientId);
+  await setDoc(planRef, {
     trainerId,
     clientId: input.clientId,
     status: input.status,
@@ -141,6 +142,7 @@ export async function createPlanAsCoach(input: PlanInput) {
     lastViewedAt: null,
     ...newWriteTimestamps(),
   });
+  return planRef;
 }
 
 export async function listPlansForRole(role: AppRole, userId?: string) {
@@ -150,11 +152,25 @@ export async function listPlansForRole(role: AppRole, userId?: string) {
   return getDocs(q);
 }
 
+export async function getPlanByClientId(clientId?: string) {
+  const uid = clientId ?? requireUid();
+  return getDoc(doc(db, 'plans', uid));
+}
+
 export async function updatePlanAsCoach(planId: string, patch: Record<string, unknown>) {
   await updateDoc(doc(db, 'plans', planId), {
     ...patch,
     ...updateTimestamp(),
   });
+}
+
+export async function uploadWorkoutMediaAsCoach(clientId: string, file: File): Promise<string> {
+  const trainerId = requireUid();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const fileName = `${Date.now()}-${safeName}`;
+  const mediaRef = workoutMediaRef(trainerId, clientId, fileName);
+  await uploadBytes(mediaRef, file, { contentType: file.type || 'application/octet-stream' });
+  return getDownloadURL(mediaRef);
 }
 
 export async function updatePlanClientFields(planId: string, data: {clientNotes?: string; lastViewedAt?: string | null}) {

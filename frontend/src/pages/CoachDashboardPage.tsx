@@ -7,6 +7,7 @@ import {
   listPlansForRole,
   listRegisteredUsers,
   setUserRole,
+  uploadWorkoutMediaAsCoach,
   updatePlanAsCoach,
   useAuthState,
   type AppRole,
@@ -33,6 +34,7 @@ interface UserProfileDoc {
   displayName?: string;
   role?: string;
   requestedRole?: string;
+  onboardingCompleted?: boolean;
 }
 
 interface OnboardingDoc {
@@ -71,6 +73,7 @@ export function CoachDashboardPage() {
   const [loading, setLoading] = useState(false);
   const [selectedClientOnboarding, setSelectedClientOnboarding] = useState<OnboardingDoc | null>(null);
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  const [uploadingExerciseIndex, setUploadingExerciseIndex] = useState<number | null>(null);
 
   const [selectedClientId, setSelectedClientId] = useState('');
   const [planTitle, setPlanTitle] = useState('');
@@ -78,7 +81,7 @@ export function CoachDashboardPage() {
 
   const [targetUid, setTargetUid] = useState('');
   const [targetRole, setTargetRole] = useState<AppRole>('client');
-  const existingPlanForClient = plans.find((plan) => plan.clientId === selectedClientId);
+  const existingPlanForClient = plans.find((plan) => plan.id === selectedClientId) ?? plans.find((plan) => plan.clientId === selectedClientId);
 
   useEffect(() => {
     async function loadSelectedClientOnboarding() {
@@ -122,6 +125,12 @@ export function CoachDashboardPage() {
       }));
       const candidates = allUsers
         .filter((item) => item.id !== user?.uid)
+        .filter((item) => {
+          const roleValue = asText(item.role).toLowerCase();
+          const requestedRoleValue = asText(item.requestedRole).toLowerCase();
+          const isClientLike = roleValue === 'client' || requestedRoleValue === 'client' || item.onboardingCompleted === true;
+          return isClientLike;
+        })
         .sort((a, b) => {
           const aLabel = asText(a.displayName || a.email || a.id).toLowerCase();
           const bLabel = asText(b.displayName || b.email || b.id).toLowerCase();
@@ -143,6 +152,7 @@ export function CoachDashboardPage() {
         showError(toMessage(error));
       }
     } catch (error) {
+      console.error('Coach action failed:', error);
       showError(toMessage(error));
     } finally {
       setLoading(false);
@@ -231,6 +241,25 @@ export function CoachDashboardPage() {
     setIsPlanModalOpen(true);
   }
 
+  async function onUploadMedia(index: number, file: File | null) {
+    if (!file) return;
+    if (!selectedClientId) {
+      showError('Seleziona prima un cliente.');
+      return;
+    }
+    setUploadingExerciseIndex(index);
+    try {
+      const url = await uploadWorkoutMediaAsCoach(selectedClientId, file);
+      updateExercise(index, { mediaUrl: url });
+      showSuccess('Media caricato con successo.');
+    } catch (error) {
+      console.error('Media upload failed:', error);
+      showError(toMessage(error));
+    } finally {
+      setUploadingExerciseIndex(null);
+    }
+  }
+
   return (
     <AppShell
       role={role === 'trainer' ? 'trainer' : 'admin'}
@@ -314,9 +343,19 @@ export function CoachDashboardPage() {
                   <input value={exercise.weight} onChange={(event) => updateExercise(index, {weight: event.target.value})} placeholder="Es. 40kg o corpo libero" />
                 </label>
                 <label>
-                  URL video o immagine
+                  URL video (YouTube o link diretto)
                   <input value={exercise.mediaUrl} onChange={(event) => updateExercise(index, {mediaUrl: event.target.value})} placeholder="https://..." />
                 </label>
+                <label>
+                  Oppure carica immagine/video
+                  <input
+                    type="file"
+                    accept="image/*,video/*"
+                    onChange={(event) => void onUploadMedia(index, event.target.files?.[0] ?? null)}
+                    disabled={uploadingExerciseIndex === index}
+                  />
+                </label>
+                {uploadingExerciseIndex === index ? <p className="hint">Caricamento media in corso...</p> : null}
                 <button className="btn btn-ghost" type="button" onClick={() => removeExercise(index)}>
                   Rimuovi esercizio
                 </button>
