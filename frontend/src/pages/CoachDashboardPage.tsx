@@ -116,6 +116,12 @@ export function CoachDashboardPage() {
   const isUploadingMedia = uploadingExerciseIndex !== null;
 
   const existingPlanForClient = plans.find((plan) => plan.id === selectedClientId) ?? plans.find((plan) => plan.clientId === selectedClientId);
+  const clientLabelById = registeredClients.reduce<Record<string, string>>((acc, client) => {
+    const label = asText(client.displayName).trim() || asText(client.email).trim() || client.id;
+    acc[getClientAuthUid(client)] = label;
+    acc[client.id] = label;
+    return acc;
+  }, {});
 
   useEffect(() => {
     async function loadSelectedClientOnboarding() {
@@ -452,7 +458,7 @@ export function CoachDashboardPage() {
         <ul className="list">
           {plans.slice(0, 5).map((plan) => (
             <li key={plan.id}>
-              <strong>{plan.title}</strong> · {plan.exercises?.length ?? 0} esercizi · cliente {plan.clientId}
+              <strong>{plan.title}</strong> · {plan.exercises?.length ?? 0} esercizi · cliente {clientLabelById[plan.clientId] || plan.clientId}
             </li>
           ))}
         </ul>
