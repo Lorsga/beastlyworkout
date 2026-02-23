@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 
 import { isAllowedAdminEmail } from '../config/admin';
-import { bootstrapFirstAdmin, logoutCurrentUser, refreshIdTokenClaims, useAuthState } from '../lib';
+import { bootstrapFirstAdmin, logoutCurrentUser, useAuthState } from '../lib';
 import { toMessage } from '../utils/firestore';
 
 export function MissingRolePage() {
@@ -20,19 +20,6 @@ export function MissingRolePage() {
     try {
       const result = await bootstrapFirstAdmin();
       setMessage(result.alreadyAdmin ? 'Utente già admin. Refresh token completato.' : 'Ruolo admin assegnato.');
-    } catch (error) {
-      setMessage(toMessage(error));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function refreshRole() {
-    setLoading(true);
-    setMessage('');
-    try {
-      await refreshIdTokenClaims();
-      setMessage('Token aggiornato. Se il ruolo è presente verrai reindirizzato automaticamente.');
     } catch (error) {
       setMessage(toMessage(error));
     } finally {
@@ -58,15 +45,10 @@ export function MissingRolePage() {
             Questo account non è tra quelli autorizzati come PT/Admin. Esci e accedi con l&apos;account corretto.
           </p>
         )}
-        <button className="btn btn-ghost" disabled={loading} onClick={() => void refreshRole()} type="button">
-          Verifica di nuovo accesso
-        </button>
         <button className="btn btn-ghost" disabled={loading} onClick={() => void logoutCurrentUser()} type="button">
           Esci e cambia account
         </button>
-        <p className="hint">
-          Accesso utente standard: <Link to="/onboarding">continua onboarding</Link>.
-        </p>
+        <p className="hint">Vuoi entrare come utente? Torna al <Link to="/auth">login</Link>.</p>
         {message ? <p className="message">{message}</p> : null}
       </section>
     </main>

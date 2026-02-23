@@ -33,7 +33,7 @@ export const createUserProfile = onDocumentCreated('users/{uid}', async (event) 
   }
 });
 
-export const setUserRole = onCall(async (request) => {
+export const setUserRole = onCall({region: 'us-central1', cors: true}, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');
   }
@@ -68,7 +68,7 @@ export const setUserRole = onCall(async (request) => {
   return {ok: true, uid: payload.uid, role: payload.role};
 });
 
-export const bootstrapFirstAdmin = onCall(async (request) => {
+export const bootstrapFirstAdmin = onCall({region: 'us-central1', cors: true}, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');
   }

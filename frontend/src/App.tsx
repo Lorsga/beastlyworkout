@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
+import { isAllowedAdminEmail } from './config/admin';
 import { useAuthState } from './lib';
 
 const AuthPage = lazy(() => import('./pages/AuthPage').then((module) => ({ default: module.AuthPage })));
@@ -16,6 +17,7 @@ const MissingRolePage = lazy(() =>
 const OnboardingPage = lazy(() =>
   import('./pages/OnboardingPage').then((module) => ({ default: module.OnboardingPage })),
 );
+const LOGIN_INTENT_KEY = 'bw_login_intent';
 
 function LoadingScreen() {
   return (
@@ -39,7 +41,12 @@ function ProtectedRoleRoute({
 
   if (initializing) return <LoadingScreen />;
   if (!user) return <Navigate to="/auth" replace />;
-  if (!role) return <Navigate to="/onboarding" replace />;
+  if (!role) {
+    if (allow.includes('client')) return children;
+    const intent = sessionStorage.getItem(LOGIN_INTENT_KEY);
+    if (intent === 'coach' && isAllowedAdminEmail(user.email)) return <Navigate to="/missing-role" replace />;
+    return <Navigate to="/auth" replace />;
+  }
   if (!allow.includes(role)) return <Navigate to={role === 'client' ? '/app/client' : '/app/coach'} replace />;
 
   return children;
@@ -50,7 +57,11 @@ function HomeRedirect() {
 
   if (initializing) return <LoadingScreen />;
   if (!user) return <Navigate to="/auth" replace />;
-  if (!role) return <Navigate to="/onboarding" replace />;
+  if (!role) {
+    const intent = sessionStorage.getItem(LOGIN_INTENT_KEY);
+    if (intent === 'coach' && isAllowedAdminEmail(user.email)) return <Navigate to="/missing-role" replace />;
+    return <Navigate to="/app/client" replace />;
+  }
   return <Navigate to={role === 'client' ? '/app/client' : '/app/coach'} replace />;
 }
 

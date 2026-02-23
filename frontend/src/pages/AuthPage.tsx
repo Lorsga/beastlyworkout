@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 import {
   completeGoogleRedirect,
@@ -32,7 +32,7 @@ export function AuthPage() {
     const intent = sessionStorage.getItem(LOGIN_INTENT_KEY);
     const isAdminEmail = isAllowedAdminEmail(user.email);
     if (intent === 'coach' && isAdminEmail) return <Navigate to="/missing-role" replace />;
-    return <Navigate to="/onboarding" replace />;
+    return <Navigate to="/app/client" replace />;
   }
 
   async function signInAsClient() {
@@ -45,7 +45,7 @@ export function AuthPage() {
         setMessage('Apertura accesso Google...');
         return;
       }
-      navigate('/onboarding', { replace: true });
+      navigate('/app/client', { replace: true });
     } catch (error) {
       setMessage(toMessage(error));
     } finally {
@@ -106,9 +106,6 @@ export function AuthPage() {
         <button className="btn btn-ghost" disabled={loading} onClick={() => void signInAsCoach()} type="button">
           Continua con Google (PT/Admin)
         </button>
-        <p className="hint">
-          Se non sei PT/Admin torna a <Link to="/onboarding">onboarding utente</Link>.
-        </p>
 
         {message ? <p className="message">{message}</p> : null}
       </section>
