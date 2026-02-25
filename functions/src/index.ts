@@ -11,14 +11,35 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
 ];
-const adminEmails = new Set(
-  (process.env.ADMIN_EMAILS ?? 'lrnz.sga@gmail.com,beastlyworkoutideas@gmail.com')
+const supervisorEmails = new Set(
+  (process.env.SUPERVISOR_EMAILS ?? 'lrnz.sga@gmail.com,beastlyworkoutideas@gmail.com')
     .split(',')
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean),
 );
 
 type AppRole = 'admin' | 'trainer' | 'client';
+type CoachSubscriptionStatus = 'trial_pending' | 'trial_active' | 'active_paid' | 'expired' | 'disabled';
+
+interface CoachSubscriptionDoc {
+  coachId: string;
+  coachEmail: string;
+  coachName: string;
+  coachCode: string;
+  isSupervisor: boolean;
+  status: CoachSubscriptionStatus;
+  trialDays: number;
+  trialAcceptedAt?: admin.firestore.Timestamp | null;
+  trialStartedAt?: admin.firestore.Timestamp | null;
+  trialEndsAt?: admin.firestore.Timestamp | null;
+  subscriptionStartedAt?: admin.firestore.Timestamp | null;
+  subscriptionEndsAt?: admin.firestore.Timestamp | null;
+  renewalPeriod: 'yearly';
+  expiresAt?: admin.firestore.Timestamp | null;
+  updatedBySupervisor?: string | null;
+  createdAt?: admin.firestore.Timestamp | null;
+  updatedAt?: admin.firestore.Timestamp | null;
+}
 
 function assertRole(value: unknown): asserts value is AppRole {
   if (value !== 'admin' && value !== 'trainer' && value !== 'client') {
@@ -26,9 +47,212 @@ function assertRole(value: unknown): asserts value is AppRole {
   }
 }
 
-function isAllowedAdminEmail(email: unknown): boolean {
-  if (typeof email !== 'string') return false;
-  return adminEmails.has(email.trim().toLowerCase());
+function normalizeEmail(email: unknown): string {
+  if (typeof email !== 'string') return '';
+  return email.trim().toLowerCase();
+}
+
+function isSupervisorEmail(email: unknown): boolean {
+  const normalized = normalizeEmail(email);
+  return Boolean(normalized) && supervisorEmails.has(normalized);
+}
+
+function isSupervisorClaim(token: Record<string, unknown> | undefined): boolean {
+  return token?.supervisor === true;
+}
+
+function hasSupervisorAccess(token: Record<string, unknown> | undefined): boolean {
+  const role = token?.role;
+  return isSupervisorClaim(token) || role === 'admin';
+}
+
+function normalizeCoachCodeInput(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function coachCodeBaseFromEmail(email: string): string {
+  const localPart = email.split('@')[0] ?? '';
+  const normalized = normalizeCoachCodeInput(localPart);
+  const base = normalized || 'coach';
+  return `${base}beastly`;
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function addYears(date: Date, years: number): Date {
+  const result = new Date(date);
+  result.setFullYear(result.getFullYear() + years);
+  return result;
+}
+
+function toMillis(value: unknown): number {
+  if (value instanceof admin.firestore.Timestamp) return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  return 0;
+}
+
+async function getOrCreateCoachCode(uid: string, email: string, currentCoachCode: unknown): Promise<string> {
+  const existing = typeof currentCoachCode === 'string' ? normalizeCoachCodeInput(currentCoachCode) : '';
+  if (existing) return existing;
+
+  const base = coachCodeBaseFromEmail(email);
+  let candidate = base;
+  let suffix = 1;
+  while (true) {
+    const collision = await db
+      .collection('users')
+      .where('coachCode', '==', candidate)
+      .limit(1)
+      .get();
+
+    if (collision.empty || collision.docs[0]?.id === uid) {
+      return candidate;
+    }
+
+    suffix += 1;
+    candidate = `${base}${suffix}`;
+  }
+}
+
+async function applyUserClaims(uid: string, role: AppRole, supervisor: boolean): Promise<void> {
+  const userRecord = await admin.auth().getUser(uid);
+  const currentClaims = userRecord.customClaims ?? {};
+  const nextClaims = {...currentClaims, role, supervisor};
+  await admin.auth().setCustomUserClaims(uid, nextClaims);
+  await admin.auth().revokeRefreshTokens(uid);
+}
+
+function resolveCoachSubscriptionStatus(data: CoachSubscriptionDoc, nowMillis: number): CoachSubscriptionStatus {
+  if (data.isSupervisor) return 'active_paid';
+  if (data.status === 'disabled') return 'disabled';
+  if (data.status === 'active_paid') {
+    const subscriptionEnds = toMillis(data.subscriptionEndsAt);
+    return subscriptionEnds > nowMillis ? 'active_paid' : 'expired';
+  }
+  if (data.status === 'trial_active') {
+    const trialEnds = toMillis(data.trialEndsAt);
+    return trialEnds > nowMillis ? 'trial_active' : 'expired';
+  }
+  if (data.status === 'trial_pending') return 'trial_pending';
+  return 'expired';
+}
+
+function buildCoachAccessResponse(data: CoachSubscriptionDoc, nowMillis: number) {
+  const resolvedStatus = resolveCoachSubscriptionStatus(data, nowMillis);
+  return {
+    ok: true,
+    coachCode: data.coachCode,
+    isSupervisor: data.isSupervisor,
+    status: resolvedStatus,
+    requiresTrialAcceptance: resolvedStatus === 'trial_pending' && !data.isSupervisor,
+    isExpired: resolvedStatus === 'expired' || resolvedStatus === 'disabled',
+    trialEndsAt: data.trialEndsAt?.toDate().toISOString() ?? null,
+    subscriptionEndsAt: data.subscriptionEndsAt?.toDate().toISOString() ?? null,
+    expiresAt: data.expiresAt?.toDate().toISOString() ?? null,
+  };
+}
+
+async function upsertCoachSubscription(uid: string, email: string, displayName: string): Promise<CoachSubscriptionDoc> {
+  const isSupervisor = isSupervisorEmail(email);
+  const userRef = db.collection('users').doc(uid);
+  const userSnap = await userRef.get();
+  const userData = userSnap.data() ?? {};
+  const coachCode = await getOrCreateCoachCode(uid, email, userData.coachCode);
+  const now = admin.firestore.Timestamp.now();
+  const nowDate = now.toDate();
+
+  await applyUserClaims(uid, 'trainer', isSupervisor);
+
+  await userRef.set(
+    {
+      uid,
+      email,
+      displayName: displayName || userData.displayName || '',
+      role: 'trainer',
+      supervisor: isSupervisor,
+      coachCode,
+      coachAccessRequestedAt: now,
+      updatedAt: now,
+      createdAt: userData.createdAt ?? now,
+    },
+    {merge: true},
+  );
+
+  const subRef = db.collection('coachSubscriptions').doc(uid);
+  const subSnap = await subRef.get();
+
+  if (isSupervisor) {
+    const payload: CoachSubscriptionDoc = {
+      coachId: uid,
+      coachEmail: email,
+      coachName: displayName || '',
+      coachCode,
+      isSupervisor: true,
+      status: 'active_paid',
+      trialDays: 15,
+      renewalPeriod: 'yearly',
+      expiresAt: null,
+      updatedBySupervisor: uid,
+      updatedAt: now,
+      createdAt: subSnap.exists ? (subSnap.data()?.createdAt ?? now) : now,
+    };
+    await subRef.set(payload, {merge: true});
+    return payload;
+  }
+
+  const current = (subSnap.data() as CoachSubscriptionDoc | undefined) ?? null;
+  if (!current) {
+    const payload: CoachSubscriptionDoc = {
+      coachId: uid,
+      coachEmail: email,
+      coachName: displayName || '',
+      coachCode,
+      isSupervisor: false,
+      status: 'trial_pending',
+      trialDays: 15,
+      trialAcceptedAt: null,
+      trialStartedAt: null,
+      trialEndsAt: null,
+      subscriptionStartedAt: null,
+      subscriptionEndsAt: null,
+      renewalPeriod: 'yearly',
+      expiresAt: null,
+      updatedBySupervisor: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await subRef.set(payload, {merge: true});
+    return payload;
+  }
+
+  const resolvedStatus = resolveCoachSubscriptionStatus(current, nowDate.getTime());
+  const nextStatus: CoachSubscriptionStatus = resolvedStatus;
+  const payload: Partial<CoachSubscriptionDoc> = {
+    coachEmail: email,
+    coachName: displayName || current.coachName || '',
+    coachCode,
+    isSupervisor: false,
+    status: nextStatus,
+    renewalPeriod: 'yearly',
+    updatedAt: now,
+  };
+
+  if (nextStatus === 'expired') {
+    const expiresMillis = Math.max(toMillis(current.subscriptionEndsAt), toMillis(current.trialEndsAt));
+    payload.expiresAt = expiresMillis > 0 ? admin.firestore.Timestamp.fromMillis(expiresMillis) : now;
+  }
+
+  await subRef.set(payload, {merge: true});
+
+  return {
+    ...current,
+    ...payload,
+  } as CoachSubscriptionDoc;
 }
 
 export const createUserProfile = onDocumentCreated('users/{uid}', async (event) => {
@@ -57,25 +281,21 @@ export const syncAdminRoleByEmail = onDocumentWritten('users/{uid}', async (even
   const uid = event.params.uid;
   const data = after.data();
   if (!data) return;
-  const userRecord = await admin.auth().getUser(uid);
-  const currentClaims = userRecord.customClaims ?? {};
+
+  const email = normalizeEmail(data.email);
+  const supervisor = isSupervisorEmail(email);
+  const currentRole = typeof data.role === 'string' ? data.role : '';
+
   const updates: Record<string, unknown> = {};
 
-  if (isAllowedAdminEmail(data.email)) {
-    if (data.role !== 'admin') updates.role = 'admin';
-    if (!data.roleAssignedBy) updates.roleAssignedBy = uid;
-    if (!data.roleAssignedAt) updates.roleAssignedAt = admin.firestore.FieldValue.serverTimestamp();
-    if (currentClaims.role !== 'admin') {
-      await admin.auth().setCustomUserClaims(uid, {...currentClaims, role: 'admin'});
-    }
-  } else {
-    const canBecomeClient = data.role === 'client' || data.onboardingCompleted === true || data.requestedRole === 'client';
-    if (canBecomeClient) {
-      if (data.role !== 'client') updates.role = 'client';
-      if (currentClaims.role !== 'client') {
-        await admin.auth().setCustomUserClaims(uid, {...currentClaims, role: 'client'});
-      }
-    }
+  if (supervisor) {
+    if (currentRole !== 'trainer' && currentRole !== 'admin') updates.role = 'trainer';
+    if (data.supervisor !== true) updates.supervisor = true;
+    await applyUserClaims(uid, 'trainer', true);
+  } else if (currentRole === 'client' || data.onboardingCompleted === true || data.requestedRole === 'client') {
+    if (currentRole !== 'client') updates.role = 'client';
+    if (data.supervisor) updates.supervisor = false;
+    await applyUserClaims(uid, 'client', false);
   }
 
   if (Object.keys(updates).length > 0) {
@@ -97,17 +317,353 @@ export const cleanupPlanMediaOnDelete = onDocumentDeleted('plans/{planId}', asyn
   await admin.storage().bucket().deleteFiles({prefix, force: true});
 });
 
+export const ensureCoachAccess = onCall({region: 'us-central1', cors: allowedOrigins, invoker: 'public'}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication required.');
+  }
+
+  const uid = request.auth.uid;
+  const email = normalizeEmail(request.auth.token.email);
+  if (!email) {
+    throw new HttpsError('invalid-argument', 'Email account required for coach access.');
+  }
+
+  const displayName = typeof request.auth.token.name === 'string' ? request.auth.token.name : '';
+  const subscription = await upsertCoachSubscription(uid, email, displayName);
+  const nowMillis = Date.now();
+
+  return buildCoachAccessResponse(subscription, nowMillis);
+});
+
+export const acceptCoachTrial = onCall({region: 'us-central1', cors: allowedOrigins, invoker: 'public'}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication required.');
+  }
+
+  const uid = request.auth.uid;
+  const email = normalizeEmail(request.auth.token.email);
+  if (isSupervisorEmail(email)) {
+    return {
+      ok: true,
+      isSupervisor: true,
+      status: 'active_paid',
+      requiresTrialAcceptance: false,
+      isExpired: false,
+    };
+  }
+
+  const subRef = db.collection('coachSubscriptions').doc(uid);
+  const subSnap = await subRef.get();
+  if (!subSnap.exists) {
+    throw new HttpsError('not-found', 'Coach subscription not found. Retry coach login.');
+  }
+
+  const current = subSnap.data() as CoachSubscriptionDoc;
+  if (current.status !== 'trial_pending' && current.status !== 'trial_active') {
+    const nowMillis = Date.now();
+    return buildCoachAccessResponse(current, nowMillis);
+  }
+
+  const now = new Date();
+  const trialEndsAt = addDays(now, 15);
+  const payload: Partial<CoachSubscriptionDoc> = {
+    status: 'trial_active',
+    trialAcceptedAt: admin.firestore.Timestamp.fromDate(now),
+    trialStartedAt: admin.firestore.Timestamp.fromDate(now),
+    trialEndsAt: admin.firestore.Timestamp.fromDate(trialEndsAt),
+    expiresAt: admin.firestore.Timestamp.fromDate(trialEndsAt),
+    updatedAt: admin.firestore.Timestamp.fromDate(now),
+  };
+
+  await subRef.set(payload, {merge: true});
+  const merged = {...current, ...payload} as CoachSubscriptionDoc;
+  return buildCoachAccessResponse(merged, now.getTime());
+});
+
+export const getCoachAccessState = onCall({region: 'us-central1', cors: allowedOrigins, invoker: 'public'}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication required.');
+  }
+
+  const uid = request.auth.uid;
+  const email = normalizeEmail(request.auth.token.email);
+  if (isSupervisorEmail(email)) {
+    return {
+      ok: true,
+      isSupervisor: true,
+      status: 'active_paid',
+      requiresTrialAcceptance: false,
+      isExpired: false,
+    };
+  }
+
+  const subSnap = await db.collection('coachSubscriptions').doc(uid).get();
+  if (!subSnap.exists) {
+    return {
+      ok: true,
+      isSupervisor: false,
+      status: 'trial_pending',
+      requiresTrialAcceptance: true,
+      isExpired: false,
+    };
+  }
+
+  const data = subSnap.data() as CoachSubscriptionDoc;
+  return buildCoachAccessResponse(data, Date.now());
+});
+
+export const completeClientOnboarding = onCall(
+  {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    const uid = request.auth.uid;
+    const payload = request.data as {
+      fullName?: string;
+      email?: string;
+      phone?: string;
+      coachCode?: string;
+    };
+
+    const fullName = typeof payload.fullName === 'string' ? payload.fullName.trim() : '';
+    const email = normalizeEmail(payload.email);
+    const phone = typeof payload.phone === 'string' ? payload.phone.trim() : '';
+    const coachCode = typeof payload.coachCode === 'string' ? normalizeCoachCodeInput(payload.coachCode) : '';
+
+    if (!fullName || !email || !phone || !coachCode) {
+      throw new HttpsError('invalid-argument', 'fullName, email, phone and coachCode are required.');
+    }
+
+    const coachQuery = await db.collection('users').where('coachCode', '==', coachCode).limit(1).get();
+    if (coachQuery.empty) {
+      throw new HttpsError('not-found', 'Coach code not valid.');
+    }
+
+    const coachDoc = coachQuery.docs[0];
+    const coachData = coachDoc.data();
+    const coachUid = coachDoc.id;
+    const coachRole = typeof coachData.role === 'string' ? coachData.role : '';
+    const coachEmail = normalizeEmail(coachData.email);
+    if (coachRole !== 'trainer' && coachRole !== 'admin') {
+      throw new HttpsError('failed-precondition', 'Coach not active.');
+    }
+
+    await applyUserClaims(uid, 'client', false);
+
+    const userRef = db.collection('users').doc(uid);
+    await userRef.set(
+      {
+        uid,
+        role: 'client',
+        supervisor: false,
+        requestedRole: 'client',
+        displayName: fullName,
+        email,
+        onboardingStatus: 'completed',
+        onboardingCompleted: true,
+        onboardingUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        assignedCoachId: coachUid,
+        assignedCoachCode: coachCode,
+        assignedCoachEmail: coachEmail,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
+
+    await db.collection('users').doc(uid).collection('private').doc('onboarding').set(
+      {
+        fullName,
+        email,
+        phone,
+        coachCode,
+        coachId: coachUid,
+        compiledBy: 'client',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
+
+    await db.collection('trainerClients').doc(`${coachUid}_${uid}`).set(
+      {
+        trainerId: coachUid,
+        clientId: uid,
+        source: 'coach_code',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
+
+    return {ok: true, coachId: coachUid, coachCode};
+  },
+);
+
+function assertSupervisor(request: {auth?: {uid: string; token?: Record<string, unknown>}}): string {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication required.');
+  }
+  if (!hasSupervisorAccess(request.auth.token)) {
+    throw new HttpsError('permission-denied', 'Only supervisors can perform this action.');
+  }
+  return request.auth.uid;
+}
+
+function subscriptionStatePayload(current: CoachSubscriptionDoc, now: Date, status: CoachSubscriptionStatus, endsAt: Date | null, supervisorUid: string): Partial<CoachSubscriptionDoc> {
+  return {
+    status,
+    subscriptionStartedAt: status === 'active_paid' ? admin.firestore.Timestamp.fromDate(now) : current.subscriptionStartedAt ?? null,
+    subscriptionEndsAt: endsAt ? admin.firestore.Timestamp.fromDate(endsAt) : null,
+    expiresAt: endsAt ? admin.firestore.Timestamp.fromDate(endsAt) : null,
+    updatedBySupervisor: supervisorUid,
+    updatedAt: admin.firestore.Timestamp.fromDate(now),
+  };
+}
+
+export const listCoachesForSupervisor = onCall(
+  {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
+  async (request) => {
+    assertSupervisor(request as {auth?: {token?: Record<string, unknown>; uid: string}});
+
+    const [usersSnap, subsSnap] = await Promise.all([
+      db.collection('users').where('role', '==', 'trainer').get(),
+      db.collection('coachSubscriptions').get(),
+    ]);
+
+    const subMap = new Map<string, CoachSubscriptionDoc>();
+    for (const docSnap of subsSnap.docs) {
+      subMap.set(docSnap.id, docSnap.data() as CoachSubscriptionDoc);
+    }
+
+    const now = Date.now();
+    const coaches = usersSnap.docs.map((docSnap) => {
+      const data = docSnap.data();
+      const sub = subMap.get(docSnap.id);
+      const normalizedSub = sub ? buildCoachAccessResponse(sub, now) : {
+        status: 'trial_pending',
+        requiresTrialAcceptance: true,
+        isExpired: false,
+        trialEndsAt: null,
+        subscriptionEndsAt: null,
+        expiresAt: null,
+      };
+
+      return {
+        uid: docSnap.id,
+        displayName: typeof data.displayName === 'string' ? data.displayName : '',
+        email: normalizeEmail(data.email),
+        coachCode: typeof data.coachCode === 'string' ? data.coachCode : '',
+        isSupervisor: data.supervisor === true,
+        status: normalizedSub.status,
+        trialEndsAt: normalizedSub.trialEndsAt,
+        subscriptionEndsAt: normalizedSub.subscriptionEndsAt,
+        expiresAt: normalizedSub.expiresAt,
+      };
+    });
+
+    return {
+      ok: true,
+      coaches,
+    };
+  },
+);
+
+export const activateCoachSubscription = onCall(
+  {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
+  async (request) => {
+    const supervisorUid = assertSupervisor(request as {auth?: {token?: Record<string, unknown>; uid: string}});
+    const targetUid = typeof (request.data as {uid?: unknown}).uid === 'string' ? (request.data as {uid: string}).uid : '';
+    if (!targetUid) throw new HttpsError('invalid-argument', 'uid is required.');
+
+    const subRef = db.collection('coachSubscriptions').doc(targetUid);
+    const subSnap = await subRef.get();
+    if (!subSnap.exists) throw new HttpsError('not-found', 'Coach subscription not found.');
+
+    const current = subSnap.data() as CoachSubscriptionDoc;
+    if (current.isSupervisor) throw new HttpsError('failed-precondition', 'Supervisor account cannot be modified.');
+
+    const now = new Date();
+    const currentEndsMillis = toMillis(current.subscriptionEndsAt);
+    const baseDate = currentEndsMillis > now.getTime() ? new Date(currentEndsMillis) : now;
+    const nextEnd = addYears(baseDate, 1);
+
+    const patch = subscriptionStatePayload(current, now, 'active_paid', nextEnd, supervisorUid);
+    await subRef.set(patch, {merge: true});
+
+    return {
+      ok: true,
+      uid: targetUid,
+      status: 'active_paid',
+      subscriptionEndsAt: nextEnd.toISOString(),
+    };
+  },
+);
+
+export const renewCoachSubscription = onCall(
+  {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
+  async (request) => {
+    const supervisorUid = assertSupervisor(request as {auth?: {token?: Record<string, unknown>; uid: string}});
+    const targetUid = typeof (request.data as {uid?: unknown}).uid === 'string' ? (request.data as {uid: string}).uid : '';
+    if (!targetUid) throw new HttpsError('invalid-argument', 'uid is required.');
+
+    const subRef = db.collection('coachSubscriptions').doc(targetUid);
+    const subSnap = await subRef.get();
+    if (!subSnap.exists) throw new HttpsError('not-found', 'Coach subscription not found.');
+
+    const current = subSnap.data() as CoachSubscriptionDoc;
+    if (current.isSupervisor) throw new HttpsError('failed-precondition', 'Supervisor account cannot be modified.');
+
+    const now = new Date();
+    const currentEndsMillis = toMillis(current.subscriptionEndsAt);
+    const baseDate = currentEndsMillis > 0 ? new Date(currentEndsMillis) : now;
+    const nextEnd = addYears(baseDate, 1);
+
+    const patch = subscriptionStatePayload(current, now, 'active_paid', nextEnd, supervisorUid);
+    await subRef.set(patch, {merge: true});
+
+    return {
+      ok: true,
+      uid: targetUid,
+      status: 'active_paid',
+      subscriptionEndsAt: nextEnd.toISOString(),
+    };
+  },
+);
+
+export const disableCoachSubscription = onCall(
+  {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
+  async (request) => {
+    const supervisorUid = assertSupervisor(request as {auth?: {token?: Record<string, unknown>; uid: string}});
+    const targetUid = typeof (request.data as {uid?: unknown}).uid === 'string' ? (request.data as {uid: string}).uid : '';
+    if (!targetUid) throw new HttpsError('invalid-argument', 'uid is required.');
+
+    const subRef = db.collection('coachSubscriptions').doc(targetUid);
+    const subSnap = await subRef.get();
+    if (!subSnap.exists) throw new HttpsError('not-found', 'Coach subscription not found.');
+
+    const current = subSnap.data() as CoachSubscriptionDoc;
+    if (current.isSupervisor) throw new HttpsError('failed-precondition', 'Supervisor account cannot be modified.');
+
+    const now = new Date();
+    const patch = subscriptionStatePayload(current, now, 'disabled', null, supervisorUid);
+    await subRef.set(patch, {merge: true});
+
+    return {ok: true, uid: targetUid, status: 'disabled'};
+  },
+);
+
 export const setUserRole = onCall({region: 'us-central1', cors: allowedOrigins, invoker: 'public'}, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');
   }
 
   const callerUid = request.auth.uid;
-  const callerRole = request.auth.token.role;
+  const callerToken = request.auth.token as Record<string, unknown>;
   const payload = request.data as {uid?: string; role?: AppRole};
 
-  if (callerRole !== 'admin') {
-    throw new HttpsError('permission-denied', 'Only admins can assign roles.');
+  if (!hasSupervisorAccess(callerToken)) {
+    throw new HttpsError('permission-denied', 'Only supervisors can assign roles.');
   }
 
   if (!payload.uid || typeof payload.uid !== 'string') {
@@ -116,12 +672,12 @@ export const setUserRole = onCall({region: 'us-central1', cors: allowedOrigins, 
 
   assertRole(payload.role);
 
-  await admin.auth().setCustomUserClaims(payload.uid, {role: payload.role});
-  await admin.auth().revokeRefreshTokens(payload.uid);
+  await applyUserClaims(payload.uid, payload.role, false);
 
   await db.collection('users').doc(payload.uid).set(
     {
       role: payload.role,
+      supervisor: false,
       roleAssignedBy: callerUid,
       roleAssignedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -135,36 +691,31 @@ export const setUserRole = onCall({region: 'us-central1', cors: allowedOrigins, 
 export const bootstrapFirstAdmin = onCall(
   {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
   async (request) => {
-  if (!request.auth) {
-    throw new HttpsError('unauthenticated', 'Authentication required.');
-  }
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Authentication required.');
+    }
 
-  const uid = request.auth.uid;
-  const currentClaims = request.auth.token;
-  const email = request.auth.token.email;
-  if (!isAllowedAdminEmail(email)) {
-    throw new HttpsError('permission-denied', 'Account is not allowed to become admin.');
-  }
+    const uid = request.auth.uid;
+    const email = normalizeEmail(request.auth.token.email);
+    if (!isSupervisorEmail(email)) {
+      throw new HttpsError('permission-denied', 'Account is not allowed to become supervisor.');
+    }
 
-  if (currentClaims.role === 'admin') {
-    return {ok: true, alreadyAdmin: true};
-  }
+    await applyUserClaims(uid, 'trainer', true);
 
-  await admin.auth().setCustomUserClaims(uid, {role: 'admin'});
-  await admin.auth().revokeRefreshTokens(uid);
+    await db.collection('users').doc(uid).set(
+      {
+        uid,
+        role: 'trainer',
+        supervisor: true,
+        roleAssignedBy: uid,
+        roleAssignedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
 
-  await db.collection('users').doc(uid).set(
-    {
-      uid,
-      role: 'admin',
-      roleAssignedBy: uid,
-      roleAssignedAt: admin.firestore.FieldValue.serverTimestamp(),
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    {merge: true},
-  );
-
-  return {ok: true, uid, role: 'admin'};
+    return {ok: true, uid, role: 'trainer', supervisor: true};
   },
 );

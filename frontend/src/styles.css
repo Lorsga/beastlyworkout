@@ -488,6 +488,43 @@ a.btn {
   gap: 10px;
 }
 
+.fullscreen-gate {
+  width: min(100%, 680px);
+  min-height: min(88vh, 760px);
+  align-content: center;
+}
+
+.coach-code {
+  font-size: clamp(24px, 6vw, 34px);
+  font-family: 'Space Grotesk', sans-serif;
+  letter-spacing: 0.01em;
+  background: rgba(255, 122, 0, 0.12);
+  border: 1px solid rgba(255, 122, 0, 0.32);
+  border-radius: 14px;
+  padding: 14px;
+  text-align: center;
+  word-break: break-word;
+}
+
+.supervisor-list {
+  display: grid;
+  gap: 12px;
+}
+
+.supervisor-row {
+  border: 1px solid rgba(18, 18, 18, 0.12);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.supervisor-actions {
+  display: grid;
+  gap: 8px;
+}
+
 .card,
 .hero {
   animation: rise 420ms ease both;
@@ -548,6 +585,11 @@ a.btn {
 
   .modal-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .supervisor-row {
+    grid-template-columns: 1fr auto;
+    align-items: center;
   }
 }
 

@@ -9,13 +9,14 @@ import {
 } from 'firebase/auth';
 import { useEffect, useMemo, useState } from 'react';
 
-import { auth, getCurrentUserRole, type AppRole } from './firebase';
+import { auth, getCurrentUserRole, isCurrentUserSupervisor, type AppRole } from './firebase';
 import { createUserProfile, getUserProfile } from './collections';
 
 export interface AuthState {
   initializing: boolean;
   user: User | null;
   role: AppRole | null;
+  isSupervisor: boolean;
   isAuthenticated: boolean;
 }
 
@@ -23,6 +24,7 @@ export function useAuthState(): AuthState {
   const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [role, setRole] = useState<AppRole | null>(null);
+  const [isSupervisor, setIsSupervisor] = useState(false);
 
   useEffect(() => {
     return onIdTokenChanged(auth, async (nextUser) => {
@@ -31,12 +33,14 @@ export function useAuthState(): AuthState {
         setUser(nextUser);
         if (!nextUser) {
           setRole(null);
+          setIsSupervisor(false);
           return;
         }
 
         await ensureUserProfile(nextUser);
         const nextRole = await getCurrentUserRole(nextUser);
         setRole(nextRole);
+        setIsSupervisor(await isCurrentUserSupervisor(nextUser));
       } catch (error) {
         const code = typeof error === 'object' && error && 'code' in error ? String((error as { code: unknown }).code) : '';
         if (code.includes('user-token-expired')) {
@@ -44,6 +48,7 @@ export function useAuthState(): AuthState {
           setUser(null);
         }
         setRole(null);
+        setIsSupervisor(false);
       } finally {
         setInitializing(false);
       }
@@ -55,9 +60,10 @@ export function useAuthState(): AuthState {
       initializing,
       user,
       role,
+      isSupervisor,
       isAuthenticated: Boolean(user),
     }),
-    [initializing, user, role],
+    [initializing, user, role, isSupervisor],
   );
 }
 

@@ -11,6 +11,19 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 
 export type AppRole = 'admin' | 'trainer' | 'client';
+export type CoachAccessStatus = 'trial_pending' | 'trial_active' | 'active_paid' | 'expired' | 'disabled';
+
+export interface CoachAccessState {
+  ok: boolean;
+  coachCode?: string;
+  isSupervisor?: boolean;
+  status: CoachAccessStatus | 'supervisor_active';
+  requiresTrialAcceptance: boolean;
+  isExpired: boolean;
+  trialEndsAt?: string | null;
+  subscriptionEndsAt?: string | null;
+  expiresAt?: string | null;
+}
 
 const firebaseConfig = {
   apiKey: 'AIzaSyBMwuPSGuAL3BC4KbmKv7BXwumOvQH4q_U',
@@ -38,6 +51,42 @@ const setUserRoleFn = httpsCallable<{ uid: string; role: AppRole }, { ok: boolea
   functions,
   'setUserRole',
 );
+const ensureCoachAccessFn = httpsCallable<undefined, CoachAccessState>(functions, 'ensureCoachAccess');
+const acceptCoachTrialFn = httpsCallable<undefined, CoachAccessState>(functions, 'acceptCoachTrial');
+const getCoachAccessStateFn = httpsCallable<undefined, CoachAccessState>(functions, 'getCoachAccessState');
+const completeClientOnboardingFn = httpsCallable<
+  { fullName: string; email: string; phone: string; coachCode: string },
+  { ok: boolean; coachId: string; coachCode: string }
+>(functions, 'completeClientOnboarding');
+const listCoachesForSupervisorFn = httpsCallable<
+  undefined,
+  {
+    ok: boolean;
+    coaches: Array<{
+      uid: string;
+      displayName: string;
+      email: string;
+      coachCode: string;
+      isSupervisor: boolean;
+      status: CoachAccessStatus | 'supervisor_active';
+      trialEndsAt: string | null;
+      subscriptionEndsAt: string | null;
+      expiresAt: string | null;
+    }>;
+  }
+>(functions, 'listCoachesForSupervisor');
+const activateCoachSubscriptionFn = httpsCallable<{ uid: string }, { ok: boolean; uid: string; status: CoachAccessStatus; subscriptionEndsAt?: string }>(
+  functions,
+  'activateCoachSubscription',
+);
+const renewCoachSubscriptionFn = httpsCallable<{ uid: string }, { ok: boolean; uid: string; status: CoachAccessStatus; subscriptionEndsAt?: string }>(
+  functions,
+  'renewCoachSubscription',
+);
+const disableCoachSubscriptionFn = httpsCallable<{ uid: string }, { ok: boolean; uid: string; status: CoachAccessStatus }>(
+  functions,
+  'disableCoachSubscription',
+);
 
 export async function bootstrapFirstAdmin() {
   const result = await bootstrapFirstAdminFn();
@@ -47,6 +96,46 @@ export async function bootstrapFirstAdmin() {
 
 export async function setUserRole(uid: string, role: AppRole) {
   const result = await setUserRoleFn({ uid, role });
+  return result.data;
+}
+
+export async function ensureCoachAccess() {
+  const result = await ensureCoachAccessFn();
+  return result.data;
+}
+
+export async function acceptCoachTrial() {
+  const result = await acceptCoachTrialFn();
+  return result.data;
+}
+
+export async function getCoachAccessState() {
+  const result = await getCoachAccessStateFn();
+  return result.data;
+}
+
+export async function completeClientOnboarding(payload: { fullName: string; email: string; phone: string; coachCode: string }) {
+  const result = await completeClientOnboardingFn(payload);
+  return result.data;
+}
+
+export async function listCoachesForSupervisor() {
+  const result = await listCoachesForSupervisorFn();
+  return result.data;
+}
+
+export async function activateCoachSubscription(uid: string) {
+  const result = await activateCoachSubscriptionFn({ uid });
+  return result.data;
+}
+
+export async function renewCoachSubscription(uid: string) {
+  const result = await renewCoachSubscriptionFn({ uid });
+  return result.data;
+}
+
+export async function disableCoachSubscription(uid: string) {
+  const result = await disableCoachSubscriptionFn({ uid });
   return result.data;
 }
 
@@ -78,6 +167,13 @@ export async function getCurrentUserRole(user?: User | null): Promise<AppRole | 
     }
     throw error;
   }
+}
+
+export async function isCurrentUserSupervisor(user?: User | null): Promise<boolean> {
+  const current = user ?? auth.currentUser;
+  if (!current) return false;
+  const token = await current.getIdTokenResult();
+  return token.claims.supervisor === true;
 }
 
 export function newWriteTimestamps() {

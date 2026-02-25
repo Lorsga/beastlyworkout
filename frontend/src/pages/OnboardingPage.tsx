@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 import { useToast } from '../components/ToastProvider';
-import { createUserProfile, logoutCurrentUser, setUserPrivateDoc, useAuthState } from '../lib';
+import { completeClientOnboarding, logoutCurrentUser, useAuthState } from '../lib';
 import { toMessage } from '../utils/firestore';
 
 type BasicOnboardingForm = {
   fullName: string;
   email: string;
   phone: string;
+  coachCode: string;
 };
 
 export function OnboardingPage() {
@@ -20,11 +21,11 @@ export function OnboardingPage() {
     fullName: user?.displayName ?? '',
     email: user?.email ?? '',
     phone: '',
+    coachCode: '',
   });
 
   if (!user) return <Navigate to="/auth" replace />;
   if (role === 'admin' || role === 'trainer') return <Navigate to="/app/coach" replace />;
-  const currentUser = user;
 
   function updateField<K extends keyof BasicOnboardingForm>(key: K, value: BasicOnboardingForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -34,6 +35,7 @@ export function OnboardingPage() {
     if (!form.fullName.trim()) return 'Inserisci nome e cognome.';
     if (!form.email.trim()) return 'Inserisci e-mail.';
     if (!form.phone.trim()) return 'Inserisci numero di telefono.';
+    if (!form.coachCode.trim()) return 'Inserisci il codice coach.';
     return null;
   }
 
@@ -46,21 +48,11 @@ export function OnboardingPage() {
 
     setLoading(true);
     try {
-      await createUserProfile({
-        displayName: form.fullName.trim() || currentUser.displayName || '',
-        email: form.email.trim(),
-        role: 'client',
-        requestedRole: 'client',
-        onboardingStatus: 'completed',
-        onboardingCompleted: true,
-        onboardingUpdatedAt: new Date().toISOString(),
-      });
-
-      await setUserPrivateDoc('onboarding', {
+      await completeClientOnboarding({
         fullName: form.fullName.trim(),
         email: form.email.trim(),
         phone: form.phone.trim(),
-        compiledBy: 'client',
+        coachCode: form.coachCode.trim(),
       });
 
       showSuccess('Profilo salvato. Ora puoi entrare nella tua area.');
@@ -109,6 +101,15 @@ export function OnboardingPage() {
             type="tel"
             inputMode="numeric"
             placeholder="Es. 3405882404"
+          />
+        </label>
+
+        <label>
+          Codice coach *
+          <input
+            value={form.coachCode}
+            onChange={(event) => updateField('coachCode', event.target.value)}
+            placeholder="Es. lorenzobeastly"
           />
         </label>
 

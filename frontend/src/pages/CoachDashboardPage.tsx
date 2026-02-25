@@ -1,17 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import Select, { type StylesConfig } from 'react-select';
+import { useNavigate } from 'react-router-dom';
 
 import { useToast } from '../components/ToastProvider';
 import {
+  activateCoachSubscription,
+  disableCoachSubscription,
   createPlanAsCoach,
   deletePlanAsCoach,
+  acceptCoachTrial,
+  getCoachAccessState,
   getUserPrivateDoc,
   listPlansForRole,
+  listCoachesForSupervisor,
   listRegisteredUsers,
+  logoutCurrentUser,
+  renewCoachSubscription,
   setClientOnboardingAsCoach,
   uploadWorkoutMediaAsCoach,
   updatePlanAsCoach,
   useAuthState,
+  type CoachAccessState,
 } from '../lib';
 import { AppShell } from '../components/AppShell';
 import { toMessage } from '../utils/firestore';
@@ -105,6 +114,17 @@ interface OnboardingDraft {
 }
 
 type ClientOption = { value: string; label: string };
+type SupervisorCoachItem = {
+  uid: string;
+  displayName: string;
+  email: string;
+  coachCode: string;
+  isSupervisor: boolean;
+  status: string;
+  trialEndsAt: string | null;
+  subscriptionEndsAt: string | null;
+  expiresAt: string | null;
+};
 
 const PROFILE_STEPS = ['Anagrafica', 'Stato fisico', 'Obiettivi', 'Supporto'] as const;
 
@@ -244,8 +264,16 @@ function toTrainingDaysPerWeek(value: string): number {
   return 0;
 }
 
+function formatDate(value?: string | null): string {
+  if (!value) return 'Non disponibile';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Non disponibile';
+  return date.toLocaleDateString('it-IT', {day: '2-digit', month: '2-digit', year: 'numeric'});
+}
+
 export function CoachDashboardPage() {
-  const { role, user } = useAuthState();
+  const { role, user, isSupervisor } = useAuthState();
+  const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const [registeredClients, setRegisteredClients] = useState<Array<UserProfileDoc & { id: string }>>([]);
   const [plans, setPlans] = useState<Array<PlanDoc & { id: string }>>([]);
@@ -256,6 +284,11 @@ export function CoachDashboardPage() {
   const [profileStep, setProfileStep] = useState(0);
   const [onboardingDraft, setOnboardingDraft] = useState<OnboardingDraft>(emptyOnboardingDraft());
   const [uploadingExerciseIndex, setUploadingExerciseIndex] = useState<number | null>(null);
+  const [coachAccess, setCoachAccess] = useState<CoachAccessState | null>(null);
+  const [loadingCoachAccess, setLoadingCoachAccess] = useState(false);
+  const [supervisorCoaches, setSupervisorCoaches] = useState<SupervisorCoachItem[]>([]);
+  const [supervisorSearch, setSupervisorSearch] = useState('');
+  const [supervisorActionUid, setSupervisorActionUid] = useState('');
 
   const [selectedClientId, setSelectedClientId] = useState('');
   const [planTitle, setPlanTitle] = useState('');
@@ -282,6 +315,17 @@ export function CoachDashboardPage() {
 
   const selectedClientOption = clientOptions.find((option) => option.value === selectedClientId) ?? null;
   const profileProgress = Math.round(((profileStep + 1) / PROFILE_STEPS.length) * 100);
+  const filteredSupervisorCoaches = supervisorCoaches
+    .filter((coach) => {
+      const needle = supervisorSearch.trim().toLowerCase();
+      if (!needle) return true;
+      return coach.displayName.toLowerCase().includes(needle) || coach.email.toLowerCase().includes(needle);
+    })
+    .sort((a, b) => {
+      const aTime = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
+      const bTime = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
+      return aTime - bTime;
+    });
 
   const customStyles: StylesConfig<ClientOption, false> = useMemo(
     () => ({
@@ -389,6 +433,46 @@ export function CoachDashboardPage() {
   useEffect(() => {
     void loadData();
   }, [role, user?.uid]);
+
+  useEffect(() => {
+    if (!coachAccess || coachAccess.isSupervisor) return;
+    if (coachAccess.isExpired) {
+      void logoutCurrentUser().finally(() => {
+        sessionStorage.setItem('bw_login_intent', 'coach');
+        navigate('/auth', {replace: true});
+      });
+    }
+  }, [coachAccess?.status, coachAccess?.isExpired, coachAccess?.isSupervisor]);
+
+  useEffect(() => {
+    async function loadAccessState() {
+      if (!role || role === 'client') return;
+      setLoadingCoachAccess(true);
+      try {
+        const access = await getCoachAccessState();
+        setCoachAccess(access);
+      } catch (error) {
+        showError(toMessage(error));
+      } finally {
+        setLoadingCoachAccess(false);
+      }
+    }
+    void loadAccessState();
+  }, [role, user?.uid]);
+
+  async function loadSupervisorCoaches() {
+    if (!isSupervisor) return;
+    try {
+      const result = await listCoachesForSupervisor();
+      setSupervisorCoaches(result.coaches ?? []);
+    } catch (error) {
+      showError(toMessage(error));
+    }
+  }
+
+  useEffect(() => {
+    void loadSupervisorCoaches();
+  }, [isSupervisor, user?.uid]);
 
   async function runAction(action: () => Promise<unknown>, okMessage: string) {
     setLoading(true);
@@ -636,12 +720,140 @@ export function CoachDashboardPage() {
     setIsPlanModalOpen(false);
   }
 
+  async function runSupervisorAction(uid: string, action: 'activate' | 'renew' | 'disable') {
+    setSupervisorActionUid(uid);
+    try {
+      if (action === 'activate') {
+        await activateCoachSubscription(uid);
+        showSuccess('Abbonamento attivato.');
+      } else if (action === 'renew') {
+        await renewCoachSubscription(uid);
+        showSuccess('Abbonamento rinnovato di 1 anno.');
+      } else {
+        await disableCoachSubscription(uid);
+        showSuccess('Abbonamento disattivato.');
+      }
+      await loadSupervisorCoaches();
+    } catch (error) {
+      showError(toMessage(error));
+    } finally {
+      setSupervisorActionUid('');
+    }
+  }
+
+  async function acceptTrialFromCoachPage() {
+    setLoadingCoachAccess(true);
+    try {
+      await acceptCoachTrial();
+      const state = await getCoachAccessState();
+      setCoachAccess(state);
+      showSuccess('Periodo di prova attivato.');
+    } catch (error) {
+      showError(toMessage(error));
+    } finally {
+      setLoadingCoachAccess(false);
+    }
+  }
+
   return (
     <AppShell
       role={role === 'trainer' ? 'trainer' : 'admin'}
       subtitle="Gestisci clienti, anagrafica completa e schede tecniche da un unico posto."
       title="Area Coach"
     >
+      {coachAccess?.requiresTrialAcceptance ? (
+        <section className="modal-overlay" role="dialog" aria-modal="true">
+          <article className="card modal-card fullscreen-gate">
+            <p className="eyebrow">Accesso Coach</p>
+            <h2>Prova gratuita 15 giorni</h2>
+            <p className="hero-sub">
+              Per entrare nell&apos;area coach devi accettare il periodo gratuito di 15 giorni. Al termine sarà necessario attivare l&apos;abbonamento.
+            </p>
+            <button className="btn" type="button" disabled={loadingCoachAccess} onClick={() => void acceptTrialFromCoachPage()}>
+              {loadingCoachAccess ? 'Attivazione...' : 'Accetta e continua'}
+            </button>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => {
+                void logoutCurrentUser().finally(() => navigate('/auth', {replace: true}));
+              }}
+            >
+              Esci
+            </button>
+          </article>
+        </section>
+      ) : null}
+
+      <article className="card">
+        <h2>Il tuo codice coach</h2>
+        <p className="hero-sub">Invia questo codice al cliente: è obbligatorio per associarlo a te in onboarding.</p>
+        <p className="coach-code">{coachAccess?.coachCode || 'Caricamento...'}</p>
+        {loadingCoachAccess ? <p className="hint">Sto verificando il tuo accesso...</p> : null}
+        {coachAccess?.isSupervisor ? (
+          <p className="hint">Account supervisor: accesso sempre attivo, senza trial.</p>
+        ) : (
+          <p className="hint">
+            Stato accesso: <strong>{coachAccess?.status ?? 'non disponibile'}</strong>
+            {' · '}Scadenza: <strong>{formatDate(coachAccess?.expiresAt ?? coachAccess?.trialEndsAt ?? coachAccess?.subscriptionEndsAt)}</strong>
+          </p>
+        )}
+      </article>
+
+      {isSupervisor ? (
+        <article className="card">
+          <h2>Gestione coach (Supervisor)</h2>
+          <label>
+            Cerca coach per nome o email
+            <input
+              value={supervisorSearch}
+              onChange={(event) => setSupervisorSearch(event.target.value)}
+              placeholder="Es. Mario Rossi o mario@gmail.com"
+            />
+          </label>
+          <div className="supervisor-list">
+            {filteredSupervisorCoaches.map((coach) => (
+              <article className="supervisor-row" key={coach.uid}>
+                <div>
+                  <p><strong>{coach.displayName || 'Coach senza nome'}</strong></p>
+                  <p className="hint">{coach.email}</p>
+                  <p className="hint">Codice: {coach.coachCode || '-'}</p>
+                  <p className="hint">Stato: {coach.isSupervisor ? 'supervisor_active' : coach.status}</p>
+                  <p className="hint">Scadenza: {formatDate(coach.expiresAt)}</p>
+                </div>
+                <div className="supervisor-actions">
+                  <button
+                    className="btn btn-ghost"
+                    type="button"
+                    disabled={coach.isSupervisor || supervisorActionUid === coach.uid}
+                    onClick={() => void runSupervisorAction(coach.uid, 'activate')}
+                  >
+                    Attiva
+                  </button>
+                  <button
+                    className="btn btn-ghost"
+                    type="button"
+                    disabled={coach.isSupervisor || supervisorActionUid === coach.uid}
+                    onClick={() => void runSupervisorAction(coach.uid, 'renew')}
+                  >
+                    Rinnova +1 anno
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    type="button"
+                    disabled={coach.isSupervisor || supervisorActionUid === coach.uid}
+                    onClick={() => void runSupervisorAction(coach.uid, 'disable')}
+                  >
+                    Disattiva
+                  </button>
+                </div>
+              </article>
+            ))}
+            {filteredSupervisorCoaches.length === 0 ? <p className="hint">Nessun coach trovato.</p> : null}
+          </div>
+        </article>
+      ) : null}
+
       <article className="card">
         <h2>Gestione cliente</h2>
         <label>

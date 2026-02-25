@@ -13,12 +13,26 @@ service cloud.firestore {
       return hasRole('admin');
     }
 
+    function isSupervisor() {
+      return isAdmin() || (isSignedIn() && request.auth.token.supervisor == true);
+    }
+
+    function hasActiveCoachSubscription(uid) {
+      let subPath = /databases/$(database)/documents/coachSubscriptions/$(uid);
+      let sub = get(subPath);
+      return sub != null && (
+        sub.data.isSupervisor == true ||
+        (sub.data.status == 'trial_active' && sub.data.trialEndsAt > request.time) ||
+        (sub.data.status == 'active_paid' && sub.data.subscriptionEndsAt > request.time)
+      );
+    }
+
     function isTrainer() {
       return hasRole('trainer');
     }
 
     function isCoach() {
-      return isAdmin() || isTrainer();
+      return isAdmin() || (isTrainer() && (request.auth.token.supervisor == true || hasActiveCoachSubscription(request.auth.uid)));
     }
 
     function isClient() {
@@ -32,7 +46,7 @@ service cloud.firestore {
     function canAccessPair(trainerId, clientId) {
       return isSignedIn() && (
         isAdmin() ||
-        request.auth.uid == trainerId ||
+        (request.auth.uid == trainerId && isCoach()) ||
         request.auth.uid == clientId
       );
     }
@@ -57,11 +71,12 @@ service cloud.firestore {
       );
 
       allow create: if isCoach() &&
+        hasActiveCoachSubscription(request.auth.uid) &&
         request.resource.data.trainerId == request.auth.uid &&
         request.resource.data.clientId is string;
 
       allow update: if isAdmin() ||
-        (isCoach() && request.auth.uid == resource.data.trainerId);
+        (isCoach() && hasActiveCoachSubscription(request.auth.uid) && request.auth.uid == resource.data.trainerId);
 
       allow delete: if isAdmin();
     }
@@ -70,18 +85,19 @@ service cloud.firestore {
       allow read: if isSignedIn() && canAccessPair(resource.data.trainerId, resource.data.clientId);
 
       allow create: if isCoach() &&
+        hasActiveCoachSubscription(request.auth.uid) &&
         request.resource.data.trainerId == request.auth.uid &&
         request.resource.data.clientId is string &&
         request.resource.data.status in ['draft', 'active', 'archived'];
 
       allow update: if isAdmin() ||
-        (isCoach() && request.auth.uid == resource.data.trainerId) ||
+        (isCoach() && hasActiveCoachSubscription(request.auth.uid) && request.auth.uid == resource.data.trainerId) ||
         (isClient() && request.auth.uid == resource.data.clientId &&
           request.resource.data.diff(resource.data).changedKeys().hasOnly(['clientNotes', 'lastViewedAt'])
         );
 
       allow delete: if isAdmin() ||
-        (isCoach() && request.auth.uid == resource.data.trainerId);
+        (isCoach() && hasActiveCoachSubscription(request.auth.uid) && request.auth.uid == resource.data.trainerId);
     }
 
     match /workoutLogs/{logId} {
@@ -93,7 +109,7 @@ service cloud.firestore {
 
       allow update: if isAdmin() ||
         (isClient() && request.auth.uid == resource.data.clientId) ||
-        (isCoach() && request.auth.uid == resource.data.trainerId &&
+        (isCoach() && hasActiveCoachSubscription(request.auth.uid) && request.auth.uid == resource.data.trainerId &&
           request.resource.data.diff(resource.data).changedKeys().hasOnly(['trainerFeedback', 'updatedAt'])
         );
 
@@ -102,14 +118,19 @@ service cloud.firestore {
 
     match /sessions/{sessionId} {
       allow read: if isSignedIn() && canAccessPair(resource.data.trainerId, resource.data.clientId);
-      allow create, update: if isCoach() && request.auth.uid == request.resource.data.trainerId;
-      allow delete: if isAdmin() || (isCoach() && request.auth.uid == resource.data.trainerId);
+      allow create, update: if isCoach() && hasActiveCoachSubscription(request.auth.uid) && request.auth.uid == request.resource.data.trainerId;
+      allow delete: if isAdmin() || (isCoach() && hasActiveCoachSubscription(request.auth.uid) && request.auth.uid == resource.data.trainerId);
     }
 
     match /metrics/{metricId} {
       allow read: if isSignedIn() && canAccessPair(resource.data.trainerId, resource.data.clientId);
       allow create, update: if isClient() && request.auth.uid == request.resource.data.clientId;
       allow delete: if isAdmin();
+    }
+
+    match /coachSubscriptions/{coachId} {
+      allow read: if isOwner(coachId) || isSupervisor();
+      allow write: if isSupervisor();
     }
 
     match /{document=**} {
