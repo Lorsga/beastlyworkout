@@ -461,6 +461,33 @@ a.btn {
   background: #111;
 }
 
+.step-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.step-tab {
+  border: 1px solid rgba(24, 33, 38, 0.14);
+  border-radius: 10px;
+  background: rgba(24, 33, 38, 0.05);
+  color: var(--text);
+  padding: 10px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.step-tab-active {
+  background: linear-gradient(120deg, var(--brand), var(--brand-2));
+  border-color: transparent;
+  color: #fff;
+}
+
+.modal-grid {
+  display: grid;
+  gap: 10px;
+}
+
 .card,
 .hero {
   animation: rise 420ms ease both;
@@ -513,6 +540,14 @@ a.btn {
   .exercise-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
+  }
+
+  .step-tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .modal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

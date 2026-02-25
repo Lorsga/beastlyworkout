@@ -4,6 +4,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useToast } from '../components/ToastProvider';
 import {
   getPlanByClientId,
+  getUserPrivateDoc,
   getUserProfile,
   listPlansForRole,
   useAuthState,
@@ -28,6 +29,17 @@ interface PlanDoc {
 interface UserProfileDoc {
   uid?: string;
   clientId?: string;
+}
+
+interface OnboardingDoc {
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  age?: string;
+  sex?: string;
+  heightCm?: string;
+  weightKg?: string;
+  objectivePrimary?: string;
 }
 
 function toYouTubeEmbedUrl(url: string): string | null {
@@ -80,6 +92,7 @@ export function ClientDashboardPage() {
   const [loading, setLoading] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [mediaPreview, setMediaPreview] = useState<{ url: string; label: string } | null>(null);
+  const [onboarding, setOnboarding] = useState<OnboardingDoc | null>(null);
   const whatsappMessage = 'Ciao coach, avrei bisogno di un feedback sulla mia scheda.';
 
   useEffect(() => {
@@ -109,6 +122,8 @@ export function ClientDashboardPage() {
       const authUid = user?.uid ?? '';
       const profileSnap = authUid ? await getUserProfile(authUid) : null;
       const profile = (profileSnap?.data() as UserProfileDoc | undefined) ?? {};
+      const onboardingSnap = authUid ? await getUserPrivateDoc(authUid, 'onboarding') : null;
+      setOnboarding((onboardingSnap?.data() as OnboardingDoc | undefined) ?? null);
 
       const candidateIds = Array.from(
         new Set([authUid, (profile.uid ?? '').trim(), (profile.clientId ?? '').trim()].filter((value) => value.length > 0)),
@@ -151,6 +166,16 @@ export function ClientDashboardPage() {
 
   const topPlan = plans[0];
   const topPlanExercises = normalizeExercises(topPlan?.exercises);
+  const profileRows = [
+    { label: 'Nome e cognome', value: onboarding?.fullName },
+    { label: 'E-mail', value: onboarding?.email ?? user?.email },
+    { label: 'Telefono', value: onboarding?.phone },
+    { label: 'Età', value: onboarding?.age },
+    { label: 'Sesso', value: onboarding?.sex },
+    { label: 'Altezza', value: onboarding?.heightCm ? `${onboarding.heightCm} cm` : '' },
+    { label: 'Peso', value: onboarding?.weightKg ? `${onboarding.weightKg} kg` : '' },
+    { label: 'Obiettivo', value: onboarding?.objectivePrimary },
+  ].filter((item) => (item.value ?? '').toString().trim().length > 0);
 
   if (!user) return <Navigate to="/auth" replace />;
   if (checkingOnboarding) {
@@ -201,6 +226,21 @@ export function ClientDashboardPage() {
           Apri chat WhatsApp
         </a>
         {!HAS_PT_WHATSAPP ? <p className="message">Numero WhatsApp PT non ancora configurato.</p> : null}
+      </article>
+
+      <article className="card">
+        <h2>La tua anagrafica</h2>
+        {profileRows.length > 0 ? (
+          <div className="client-info-block">
+            {profileRows.map((row) => (
+              <p key={row.label} className="hint">
+                <strong>{row.label}:</strong> {row.value}
+              </p>
+            ))}
+          </div>
+        ) : (
+          <p className="hint">Anagrafica non ancora disponibile.</p>
+        )}
       </article>
 
       <article className="card">

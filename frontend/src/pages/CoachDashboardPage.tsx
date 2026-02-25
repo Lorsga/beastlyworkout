@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Select, { type StylesConfig } from 'react-select';
 
 import { useToast } from '../components/ToastProvider';
 import {
@@ -7,6 +8,7 @@ import {
   getUserPrivateDoc,
   listPlansForRole,
   listRegisteredUsers,
+  setClientOnboardingAsCoach,
   uploadWorkoutMediaAsCoach,
   updatePlanAsCoach,
   useAuthState,
@@ -68,7 +70,43 @@ interface OnboardingDoc {
   experienceLevel?: string;
   trainingDaysPerWeek?: number;
   notes?: string;
+  compiledBy?: string;
 }
+
+interface OnboardingDraft {
+  fullName: string;
+  age: string;
+  sex: string;
+  email: string;
+  phone: string;
+  discoverySource: string;
+  heightCm: string;
+  weightKg: string;
+  pastProgram: string;
+  trainingFrequency: string;
+  workoutDuration: string;
+  workoutLocation: string;
+  equipment: string;
+  trainingTypeHistory: string;
+  hasInjuries: string;
+  injuryDetails: string;
+  objectivePrimary: string;
+  objectiveReason: string;
+  expectedTimeline: string;
+  supportPreference: string;
+  supportPreferenceOther: string;
+  investmentRange: string;
+  whatBlockedSoFar: string;
+  oneThingToImprove: string;
+  importanceScore: string;
+  riskIfNoChange: string;
+  readiness: string;
+  notes: string;
+}
+
+type ClientOption = { value: string; label: string };
+
+const PROFILE_STEPS = ['Anagrafica', 'Stato fisico', 'Obiettivi', 'Supporto'] as const;
 
 function asText(value: unknown): string {
   return typeof value === 'string' ? value : value == null ? '' : String(value);
@@ -107,7 +145,6 @@ function normalizeWhatsappPhone(raw: string): string {
   if (digits.startsWith('+')) return digits.slice(1);
   if (digits.startsWith('00')) return digits.slice(2);
   if (digits.startsWith('39')) return digits;
-  // Default IT fallback for local mobile numbers (es. 340...)
   if (digits.length >= 9) return `39${digits}`;
   return digits;
 }
@@ -131,6 +168,82 @@ function defaultExercise() {
   return {name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''};
 }
 
+function emptyOnboardingDraft(base?: { name?: string; email?: string }): OnboardingDraft {
+  return {
+    fullName: base?.name ?? '',
+    age: '',
+    sex: '',
+    email: base?.email ?? '',
+    phone: '',
+    discoverySource: '',
+    heightCm: '',
+    weightKg: '',
+    pastProgram: '',
+    trainingFrequency: '',
+    workoutDuration: '',
+    workoutLocation: '',
+    equipment: '',
+    trainingTypeHistory: '',
+    hasInjuries: '',
+    injuryDetails: '',
+    objectivePrimary: '',
+    objectiveReason: '',
+    expectedTimeline: '',
+    supportPreference: '',
+    supportPreferenceOther: '',
+    investmentRange: '',
+    whatBlockedSoFar: '',
+    oneThingToImprove: '',
+    importanceScore: '',
+    riskIfNoChange: '',
+    readiness: '',
+    notes: '',
+  };
+}
+
+function toOnboardingDraft(data: OnboardingDoc | null, base?: { name?: string; email?: string }): OnboardingDraft {
+  const seed = emptyOnboardingDraft(base);
+  if (!data) return seed;
+  return {
+    ...seed,
+    fullName: asText(data.fullName).trim() || seed.fullName,
+    age: asText(data.age).trim(),
+    sex: asText(data.sex).trim(),
+    email: asText(data.email).trim() || seed.email,
+    phone: asText(data.phone).trim(),
+    discoverySource: asText(data.discoverySource).trim(),
+    heightCm: asText(data.heightCm).trim(),
+    weightKg: asText(data.weightKg).trim(),
+    pastProgram: asText(data.pastProgram).trim(),
+    trainingFrequency: asText(data.trainingFrequency).trim(),
+    workoutDuration: asText(data.workoutDuration).trim(),
+    workoutLocation: asText(data.workoutLocation).trim(),
+    equipment: asText(data.equipment).trim(),
+    trainingTypeHistory: asText(data.trainingTypeHistory).trim(),
+    hasInjuries: asText(data.hasInjuries).trim(),
+    injuryDetails: asText(data.injuryDetails).trim(),
+    objectivePrimary: asText(data.objectivePrimary).trim(),
+    objectiveReason: asText(data.objectiveReason).trim(),
+    expectedTimeline: asText(data.expectedTimeline).trim(),
+    supportPreference: asText(data.supportPreference).trim(),
+    supportPreferenceOther: asText(data.supportPreferenceOther).trim(),
+    investmentRange: asText(data.investmentRange).trim(),
+    whatBlockedSoFar: asText(data.whatBlockedSoFar).trim(),
+    oneThingToImprove: asText(data.oneThingToImprove).trim(),
+    importanceScore: data.importanceScore != null ? String(data.importanceScore) : '',
+    riskIfNoChange: asText(data.riskIfNoChange).trim(),
+    readiness: asText(data.readiness).trim(),
+    notes: asText(data.notes).trim(),
+  };
+}
+
+function toTrainingDaysPerWeek(value: string): number {
+  if (value.includes('1-2')) return 2;
+  if (value.includes('3-4')) return 4;
+  if (value.includes('5')) return 5;
+  return 0;
+}
+
 export function CoachDashboardPage() {
   const { role, user } = useAuthState();
   const { showError, showSuccess } = useToast();
@@ -139,14 +252,17 @@ export function CoachDashboardPage() {
   const [loading, setLoading] = useState(false);
   const [selectedClientOnboarding, setSelectedClientOnboarding] = useState<OnboardingDoc | null>(null);
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileStep, setProfileStep] = useState(0);
+  const [onboardingDraft, setOnboardingDraft] = useState<OnboardingDraft>(emptyOnboardingDraft());
   const [uploadingExerciseIndex, setUploadingExerciseIndex] = useState<number | null>(null);
 
   const [selectedClientId, setSelectedClientId] = useState('');
   const [planTitle, setPlanTitle] = useState('');
   const [exercises, setExercises] = useState([defaultExercise()]);
   const isUploadingMedia = uploadingExerciseIndex !== null;
-  const [savingTitle, setSavingTitle] = useState(false);
 
+  const selectedClientProfile = registeredClients.find((item) => getClientAuthUid(item) === selectedClientId) ?? null;
   const existingPlanForClient = plans.find((plan) => plan.id === selectedClientId) ?? plans.find((plan) => plan.clientId === selectedClientId);
   const selectedClientWhatsappUrl = buildClientWhatsappUrl(
     asText(selectedClientOnboarding?.phone),
@@ -158,6 +274,41 @@ export function CoachDashboardPage() {
     acc[client.id] = label;
     return acc;
   }, {});
+
+  const clientOptions: ClientOption[] = registeredClients.map((client) => ({
+    value: getClientAuthUid(client),
+    label: asText(client.displayName).trim() || asText(client.email) || client.id,
+  }));
+
+  const selectedClientOption = clientOptions.find((option) => option.value === selectedClientId) ?? null;
+  const profileProgress = Math.round(((profileStep + 1) / PROFILE_STEPS.length) * 100);
+
+  const customStyles: StylesConfig<ClientOption, false> = useMemo(
+    () => ({
+      control: (base, state) => ({
+        ...base,
+        minHeight: 48,
+        borderRadius: 12,
+        borderColor: state.isFocused ? '#ff6a00' : 'rgba(18,18,18,0.16)',
+        boxShadow: state.isFocused ? '0 0 0 2px rgba(255,106,0,0.20)' : 'none',
+        backgroundColor: '#fff',
+        '&:hover': { borderColor: '#ff6a00' },
+      }),
+      menu: (base) => ({
+        ...base,
+        borderRadius: 12,
+        overflow: 'hidden',
+        zIndex: 50,
+      }),
+      option: (base, state) => ({
+        ...base,
+        backgroundColor: state.isSelected ? '#ff6a00' : state.isFocused ? 'rgba(255,106,0,0.10)' : '#fff',
+        color: state.isSelected ? '#fff' : '#121212',
+        cursor: 'pointer',
+      }),
+    }),
+    [],
+  );
 
   useEffect(() => {
     async function loadSelectedClientOnboarding() {
@@ -189,36 +340,6 @@ export function CoachDashboardPage() {
       .filter((item) => item.name.trim().length > 0);
     setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
   }, [selectedClientId, existingPlanForClient?.id]);
-
-  useEffect(() => {
-    if (!existingPlanForClient) return;
-    const nextTitle = planTitle.trim();
-    const currentTitle = asText(existingPlanForClient.title).trim();
-    if (!nextTitle || nextTitle === currentTitle) return;
-
-    const timer = window.setTimeout(async () => {
-      try {
-        setSavingTitle(true);
-        await updatePlanAsCoach(existingPlanForClient.id, {title: nextTitle});
-        setPlans((prev) =>
-          prev.map((plan) =>
-            plan.id === existingPlanForClient.id
-              ? {
-                  ...plan,
-                  title: nextTitle,
-                }
-              : plan,
-          ),
-        );
-      } catch (error) {
-        showError(toMessage(error));
-      } finally {
-        setSavingTitle(false);
-      }
-    }, 700);
-
-    return () => window.clearTimeout(timer);
-  }, [planTitle, existingPlanForClient?.id]);
 
   async function loadData() {
     if (!role) return;
@@ -298,6 +419,10 @@ export function CoachDashboardPage() {
     setExercises((prev) => prev.map((item, idx) => (idx === index ? {...item, ...patch} : item)));
   }
 
+  function updateOnboardingField<K extends keyof OnboardingDraft>(key: K, value: OnboardingDraft[K]) {
+    setOnboardingDraft((prev) => ({ ...prev, [key]: value }));
+  }
+
   function reloadModalDraftFromServer() {
     if (!existingPlanForClient) {
       setPlanTitle('');
@@ -309,7 +434,121 @@ export function CoachDashboardPage() {
     setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
   }
 
+  function openProfileModal() {
+    if (!selectedClientId) {
+      showError('Seleziona prima un cliente.');
+      return;
+    }
+
+    const base = {
+      name: asText(selectedClientProfile?.displayName).trim(),
+      email: asText(selectedClientProfile?.email).trim(),
+    };
+
+    setOnboardingDraft(toOnboardingDraft(selectedClientOnboarding, base));
+    setProfileStep(0);
+    setIsProfileModalOpen(true);
+  }
+
+  function closeProfileModalWithoutSaving() {
+    const base = {
+      name: asText(selectedClientProfile?.displayName).trim(),
+      email: asText(selectedClientProfile?.email).trim(),
+    };
+    setOnboardingDraft(toOnboardingDraft(selectedClientOnboarding, base));
+    setProfileStep(0);
+    setIsProfileModalOpen(false);
+  }
+
+  function validateCoachProfile(): string | null {
+    if (!onboardingDraft.fullName.trim()) return 'Inserisci nome e cognome.';
+    if (!onboardingDraft.email.trim()) return 'Inserisci e-mail.';
+    if (!onboardingDraft.phone.trim()) return 'Inserisci numero di telefono.';
+    if (!onboardingDraft.age.trim()) return 'Inserisci età.';
+    if (!onboardingDraft.sex.trim()) return 'Inserisci sesso.';
+    if (!onboardingDraft.heightCm.trim()) return 'Inserisci altezza.';
+    if (!onboardingDraft.weightKg.trim()) return 'Inserisci peso.';
+    if (!onboardingDraft.pastProgram.trim()) return 'Compila esperienza allenamento.';
+    if (!onboardingDraft.trainingFrequency.trim()) return 'Compila frequenza allenamento.';
+    if (!onboardingDraft.workoutDuration.trim()) return 'Compila durata allenamento.';
+    if (!onboardingDraft.workoutLocation.trim()) return 'Compila luogo allenamento.';
+    if (!onboardingDraft.equipment.trim()) return 'Compila attrezzatura.';
+    if (!onboardingDraft.objectivePrimary.trim()) return 'Compila obiettivo principale.';
+    if (!onboardingDraft.objectiveReason.trim()) return 'Compila motivo obiettivo.';
+    if (!onboardingDraft.expectedTimeline.trim()) return 'Compila timeline risultati.';
+    if (!onboardingDraft.supportPreference.trim()) return 'Compila supporto preferito.';
+    if (!onboardingDraft.investmentRange.trim()) return 'Compila fascia investimento.';
+    if (!onboardingDraft.readiness.trim()) return 'Compila disponibilità a partire.';
+    return null;
+  }
+
+  async function saveCoachOnboarding() {
+    if (!selectedClientId) {
+      showError('Seleziona prima un cliente.');
+      return;
+    }
+
+    const validationError = validateCoachProfile();
+    if (validationError) {
+      showError(validationError);
+      return;
+    }
+
+    const payload: OnboardingDoc = {
+      fullName: onboardingDraft.fullName.trim(),
+      age: onboardingDraft.age.trim(),
+      sex: onboardingDraft.sex.trim(),
+      email: onboardingDraft.email.trim(),
+      phone: onboardingDraft.phone.trim(),
+      discoverySource: onboardingDraft.discoverySource.trim(),
+      heightCm: onboardingDraft.heightCm.trim(),
+      weightKg: onboardingDraft.weightKg.trim(),
+      pastProgram: onboardingDraft.pastProgram.trim(),
+      trainingFrequency: onboardingDraft.trainingFrequency.trim(),
+      workoutDuration: onboardingDraft.workoutDuration.trim(),
+      workoutLocation: onboardingDraft.workoutLocation.trim(),
+      equipment: onboardingDraft.equipment.trim(),
+      trainingTypeHistory: onboardingDraft.trainingTypeHistory.trim(),
+      hasInjuries: onboardingDraft.hasInjuries.trim(),
+      injuryDetails: onboardingDraft.injuryDetails.trim(),
+      objectivePrimary: onboardingDraft.objectivePrimary.trim(),
+      objectiveReason: onboardingDraft.objectiveReason.trim(),
+      expectedTimeline: onboardingDraft.expectedTimeline.trim(),
+      supportPreference: onboardingDraft.supportPreference.trim(),
+      supportPreferenceOther: onboardingDraft.supportPreferenceOther.trim(),
+      investmentRange: onboardingDraft.investmentRange.trim(),
+      whatBlockedSoFar: onboardingDraft.whatBlockedSoFar.trim(),
+      oneThingToImprove: onboardingDraft.oneThingToImprove.trim(),
+      importanceScore: Number(onboardingDraft.importanceScore || 0),
+      riskIfNoChange: onboardingDraft.riskIfNoChange.trim(),
+      readiness: onboardingDraft.readiness.trim(),
+      goal: onboardingDraft.objectivePrimary.trim(),
+      experienceLevel: onboardingDraft.pastProgram.trim(),
+      trainingDaysPerWeek: toTrainingDaysPerWeek(onboardingDraft.trainingFrequency),
+      notes: onboardingDraft.notes.trim(),
+      compiledBy: 'coach',
+    };
+
+    setLoading(true);
+    try {
+      await setClientOnboardingAsCoach(selectedClientId, payload as Record<string, unknown>);
+      setSelectedClientOnboarding(payload);
+      showSuccess('Anagrafica cliente salvata con successo.');
+      setIsProfileModalOpen(false);
+    } catch (error) {
+      showError(toMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function savePlan() {
+    const normalizedTitle = planTitle.trim();
+    if (!normalizedTitle) {
+      showError('Inserisci un titolo per la scheda.');
+      return;
+    }
+
     const preparedExercises = exercises
       .map((item) => ({
         name: item.name.trim(),
@@ -329,7 +568,7 @@ export function CoachDashboardPage() {
       await runAction(
         () =>
           updatePlanAsCoach(existingPlanForClient.id, {
-            title: planTitle,
+            title: normalizedTitle,
             status: 'active',
             exercises: preparedExercises,
           }),
@@ -340,7 +579,7 @@ export function CoachDashboardPage() {
         () =>
           createPlanAsCoach({
             clientId: selectedClientId,
-            title: planTitle,
+            title: normalizedTitle,
             status: 'active',
             exercises: preparedExercises,
           }),
@@ -353,10 +592,6 @@ export function CoachDashboardPage() {
   function openCreatePlanModal() {
     if (!selectedClientId) {
       showError('Seleziona prima un cliente.');
-      return;
-    }
-    if (!planTitle.trim()) {
-      showError('Inserisci un titolo per la scheda.');
       return;
     }
     reloadModalDraftFromServer();
@@ -404,35 +639,33 @@ export function CoachDashboardPage() {
   return (
     <AppShell
       role={role === 'trainer' ? 'trainer' : 'admin'}
-      subtitle="Gestisci clienti, programmi e appuntamenti da un unico posto."
+      subtitle="Gestisci clienti, anagrafica completa e schede tecniche da un unico posto."
       title="Area Coach"
     >
       <article className="card">
-        <h2>Crea scheda cliente</h2>
+        <h2>Gestione cliente</h2>
         <label>
           Clienti registrati
-          <select value={selectedClientId} onChange={(event) => setSelectedClientId(event.target.value)}>
-            {registeredClients.length === 0 ? <option value="">Nessun cliente disponibile</option> : null}
-            {registeredClients.map((client) => (
-              <option key={client.id} value={getClientAuthUid(client)}>
-                {asText(client.displayName).trim() || asText(client.email) || client.id}
-              </option>
-            ))}
-          </select>
+          <Select
+            styles={customStyles}
+            options={clientOptions}
+            value={selectedClientOption}
+            onChange={(option) => setSelectedClientId(option?.value ?? '')}
+            placeholder={registeredClients.length === 0 ? 'Nessun cliente disponibile' : 'Cerca cliente per nome...'}
+            noOptionsMessage={() => 'Nessun risultato'}
+            isSearchable
+          />
         </label>
         <button className="btn btn-ghost" type="button" onClick={() => void loadData()}>
           Aggiorna lista clienti
         </button>
-        <label>
-          Titolo programma
-          <input value={planTitle} onChange={(event) => setPlanTitle(event.target.value)} placeholder="Forza 4 settimane" />
-        </label>
-        {existingPlanForClient ? <p className="hint">{savingTitle ? 'Salvataggio titolo in corso...' : 'Titolo salvato automaticamente.'}</p> : null}
-        <p className="hint">
-          {existingPlanForClient ? 'Questo cliente ha già una scheda: puoi modificarla.' : 'Questo cliente non ha ancora una scheda: ne creerai una nuova.'}
-        </p>
+
         <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
-          <h2>Informazioni del cliente</h2>
+          <h2>Anagrafica cliente</h2>
+          <p className="hint">L&apos;utente compila i dati base. Il questionario completo lo compili qui.</p>
+          <button className="btn" type="button" onClick={openProfileModal} disabled={loading || !selectedClientId}>
+            {selectedClientOnboarding ? 'Modifica anagrafica completa' : 'Compila anagrafica completa'}
+          </button>
           {selectedClientWhatsappUrl ? (
             <a className="btn btn-whatsapp" href={selectedClientWhatsappUrl} target="_blank" rel="noreferrer">
               Scrivi al cliente su WhatsApp
@@ -440,6 +673,7 @@ export function CoachDashboardPage() {
           ) : (
             <p className="hint">Numero WhatsApp cliente non disponibile.</p>
           )}
+
           <div className="client-info-block">
             <h3>Anagrafica</h3>
             <p className="hint"><strong>Nome:</strong> {onboardingValue(selectedClientOnboarding?.fullName)}</p>
@@ -449,6 +683,7 @@ export function CoachDashboardPage() {
             <p className="hint"><strong>Telefono:</strong> {onboardingValue(selectedClientOnboarding?.phone)}</p>
             <p className="hint"><strong>Come ci ha conosciuto:</strong> {onboardingValue(selectedClientOnboarding?.discoverySource)}</p>
           </div>
+
           <div className="client-info-block">
             <h3>Stato fisico e allenamento</h3>
             <p className="hint"><strong>Altezza:</strong> {onboardingValue(selectedClientOnboarding?.heightCm)} cm</p>
@@ -462,6 +697,7 @@ export function CoachDashboardPage() {
             <p className="hint"><strong>Infortuni/problemi:</strong> {onboardingValue(selectedClientOnboarding?.hasInjuries)}</p>
             <p className="hint"><strong>Dettagli infortuni:</strong> {onboardingValue(selectedClientOnboarding?.injuryDetails)}</p>
           </div>
+
           <div className="client-info-block">
             <h3>Obiettivi</h3>
             <p className="hint"><strong>Obiettivo principale:</strong> {onboardingValue(selectedClientOnboarding?.objectivePrimary || selectedClientOnboarding?.goal)}</p>
@@ -472,6 +708,7 @@ export function CoachDashboardPage() {
             <p className="hint"><strong>Importanza obiettivo:</strong> {onboardingValue(selectedClientOnboarding?.importanceScore)} / 10</p>
             <p className="hint"><strong>Rischio se non cambia:</strong> {onboardingValue(selectedClientOnboarding?.riskIfNoChange)}</p>
           </div>
+
           <div className="client-info-block">
             <h3>Supporto e decisione</h3>
             <p className="hint"><strong>Supporto preferito:</strong> {onboardingValue(selectedClientOnboarding?.supportPreference)}</p>
@@ -480,12 +717,12 @@ export function CoachDashboardPage() {
             <p className="hint"><strong>Disponibilità a partire:</strong> {onboardingValue(selectedClientOnboarding?.readiness)}</p>
           </div>
         </article>
-        <button
-          className="btn"
-          disabled={!selectedClientId || !planTitle || loading}
-          onClick={openCreatePlanModal}
-          type="button"
-        >
+
+        <p className="hint">
+          {existingPlanForClient ? 'Questo cliente ha già una scheda: puoi modificarla.' : 'Questo cliente non ha ancora una scheda: ne creerai una nuova.'}
+        </p>
+
+        <button className="btn" disabled={loading} onClick={openCreatePlanModal} type="button">
           {existingPlanForClient ? 'Modifica scheda' : 'Crea scheda'}
         </button>
         {existingPlanForClient ? (
@@ -494,11 +731,113 @@ export function CoachDashboardPage() {
           </button>
         ) : null}
       </article>
+
+      {isProfileModalOpen ? (
+        <section className="modal-overlay" role="dialog" aria-modal="true">
+          <article className="card modal-card">
+            <h2>Anagrafica completa cliente</h2>
+            <p className="hero-sub">Step {profileStep + 1} di {PROFILE_STEPS.length} · Completamento {profileProgress}%</p>
+            <div className="onboarding-progress" aria-hidden="true">
+              <div className="onboarding-progress-bar" style={{ width: `${profileProgress}%` }} />
+            </div>
+
+            <div className="step-tabs">
+              {PROFILE_STEPS.map((label, index) => (
+                <button
+                  key={label}
+                  className={`step-tab ${profileStep === index ? 'step-tab-active' : ''}`.trim()}
+                  type="button"
+                  onClick={() => setProfileStep(index)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {profileStep === 0 ? (
+              <div className="modal-grid">
+                <label>Nome e cognome *<input value={onboardingDraft.fullName} onChange={(event) => updateOnboardingField('fullName', event.target.value)} /></label>
+                <label>Età *<input type="number" min={12} max={99} value={onboardingDraft.age} onChange={(event) => updateOnboardingField('age', event.target.value)} /></label>
+                <label>Sesso *<input value={onboardingDraft.sex} onChange={(event) => updateOnboardingField('sex', event.target.value)} /></label>
+                <label>E-mail *<input type="email" value={onboardingDraft.email} onChange={(event) => updateOnboardingField('email', event.target.value)} /></label>
+                <label>Telefono *<input type="tel" value={onboardingDraft.phone} onChange={(event) => updateOnboardingField('phone', event.target.value)} /></label>
+                <label>Come ci ha conosciuto<input value={onboardingDraft.discoverySource} onChange={(event) => updateOnboardingField('discoverySource', event.target.value)} /></label>
+              </div>
+            ) : null}
+
+            {profileStep === 1 ? (
+              <div className="modal-grid">
+                <label>Altezza (cm) *<input type="number" min={100} max={250} value={onboardingDraft.heightCm} onChange={(event) => updateOnboardingField('heightCm', event.target.value)} /></label>
+                <label>Peso (kg) *<input type="number" min={30} max={250} value={onboardingDraft.weightKg} onChange={(event) => updateOnboardingField('weightKg', event.target.value)} /></label>
+                <label>Programmi precedenti *<input value={onboardingDraft.pastProgram} onChange={(event) => updateOnboardingField('pastProgram', event.target.value)} placeholder="Es. Si con coach online" /></label>
+                <label>Frequenza allenamenti *<input value={onboardingDraft.trainingFrequency} onChange={(event) => updateOnboardingField('trainingFrequency', event.target.value)} placeholder="Es. 3-4 a settimana" /></label>
+                <label>Durata allenamento *<input value={onboardingDraft.workoutDuration} onChange={(event) => updateOnboardingField('workoutDuration', event.target.value)} placeholder="Es. 45 minuti" /></label>
+                <label>Dove si allena *<input value={onboardingDraft.workoutLocation} onChange={(event) => updateOnboardingField('workoutLocation', event.target.value)} /></label>
+                <label>Attrezzatura disponibile *<input value={onboardingDraft.equipment} onChange={(event) => updateOnboardingField('equipment', event.target.value)} /></label>
+                <label>Allenamenti fatti<textarea value={onboardingDraft.trainingTypeHistory} onChange={(event) => updateOnboardingField('trainingTypeHistory', event.target.value)} /></label>
+                <label>Infortuni/problemi<input value={onboardingDraft.hasInjuries} onChange={(event) => updateOnboardingField('hasInjuries', event.target.value)} placeholder="Si/No" /></label>
+                <label>Dettagli infortuni<textarea value={onboardingDraft.injuryDetails} onChange={(event) => updateOnboardingField('injuryDetails', event.target.value)} /></label>
+              </div>
+            ) : null}
+
+            {profileStep === 2 ? (
+              <div className="modal-grid">
+                <label>Obiettivo principale *<input value={onboardingDraft.objectivePrimary} onChange={(event) => updateOnboardingField('objectivePrimary', event.target.value)} /></label>
+                <label>Perché questo obiettivo? *<textarea value={onboardingDraft.objectiveReason} onChange={(event) => updateOnboardingField('objectiveReason', event.target.value)} /></label>
+                <label>Timeline risultati *<input value={onboardingDraft.expectedTimeline} onChange={(event) => updateOnboardingField('expectedTimeline', event.target.value)} /></label>
+                <label>Cosa lo ha bloccato<textarea value={onboardingDraft.whatBlockedSoFar} onChange={(event) => updateOnboardingField('whatBlockedSoFar', event.target.value)} /></label>
+                <label>Miglioramento nei prossimi 3 mesi<textarea value={onboardingDraft.oneThingToImprove} onChange={(event) => updateOnboardingField('oneThingToImprove', event.target.value)} /></label>
+                <label>Importanza obiettivo (1-10)<input type="number" min={1} max={10} value={onboardingDraft.importanceScore} onChange={(event) => updateOnboardingField('importanceScore', event.target.value)} /></label>
+                <label>Rischio se non cambia<textarea value={onboardingDraft.riskIfNoChange} onChange={(event) => updateOnboardingField('riskIfNoChange', event.target.value)} /></label>
+              </div>
+            ) : null}
+
+            {profileStep === 3 ? (
+              <div className="modal-grid">
+                <label>Supporto preferito *<input value={onboardingDraft.supportPreference} onChange={(event) => updateOnboardingField('supportPreference', event.target.value)} /></label>
+                <label>Altro supporto<input value={onboardingDraft.supportPreferenceOther} onChange={(event) => updateOnboardingField('supportPreferenceOther', event.target.value)} /></label>
+                <label>Fascia investimento *<input value={onboardingDraft.investmentRange} onChange={(event) => updateOnboardingField('investmentRange', event.target.value)} placeholder="Es. 150-250€" /></label>
+                <label>Disponibilità a partire *<input value={onboardingDraft.readiness} onChange={(event) => updateOnboardingField('readiness', event.target.value)} /></label>
+                <label>Note coach<textarea value={onboardingDraft.notes} onChange={(event) => updateOnboardingField('notes', event.target.value)} /></label>
+              </div>
+            ) : null}
+
+            <div className="onboarding-actions">
+              <button className="btn btn-ghost" type="button" disabled={profileStep === 0} onClick={() => setProfileStep((prev) => Math.max(prev - 1, 0))}>
+                Indietro
+              </button>
+              {profileStep < PROFILE_STEPS.length - 1 ? (
+                <button className="btn" type="button" onClick={() => setProfileStep((prev) => Math.min(prev + 1, PROFILE_STEPS.length - 1))}>
+                  Continua
+                </button>
+              ) : (
+                <button className="btn" type="button" onClick={() => void saveCoachOnboarding()} disabled={loading}>
+                  {loading ? 'Salvataggio...' : 'Salva anagrafica'}
+                </button>
+              )}
+            </div>
+
+            <button className="btn btn-ghost" type="button" onClick={closeProfileModalWithoutSaving}>
+              Chiudi
+            </button>
+          </article>
+        </section>
+      ) : null}
+
       {isPlanModalOpen ? (
         <section className="modal-overlay" role="dialog" aria-modal="true">
           <article className="card modal-card">
             <h2>{existingPlanForClient ? 'Modifica scheda' : 'Compila la scheda'}</h2>
             <p className="hint">Aggiungi esercizi uno alla volta per completare il programma.</p>
+            <label>
+              Titolo scheda *
+              <input
+                value={planTitle}
+                onChange={(event) => setPlanTitle(event.target.value)}
+                placeholder="Forza 4 settimane"
+                required
+              />
+            </label>
             {exercises.map((exercise, index) => (
               <article className="card" key={`exercise-${index}`} style={{boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)'}}>
                 <div className="exercise-head">

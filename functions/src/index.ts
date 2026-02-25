@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin';
 import {onCall, HttpsError} from 'firebase-functions/v2/https';
-import {onDocumentCreated, onDocumentWritten} from 'firebase-functions/v2/firestore';
+import {onDocumentCreated, onDocumentDeleted, onDocumentWritten} from 'firebase-functions/v2/firestore';
 
 admin.initializeApp();
 
@@ -82,6 +82,19 @@ export const syncAdminRoleByEmail = onDocumentWritten('users/{uid}', async (even
     updates.updatedAt = admin.firestore.FieldValue.serverTimestamp();
     await after.ref.set(updates, {merge: true});
   }
+});
+
+export const cleanupPlanMediaOnDelete = onDocumentDeleted('plans/{planId}', async (event) => {
+  const snapshot = event.data;
+  if (!snapshot?.exists) return;
+
+  const data = snapshot.data() as {trainerId?: unknown; clientId?: unknown};
+  const trainerId = typeof data.trainerId === 'string' ? data.trainerId : '';
+  const clientId = typeof data.clientId === 'string' ? data.clientId : '';
+  if (!trainerId || !clientId) return;
+
+  const prefix = `workout-media/${trainerId}/${clientId}/`;
+  await admin.storage().bucket().deleteFiles({prefix, force: true});
 });
 
 export const setUserRole = onCall({region: 'us-central1', cors: allowedOrigins, invoker: 'public'}, async (request) => {

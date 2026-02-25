@@ -13,7 +13,7 @@ import {
   where,
   type DocumentData,
 } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes, type StorageReference } from 'firebase/storage';
+import { deleteObject, getDownloadURL, listAll, ref, uploadBytes, type StorageReference } from 'firebase/storage';
 
 import {
   auth,
@@ -39,6 +39,8 @@ export interface PlanExerciseInput {
   sets: number;
   reps: number;
   weight: string;
+  videoUrl?: string;
+  imageUrl?: string;
   mediaUrl?: string;
 }
 
@@ -129,6 +131,17 @@ export async function getUserPrivateDoc(uid: string, docId: string) {
   return getDoc(doc(db, 'users', uid, 'private', docId));
 }
 
+export async function setClientOnboardingAsCoach(clientId: string, payload: Record<string, unknown>) {
+  await setDoc(
+    doc(db, 'users', clientId, 'private', 'onboarding'),
+    {
+      ...payload,
+      ...updateTimestamp(),
+    },
+    {merge: true},
+  );
+}
+
 export async function createPlanAsCoach(input: PlanInput) {
   const trainerId = requireUid();
   const planRef = doc(db, 'plans', input.clientId);
@@ -166,7 +179,26 @@ export async function updatePlanAsCoach(planId: string, patch: Record<string, un
 }
 
 export async function deletePlanAsCoach(planId: string) {
-  await deleteDoc(doc(db, 'plans', planId));
+  const planRef = doc(db, 'plans', planId);
+  const planSnap = await getDoc(planRef);
+
+  if (planSnap.exists()) {
+    const data = planSnap.data() as {
+      trainerId?: unknown;
+      clientId?: unknown;
+      exercises?: Array<{ imageUrl?: unknown; mediaUrl?: unknown }>;
+    };
+    const mediaUrls = collectPlanStorageUrls(data.exercises);
+    await Promise.allSettled(mediaUrls.map((url) => deleteStorageUrl(url)));
+
+    const trainerId = typeof data.trainerId === 'string' ? data.trainerId : '';
+    const clientId = typeof data.clientId === 'string' ? data.clientId : '';
+    if (trainerId && clientId) {
+      await deleteWorkoutMediaFolder(trainerId, clientId);
+    }
+  }
+
+  await deleteDoc(planRef);
 }
 
 export async function uploadWorkoutMediaAsCoach(clientId: string, file: File): Promise<string> {
@@ -286,4 +318,49 @@ export function workoutMediaRef(trainerId: string, clientId: string, fileName: s
 
 export function toData<T = DocumentData>(snapshot: { data: () => T }): T {
   return snapshot.data();
+}
+
+function collectPlanStorageUrls(exercises: unknown): string[] {
+  if (!Array.isArray(exercises)) return [];
+  const urls = new Set<string>();
+  for (const item of exercises) {
+    if (!item || typeof item !== 'object') continue;
+    const imageUrl = (item as { imageUrl?: unknown }).imageUrl;
+    const mediaUrl = (item as { mediaUrl?: unknown }).mediaUrl;
+    if (isStorageUrl(imageUrl)) urls.add(imageUrl);
+    if (isStorageUrl(mediaUrl)) urls.add(mediaUrl);
+  }
+  return [...urls];
+}
+
+function isStorageUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  return (
+    value.startsWith('gs://') ||
+    value.includes('firebasestorage.googleapis.com') ||
+    value.includes('firebasestorage.app')
+  );
+}
+
+async function deleteStorageUrl(url: string): Promise<void> {
+  try {
+    await deleteObject(ref(storage, url));
+  } catch (error) {
+    console.warn('Unable to remove storage file', { url, error });
+  }
+}
+
+async function deleteWorkoutMediaFolder(trainerId: string, clientId: string): Promise<void> {
+  const root = ref(storage, `workout-media/${trainerId}/${clientId}`);
+  await deleteStorageTree(root);
+}
+
+async function deleteStorageTree(node: StorageReference): Promise<void> {
+  try {
+    const { items, prefixes } = await listAll(node);
+    await Promise.allSettled(items.map((item) => deleteObject(item)));
+    await Promise.allSettled(prefixes.map((prefix) => deleteStorageTree(prefix)));
+  } catch (error) {
+    console.warn('Unable to clear storage folder', { path: node.fullPath, error });
+  }
 }
