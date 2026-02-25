@@ -124,7 +124,6 @@ async function applyUserClaims(uid: string, role: AppRole, supervisor: boolean):
   const currentClaims = userRecord.customClaims ?? {};
   const nextClaims = {...currentClaims, role, supervisor};
   await admin.auth().setCustomUserClaims(uid, nextClaims);
-  await admin.auth().revokeRefreshTokens(uid);
 }
 
 function resolveCoachSubscriptionStatus(data: CoachSubscriptionDoc, nowMillis: number): CoachSubscriptionStatus {
@@ -343,8 +342,11 @@ export const acceptCoachTrial = onCall({region: 'us-central1', cors: allowedOrig
   const uid = request.auth.uid;
   const email = normalizeEmail(request.auth.token.email);
   if (isSupervisorEmail(email)) {
+    const userSnap = await db.collection('users').doc(uid).get();
+    const coachCode = typeof userSnap.data()?.coachCode === 'string' ? userSnap.data()?.coachCode : '';
     return {
       ok: true,
+      coachCode,
       isSupervisor: true,
       status: 'active_paid',
       requiresTrialAcceptance: false,
@@ -388,8 +390,11 @@ export const getCoachAccessState = onCall({region: 'us-central1', cors: allowedO
   const uid = request.auth.uid;
   const email = normalizeEmail(request.auth.token.email);
   if (isSupervisorEmail(email)) {
+    const userSnap = await db.collection('users').doc(uid).get();
+    const coachCode = typeof userSnap.data()?.coachCode === 'string' ? userSnap.data()?.coachCode : '';
     return {
       ok: true,
+      coachCode,
       isSupervisor: true,
       status: 'active_paid',
       requiresTrialAcceptance: false,

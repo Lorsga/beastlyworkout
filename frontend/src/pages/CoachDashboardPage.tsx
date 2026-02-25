@@ -316,6 +316,7 @@ export function CoachDashboardPage() {
   const selectedClientOption = clientOptions.find((option) => option.value === selectedClientId) ?? null;
   const profileProgress = Math.round(((profileStep + 1) / PROFILE_STEPS.length) * 100);
   const filteredSupervisorCoaches = supervisorCoaches
+    .filter((coach) => coach.uid !== user?.uid)
     .filter((coach) => {
       const needle = supervisorSearch.trim().toLowerCase();
       if (!needle) return true;
@@ -849,7 +850,13 @@ export function CoachDashboardPage() {
                 </div>
               </article>
             ))}
-            {filteredSupervisorCoaches.length === 0 ? <p className="hint">Nessun coach trovato.</p> : null}
+            {filteredSupervisorCoaches.length === 0 ? (
+              <article className="supervisor-row">
+                <p className="hint">
+                  Nessun altro coach disponibile al momento. Quando un coach si registra, lo vedrai qui con stato e scadenza.
+                </p>
+              </article>
+            ) : null}
           </div>
         </article>
       ) : null}
