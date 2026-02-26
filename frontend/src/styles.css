@@ -439,15 +439,8 @@ a.btn {
 .shell-mobile-nav {
   gap: 4px;
   align-items: stretch;
-  overflow-x: auto;
-  justify-content: flex-start;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  justify-content: space-between;
   padding: 8px;
-}
-
-.shell-mobile-nav::-webkit-scrollbar {
-  display: none;
 }
 
 .shell-tab {
@@ -466,8 +459,8 @@ a.btn {
 }
 
 .shell-tab-mobile {
-  flex: 0 0 auto;
-  min-width: 76px;
+  flex: 1;
+  min-width: 0;
 }
 
 .shell-tab-desktop {
@@ -523,6 +516,20 @@ a.btn {
 
 .mobile-nav .shell-tab-active {
   color: #fff;
+}
+
+.mobile-more-overlay {
+  align-items: end;
+  padding-bottom: 84px;
+}
+
+.mobile-more-card {
+  width: min(100%, 460px);
+}
+
+.mobile-more-list {
+  display: grid;
+  gap: 8px;
 }
 
 .modal-overlay {

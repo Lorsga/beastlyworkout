@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import type { AppRole } from '../lib';
 import { logoutCurrentUser } from '../lib';
@@ -30,6 +30,17 @@ export function AppShell({
   children: ReactNode;
 }) {
   const hasSections = sections.length > 0 && Boolean(onSectionChange);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const mobileVisibleSections = useMemo(() => {
+    if (!hasSections) return [];
+    if (sections.length <= 4) return sections;
+    return sections.slice(0, 3);
+  }, [hasSections, sections]);
+  const mobileHiddenSections = useMemo(() => {
+    if (!hasSections || sections.length <= 4) return [];
+    return sections.slice(3);
+  }, [hasSections, sections]);
+  const isMoreActive = mobileHiddenSections.some((section) => section.id === activeSection);
 
   function renderSectionButton(section: ShellSection, mode: 'mobile' | 'desktop') {
     const selected = activeSection === section.id;
@@ -82,18 +93,53 @@ export function AppShell({
 
       <nav className="mobile-nav shell-mobile-nav">
         {hasSections
-          ? sections.map((section) => renderSectionButton(section, 'mobile'))
+          ? mobileVisibleSections.map((section) => renderSectionButton(section, 'mobile'))
           : (
             <button className="shell-tab shell-tab-mobile shell-tab-active" type="button">
               <span className="shell-tab-icon" aria-hidden="true">🏠</span>
               <span className="shell-tab-label">Home</span>
             </button>
             )}
+        {mobileHiddenSections.length > 0 ? (
+          <button
+            className={`shell-tab shell-tab-mobile ${isMoreActive || showMoreMenu ? 'shell-tab-active' : ''}`.trim()}
+            type="button"
+            onClick={() => setShowMoreMenu((prev) => !prev)}
+          >
+            <span className="shell-tab-icon" aria-hidden="true">⋯</span>
+            <span className="shell-tab-label">Altro</span>
+          </button>
+        ) : null}
         <button className="shell-tab shell-tab-mobile" type="button" onClick={() => void logoutCurrentUser()}>
           <span className="shell-tab-icon" aria-hidden="true">🚪</span>
           <span className="shell-tab-label">Esci</span>
         </button>
       </nav>
+      {showMoreMenu && mobileHiddenSections.length > 0 ? (
+        <section className="modal-overlay mobile-more-overlay" role="dialog" aria-modal="true">
+          <article className="card mobile-more-card">
+            <h3>Altre sezioni</h3>
+            <div className="mobile-more-list">
+              {mobileHiddenSections.map((section) => (
+                <button
+                  key={`more-${section.id}`}
+                  className={`step-tab ${activeSection === section.id ? 'step-tab-active' : ''}`.trim()}
+                  type="button"
+                  onClick={() => {
+                    onSectionChange?.(section.id);
+                    setShowMoreMenu(false);
+                  }}
+                >
+                  {section.icon ? `${section.icon} ` : ''}{section.label}
+                </button>
+              ))}
+            </div>
+            <button className="btn btn-ghost" type="button" onClick={() => setShowMoreMenu(false)}>
+              Chiudi
+            </button>
+          </article>
+        </section>
+      ) : null}
     </main>
   );
 }
