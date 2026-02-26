@@ -282,6 +282,7 @@ export function CoachDashboardPage() {
   const [loading, setLoading] = useState(false);
   const [selectedClientOnboarding, setSelectedClientOnboarding] = useState<OnboardingDoc | null>(null);
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  const [isPlanPreviewOpen, setIsPlanPreviewOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profileStep, setProfileStep] = useState(0);
   const [onboardingDraft, setOnboardingDraft] = useState<OnboardingDraft>(emptyOnboardingDraft());
@@ -402,6 +403,10 @@ export function CoachDashboardPage() {
       .filter((item) => item.name.trim().length > 0);
     setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
   }, [selectedClientId, existingPlanForClient?.id]);
+
+  useEffect(() => {
+    if (!existingPlanForClient) setIsPlanPreviewOpen(false);
+  }, [existingPlanForClient?.id]);
 
   async function loadData() {
     if (!role) return;
@@ -978,9 +983,16 @@ export function CoachDashboardPage() {
                   {existingPlanForClient ? 'Questo cliente ha già una scheda: puoi modificarla.' : 'Questo cliente non ha ancora una scheda: ne creerai una nuova.'}
                 </p>
 
-                <button className="btn" disabled={loading || !selectedClientId} onClick={openCreatePlanModal} type="button">
-                  {existingPlanForClient ? 'Modifica scheda' : 'Crea scheda'}
-                </button>
+                <div className="supervisor-actions">
+                  {existingPlanForClient ? (
+                    <button className="btn btn-ghost" disabled={loading} onClick={() => setIsPlanPreviewOpen(true)} type="button">
+                      Visualizza scheda
+                    </button>
+                  ) : null}
+                  <button className="btn" disabled={loading || !selectedClientId} onClick={openCreatePlanModal} type="button">
+                    {existingPlanForClient ? 'Modifica scheda' : 'Crea scheda'}
+                  </button>
+                </div>
                 {existingPlanForClient ? (
                   <button className="btn btn-danger" disabled={loading} onClick={() => void deleteCurrentPlan()} type="button">
                     Elimina scheda
@@ -1174,6 +1186,41 @@ export function CoachDashboardPage() {
               {isUploadingMedia ? 'Attendi caricamento media...' : existingPlanForClient ? 'Salva modifiche' : 'Salva scheda tecnica'}
             </button>
             <button className="btn btn-ghost" type="button" onClick={closePlanModalWithoutSaving}>
+              Chiudi
+            </button>
+          </article>
+        </section>
+      ) : null}
+
+      {isPlanPreviewOpen && existingPlanForClient ? (
+        <section className="modal-overlay" role="dialog" aria-modal="true">
+          <article className="card modal-card">
+            <h2>Scheda in sola lettura</h2>
+            <p className="hint">Cliente: {clientLabelById[selectedClientId] || selectedClientId}</p>
+            <div className="plan-head">
+              <p className="hint">Titolo programma</p>
+              <h3>{existingPlanForClient.title || 'Senza titolo'}</h3>
+            </div>
+            <div className="exercise-grid">
+              {normalizePlanExercises(existingPlanForClient.exercises).map((exercise, index) => (
+                <article className="exercise-card" key={`preview-ex-${index}`}>
+                  <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
+                  <div className="exercise-meta">
+                    <span>{exercise.sets || '-'} serie</span>
+                    <span>{exercise.reps || '-'} reps</span>
+                    <span>{exercise.weight || 'Peso libero'}</span>
+                  </div>
+                  {exercise.mediaUrl ? (
+                    <a className="btn-link" href={exercise.mediaUrl} target="_blank" rel="noreferrer">
+                      {isVideoMediaUrl(exercise.mediaUrl) ? 'Apri video' : isImageMediaUrl(exercise.mediaUrl) ? 'Apri immagine' : 'Apri link'}
+                    </a>
+                  ) : (
+                    <p className="hint">Nessun media allegato</p>
+                  )}
+                </article>
+              ))}
+            </div>
+            <button className="btn btn-ghost" type="button" onClick={() => setIsPlanPreviewOpen(false)}>
               Chiudi
             </button>
           </article>
