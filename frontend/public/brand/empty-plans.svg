@@ -1,25 +1,55 @@
-<svg width="640" height="420" viewBox="0 0 640 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="720" height="480" viewBox="0 0 720 480" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="fire" x1="140" y1="70" x2="495" y2="350" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#ff9f1a"/>
-      <stop offset="0.56" stop-color="#ff6200"/>
-      <stop offset="1" stop-color="#d62828"/>
+    <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFD7B5"/>
+      <stop offset="1" stop-color="#F1B389"/>
+    </linearGradient>
+    <linearGradient id="shirt" x1="206" y1="150" x2="420" y2="330" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF7A00"/>
+      <stop offset="1" stop-color="#D62828"/>
+    </linearGradient>
+    <linearGradient id="metal" x1="70" y1="258" x2="650" y2="258" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4E4E53"/>
+      <stop offset="0.5" stop-color="#B7BDC7"/>
+      <stop offset="1" stop-color="#4E4E53"/>
+    </linearGradient>
+    <linearGradient id="fire" x1="490" y1="56" x2="624" y2="172" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFB347"/>
+      <stop offset="0.58" stop-color="#FF6A00"/>
+      <stop offset="1" stop-color="#D62828"/>
     </linearGradient>
   </defs>
 
-  <rect x="150" y="96" width="340" height="230" rx="24" fill="#120d0b" stroke="#ff7a00" stroke-opacity="0.45" stroke-width="2"/>
-  <rect x="176" y="128" width="288" height="20" rx="10" fill="#2a1a14"/>
-  <rect x="176" y="166" width="208" height="14" rx="7" fill="#2a1a14"/>
-  <rect x="176" y="188" width="168" height="14" rx="7" fill="#2a1a14"/>
-  <rect x="176" y="210" width="246" height="14" rx="7" fill="#2a1a14"/>
+  <circle cx="540" cy="112" r="50" fill="url(#fire)" opacity="0.18"/>
+  <path d="M532 154C548 132 548 119 542 104C561 117 569 132 566 147C561 165 548 176 531 179C515 182 499 176 493 162C488 149 492 137 503 126C503 139 510 147 520 150C525 151 529 152 532 154Z" fill="url(#fire)"/>
 
-  <path d="M320 146C358 182 367 215 367 240C367 272 345 298 314 298C282 298 258 275 258 243C258 214 274 184 320 146Z" fill="url(#fire)"/>
-  <path d="M316 179C335 199 340 217 340 233C340 251 328 266 312 266C294 266 281 252 281 234C281 216 289 198 316 179Z" fill="#ffd38a"/>
+  <ellipse cx="306" cy="84" rx="40" ry="42" fill="url(#skin)"/>
+  <path d="M271 84C274 56 293 40 322 42C341 43 355 53 362 70C347 67 333 64 320 64C300 64 286 70 271 84Z" fill="#111111"/>
+  <circle cx="293" cy="86" r="4" fill="#111111"/>
+  <circle cx="321" cy="86" r="4" fill="#111111"/>
+  <path d="M298 104C304 109 311 109 317 104" stroke="#8A3D2A" stroke-width="3" stroke-linecap="round"/>
 
-  <text x="320" y="352" fill="#fff5ef" font-family="Sora, Arial, sans-serif" font-size="24" font-weight="700" text-anchor="middle">
-    Nessuna scheda ancora creata
-  </text>
-  <text x="320" y="380" fill="#ffbd8a" font-family="Sora, Arial, sans-serif" font-size="15" text-anchor="middle">
-    Seleziona un cliente per iniziare
+  <rect x="226" y="130" width="162" height="144" rx="44" fill="url(#shirt)"/>
+  <path d="M226 176C249 162 272 155 307 155C342 155 365 162 388 176" stroke="#FFFFFF" stroke-opacity="0.45" stroke-width="6"/>
+
+  <rect x="192" y="164" width="42" height="112" rx="21" fill="url(#skin)"/>
+  <rect x="380" y="164" width="42" height="112" rx="21" fill="url(#skin)"/>
+
+  <rect x="72" y="248" width="576" height="20" rx="10" fill="url(#metal)"/>
+  <circle cx="88" cy="258" r="18" fill="#25252A"/>
+  <circle cx="632" cy="258" r="18" fill="#25252A"/>
+  <rect x="48" y="232" width="24" height="52" rx="8" fill="#1B1B1F"/>
+  <rect x="648" y="232" width="24" height="52" rx="8" fill="#1B1B1F"/>
+
+  <rect x="236" y="268" width="50" height="108" rx="25" fill="#151515"/>
+  <rect x="328" y="268" width="50" height="108" rx="25" fill="#151515"/>
+
+  <rect x="198" y="360" width="96" height="30" rx="14" fill="#0F0F10"/>
+  <rect x="324" y="360" width="96" height="30" rx="14" fill="#0F0F10"/>
+
+  <path d="M96 424H624" stroke="#D62828" stroke-opacity="0.6" stroke-width="6" stroke-linecap="round"/>
+
+  <text x="360" y="442" text-anchor="middle" fill="#1A1A1A" font-family="Sora, Arial, sans-serif" font-size="24" font-weight="700">
+    Nessuna scheda tecnica disponibile
   </text>
 </svg>
