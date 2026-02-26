@@ -40,17 +40,21 @@ export function AppShell({
     if (!hasSections || sections.length <= 4) return [];
     return sections.slice(3);
   }, [hasSections, sections]);
-  const isMoreActive = mobileHiddenSections.some((section) => section.id === activeSection);
+  const mobileActiveSection = showMoreMenu ? '__more__' : activeSection;
+  const isMoreActive = showMoreMenu || (!showMoreMenu && mobileHiddenSections.some((section) => section.id === activeSection));
 
   function renderSectionButton(section: ShellSection, mode: 'mobile' | 'desktop') {
-    const selected = activeSection === section.id;
+    const selected = (mode === 'mobile' ? mobileActiveSection : activeSection) === section.id;
     const label = mode === 'mobile' ? (section.mobileLabel ?? section.label) : section.label;
     return (
       <button
         key={`${mode}-${section.id}`}
         className={`shell-tab shell-tab-${mode} ${selected ? 'shell-tab-active' : ''}`.trim()}
         type="button"
-        onClick={() => onSectionChange?.(section.id)}
+        onClick={() => {
+          onSectionChange?.(section.id);
+          if (mode === 'mobile') setShowMoreMenu(false);
+        }}
         aria-current={selected ? 'page' : undefined}
       >
         {section.icon ? <span className="shell-tab-icon" aria-hidden="true">{section.icon}</span> : null}
