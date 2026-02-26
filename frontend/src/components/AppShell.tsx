@@ -6,6 +6,7 @@ import { logoutCurrentUser } from '../lib';
 type ShellSection = {
   id: string;
   label: string;
+  mobileLabel?: string;
   icon?: string;
 };
 
@@ -32,15 +33,17 @@ export function AppShell({
 
   function renderSectionButton(section: ShellSection, mode: 'mobile' | 'desktop') {
     const selected = activeSection === section.id;
+    const label = mode === 'mobile' ? (section.mobileLabel ?? section.label) : section.label;
     return (
       <button
         key={`${mode}-${section.id}`}
         className={`shell-tab shell-tab-${mode} ${selected ? 'shell-tab-active' : ''}`.trim()}
         type="button"
         onClick={() => onSectionChange?.(section.id)}
+        aria-current={selected ? 'page' : undefined}
       >
         {section.icon ? <span className="shell-tab-icon" aria-hidden="true">{section.icon}</span> : null}
-        <span className="shell-tab-label">{section.label}</span>
+        <span className="shell-tab-label">{label}</span>
       </button>
     );
   }

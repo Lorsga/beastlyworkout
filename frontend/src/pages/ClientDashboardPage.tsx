@@ -199,8 +199,8 @@ export function ClientDashboardPage() {
       subtitle="Scheda tecnica e anagrafica in un unico spazio chiaro."
       title="La tua area"
       sections={[
-        { id: 'plan', label: 'Scheda', icon: '🔥' },
-        { id: 'profile', label: 'Profilo', icon: '👤' },
+        { id: 'plan', label: 'Scheda', mobileLabel: 'Scheda', icon: '🔥' },
+        { id: 'profile', label: 'Profilo', mobileLabel: 'Profilo', icon: '👤' },
       ]}
       activeSection={activeTab}
       onSectionChange={(nextTab) => setActiveTab(nextTab as ClientTabId)}

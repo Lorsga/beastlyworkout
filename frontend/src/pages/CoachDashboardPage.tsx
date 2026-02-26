@@ -320,11 +320,11 @@ export function CoachDashboardPage() {
   const selectedClientOption = clientOptions.find((option) => option.value === selectedClientId) ?? null;
   const profileProgress = Math.round(((profileStep + 1) / PROFILE_STEPS.length) * 100);
   const coachSections = [
-    { id: 'code', label: 'Codice', icon: '🔑' },
-    { id: 'clients', label: 'Clienti', icon: '👥' },
-    { id: 'plans', label: 'Schede', icon: '🔥' },
-    { id: 'overview', label: 'Panoramica', icon: '📊' },
-    ...(isSupervisor ? [{ id: 'supervisor', label: 'Supervisor', icon: '🛡️' }] : []),
+    { id: 'code', label: 'Codice', mobileLabel: 'Codice', icon: '🔑' },
+    { id: 'clients', label: 'Clienti', mobileLabel: 'Clienti', icon: '👥' },
+    { id: 'plans', label: 'Schede', mobileLabel: 'Schede', icon: '🔥' },
+    { id: 'overview', label: 'Panoramica', mobileLabel: 'Dashboard', icon: '📊' },
+    ...(isSupervisor ? [{ id: 'supervisor', label: 'Supervisor', mobileLabel: 'Admin', icon: '🛡️' }] : []),
   ];
   const filteredSupervisorCoaches = supervisorCoaches
     .filter((coach) => coach.uid !== user?.uid)
