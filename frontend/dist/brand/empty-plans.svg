@@ -1,25 +1,11 @@
 <svg width="640" height="420" viewBox="0 0 640 420" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="640" y2="420" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1b0d09"/>
-      <stop offset="1" stop-color="#2d140b"/>
-    </linearGradient>
     <linearGradient id="fire" x1="140" y1="70" x2="495" y2="350" gradientUnits="userSpaceOnUse">
       <stop stop-color="#ff9f1a"/>
       <stop offset="0.56" stop-color="#ff6200"/>
       <stop offset="1" stop-color="#d62828"/>
     </linearGradient>
-    <filter id="soft" x="0" y="0" width="640" height="420" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="20"/>
-    </filter>
   </defs>
-
-  <rect x="0" y="0" width="640" height="420" rx="26" fill="url(#bg)"/>
-  <g filter="url(#soft)" opacity="0.4">
-    <circle cx="160" cy="90" r="58" fill="#ff6a00"/>
-    <circle cx="505" cy="334" r="72" fill="#d62828"/>
-    <circle cx="500" cy="96" r="52" fill="#ff9f1a"/>
-  </g>
 
   <rect x="150" y="96" width="340" height="230" rx="24" fill="#120d0b" stroke="#ff7a00" stroke-opacity="0.45" stroke-width="2"/>
   <rect x="176" y="128" width="288" height="20" rx="10" fill="#2a1a14"/>
