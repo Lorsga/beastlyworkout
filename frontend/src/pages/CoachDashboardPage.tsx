@@ -876,7 +876,7 @@ export function CoachDashboardPage() {
 
       {activeTab === 'clients' || activeTab === 'plans' ? (
       <article className="card">
-        <h2>Gestione cliente</h2>
+        <h2>{activeTab === 'plans' ? 'Schede tecniche' : 'Gestione cliente'}</h2>
         <label>
           Clienti registrati
           <Select
@@ -895,9 +895,12 @@ export function CoachDashboardPage() {
 
         {registeredClients.length === 0 ? (
           <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
-            <h2>Nessun cliente associato</h2>
+            <h2>{activeTab === 'plans' ? 'Nessuna scheda disponibile' : 'Nessun cliente associato'}</h2>
+            {activeTab === 'plans' ? <img src="/brand/empty-plans.svg" alt="Nessuna scheda tecnica disponibile" className="empty-state-image" /> : null}
             <p className="hint">
-              Al momento non hai clienti legati al tuo codice coach. Quando un cliente inserisce il tuo codice in onboarding, apparirà qui.
+              {activeTab === 'plans'
+                ? 'Non hai ancora clienti associati, quindi non puoi creare schede. Quando un cliente inserisce il tuo codice coach, troverai qui la sezione per creare il programma.'
+                : 'Al momento non hai clienti legati al tuo codice coach. Quando un cliente inserisce il tuo codice in onboarding, apparirà qui.'}
             </p>
           </article>
         ) : (
@@ -964,11 +967,18 @@ export function CoachDashboardPage() {
 
             {activeTab === 'plans' ? (
               <>
+                {!selectedClientId ? (
+                  <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
+                    <h2>Seleziona un cliente</h2>
+                    <img src="/brand/empty-plans.svg" alt="Seleziona cliente per creare la scheda" className="empty-state-image" />
+                    <p className="hint">Scegli un cliente dalla lista in alto per creare o modificare la sua scheda tecnica.</p>
+                  </article>
+                ) : null}
                 <p className="hint">
                   {existingPlanForClient ? 'Questo cliente ha già una scheda: puoi modificarla.' : 'Questo cliente non ha ancora una scheda: ne creerai una nuova.'}
                 </p>
 
-                <button className="btn" disabled={loading} onClick={openCreatePlanModal} type="button">
+                <button className="btn" disabled={loading || !selectedClientId} onClick={openCreatePlanModal} type="button">
                   {existingPlanForClient ? 'Modifica scheda' : 'Crea scheda'}
                 </button>
                 {existingPlanForClient ? (
