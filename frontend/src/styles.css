@@ -598,14 +598,6 @@ a.btn {
   gap: 8px;
 }
 
-.empty-state-image {
-  width: min(100%, 520px);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 122, 0, 0.24);
-  margin: 6px auto 2px;
-  display: block;
-}
-
 .card,
 .hero {
   animation: rise 420ms ease both;
