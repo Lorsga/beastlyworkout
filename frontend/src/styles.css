@@ -504,8 +504,8 @@ a.btn {
   background: rgba(255, 255, 255, 0.95);
 }
 
-.mobile-nav a,
-.mobile-nav button {
+.mobile-nav a:not(.shell-tab),
+.mobile-nav button:not(.shell-tab) {
   border: 0;
   background: transparent;
   color: var(--text);
@@ -514,7 +514,8 @@ a.btn {
   font-weight: 700;
 }
 
-.mobile-nav .shell-tab-active {
+.mobile-nav .shell-tab-active,
+.shell-sidebar .shell-tab-active {
   color: #fff;
 }
 
