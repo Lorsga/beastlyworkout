@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Beastly Workout">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#1a1a1a" />
+      <stop offset="100%" stop-color="#0b0b0b" />
+    </linearGradient>
+    <linearGradient id="flame" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#ffd56f" />
+      <stop offset="55%" stop-color="#ff7a00" />
+      <stop offset="100%" stop-color="#d62828" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)" />
+  <path
+    d="M257 94c15 58 65 69 65 130 0 39-29 71-67 71s-67-32-67-71c0-31 13-52 37-77 13-14 23-28 32-53zm0 227c43 0 77-35 77-78 29 25 46 60 46 100 0 76-58 129-123 129s-123-53-123-129c0-41 17-76 46-101 1 43 35 79 77 79z"
+    fill="url(#flame)"
+  />
+  <text x="256" y="430" text-anchor="middle" font-family="Space Grotesk, Arial, sans-serif" font-size="46" fill="#ffffff" font-weight="700">
+    BEASTLY
+  </text>
+</svg>

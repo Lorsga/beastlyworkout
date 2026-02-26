@@ -42,6 +42,8 @@ interface OnboardingDoc {
   objectivePrimary?: string;
 }
 
+type ClientTabId = 'plan' | 'profile';
+
 function toYouTubeEmbedUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
@@ -93,6 +95,7 @@ export function ClientDashboardPage() {
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [mediaPreview, setMediaPreview] = useState<{ url: string; label: string } | null>(null);
   const [onboarding, setOnboarding] = useState<OnboardingDoc | null>(null);
+  const [activeTab, setActiveTab] = useState<ClientTabId>('plan');
   const whatsappMessage = 'Ciao coach, avrei bisogno di un feedback sulla mia scheda.';
 
   useEffect(() => {
@@ -193,8 +196,14 @@ export function ClientDashboardPage() {
   return (
     <AppShell
       role="client"
-      subtitle="Tieni traccia di allenamenti e progressi in modo semplice."
+      subtitle="Scheda tecnica e anagrafica in un unico spazio chiaro."
       title="La tua area"
+      sections={[
+        { id: 'plan', label: 'Scheda', icon: '🔥' },
+        { id: 'profile', label: 'Profilo', icon: '👤' },
+      ]}
+      activeSection={activeTab}
+      onSectionChange={(nextTab) => setActiveTab(nextTab as ClientTabId)}
       headerAction={
         <div className="mobile-only">
           <a
@@ -211,70 +220,88 @@ export function ClientDashboardPage() {
         </div>
       }
     >
-      <article className="card desktop-only">
-        <h2>Parla con il tuo Personal Trainer</h2>
-        <p className="hint">Per feedback sulla scheda o qualsiasi dubbio, scrivi direttamente su WhatsApp.</p>
-        <a
-          className={`btn btn-whatsapp ${HAS_PT_WHATSAPP ? '' : 'btn-disabled'}`.trim()}
-          href={HAS_PT_WHATSAPP ? buildWhatsAppUrl(whatsappMessage) : '#'}
-          onClick={(event) => {
-            if (!HAS_PT_WHATSAPP) event.preventDefault();
-          }}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Apri chat WhatsApp
-        </a>
-        {!HAS_PT_WHATSAPP ? <p className="message">Numero WhatsApp PT non ancora configurato.</p> : null}
-      </article>
+      {activeTab === 'plan' ? (
+        <>
+          <article className="card desktop-only">
+            <h2>Parla con il tuo Personal Trainer</h2>
+            <p className="hint">Per feedback sulla scheda o qualsiasi dubbio, scrivi direttamente su WhatsApp.</p>
+            <a
+              className={`btn btn-whatsapp ${HAS_PT_WHATSAPP ? '' : 'btn-disabled'}`.trim()}
+              href={HAS_PT_WHATSAPP ? buildWhatsAppUrl(whatsappMessage) : '#'}
+              onClick={(event) => {
+                if (!HAS_PT_WHATSAPP) event.preventDefault();
+              }}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Apri chat WhatsApp
+            </a>
+            {!HAS_PT_WHATSAPP ? <p className="message">Numero WhatsApp PT non ancora configurato.</p> : null}
+          </article>
 
-      <article className="card">
-        <h2>La tua anagrafica</h2>
-        {profileRows.length > 0 ? (
-          <div className="client-info-block">
-            {profileRows.map((row) => (
-              <p key={row.label} className="hint">
-                <strong>{row.label}:</strong> {row.value}
-              </p>
-            ))}
-          </div>
-        ) : (
-          <p className="hint">Anagrafica non ancora disponibile.</p>
-        )}
-      </article>
+          <article className="card">
+            <h2>La tua scheda tecnica</h2>
+            {topPlan ? (
+              <>
+                <div className="plan-head">
+                  <p className="hint">Programma attivo</p>
+                  <h3>{topPlan.title}</h3>
+                </div>
+                <div className="exercise-grid">
+                  {topPlanExercises.map((exercise, index) => (
+                    <article className="exercise-card" key={`plan-ex-${index}`}>
+                      <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
+                      <div className="exercise-meta">
+                        <span>{exercise.sets ?? '-'} serie</span>
+                        <span>{exercise.reps || '-'} reps</span>
+                        <span>{exercise.weight || 'Peso libero'}</span>
+                      </div>
+                      {exercise.mediaUrl ? (
+                        <button className="btn-link" type="button" onClick={() => setMediaPreview({ url: exercise.mediaUrl, label: exercise.name || `Esercizio ${index + 1}` })}>
+                          {toYouTubeEmbedUrl(exercise.mediaUrl) || isVideoUrl(exercise.mediaUrl) ? 'Apri video' : isImageUrl(exercise.mediaUrl) ? 'Apri immagine' : 'Apri link'}
+                        </button>
+                      ) : (
+                        <p className="hint">Nessun media allegato</p>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="hint">La tua scheda non è ancora disponibile. Il coach la pubblicherà a breve.</p>
+            )}
+          </article>
+        </>
+      ) : null}
 
-      <article className="card">
-        <h2>La tua scheda tecnica</h2>
-        {topPlan ? (
-          <>
-            <div className="plan-head">
-              <p className="hint">Programma attivo</p>
-              <h3>{topPlan.title}</h3>
-            </div>
-            <div className="exercise-grid">
-              {topPlanExercises.map((exercise, index) => (
-                <article className="exercise-card" key={`plan-ex-${index}`}>
-                  <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
-                  <div className="exercise-meta">
-                    <span>{exercise.sets ?? '-'} serie</span>
-                    <span>{exercise.reps || '-'} reps</span>
-                    <span>{exercise.weight || 'Peso libero'}</span>
-                  </div>
-                  {exercise.mediaUrl ? (
-                    <button className="btn-link" type="button" onClick={() => setMediaPreview({ url: exercise.mediaUrl, label: exercise.name || `Esercizio ${index + 1}` })}>
-                      {toYouTubeEmbedUrl(exercise.mediaUrl) || isVideoUrl(exercise.mediaUrl) ? 'Apri video' : isImageUrl(exercise.mediaUrl) ? 'Apri immagine' : 'Apri link'}
-                    </button>
-                  ) : (
-                    <p className="hint">Nessun media allegato</p>
-                  )}
-                </article>
+      {activeTab === 'profile' ? (
+        <article className="card">
+          <h2>Profilo e anagrafica</h2>
+          {profileRows.length > 0 ? (
+            <div className="client-info-block">
+              {profileRows.map((row) => (
+                <p key={row.label} className="hint">
+                  <strong>{row.label}:</strong> {row.value}
+                </p>
               ))}
             </div>
-          </>
-        ) : (
-          <p className="hint">La tua scheda non è ancora disponibile. Il coach la pubblicherà a breve.</p>
-        )}
-      </article>
+          ) : (
+            <p className="hint">Anagrafica non ancora disponibile.</p>
+          )}
+          <a
+            className={`btn btn-whatsapp ${HAS_PT_WHATSAPP ? '' : 'btn-disabled'}`.trim()}
+            href={HAS_PT_WHATSAPP ? buildWhatsAppUrl(whatsappMessage) : '#'}
+            onClick={(event) => {
+              if (!HAS_PT_WHATSAPP) event.preventDefault();
+            }}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Scrivi al tuo PT su WhatsApp
+          </a>
+          {!HAS_PT_WHATSAPP ? <p className="message">Numero WhatsApp PT non ancora configurato.</p> : null}
+        </article>
+      ) : null}
 
       {loading ? <p className="message">Caricamento...</p> : null}
 

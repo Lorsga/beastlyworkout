@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 import { InstallAppBanner } from '../components/InstallAppBanner';
@@ -31,7 +31,9 @@ export function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [completingCoachAccess, setCompletingCoachAccess] = useState(false);
+  const [isExitingCoachFlow, setIsExitingCoachFlow] = useState(false);
   const [coachGate, setCoachGate] = useState<{ mode: 'trial' | 'expired'; access: CoachAccessState } | null>(null);
+  const coachFlowRunId = useRef(0);
 
   const paymentWhatsappUrl = useMemo(
     () =>
@@ -68,6 +70,8 @@ export function AuthPage() {
 
   async function resolveCoachAccessFlow() {
     if (!user) return;
+    const runId = ++coachFlowRunId.current;
+    const isStale = () => runId !== coachFlowRunId.current || isExitingCoachFlow;
 
     setCompletingCoachAccess(true);
     setMessage('Sto preparando il tuo accesso coach...');
@@ -77,21 +81,26 @@ export function AuthPage() {
         displayName: user.displayName ?? '',
         coachAccessRequestedAt: new Date().toISOString(),
       });
+      if (isStale()) return;
 
       const access = await ensureCoachAccess();
+      if (isStale()) return;
       if (access.isExpired) {
         await logoutCurrentUser();
         sessionStorage.removeItem(LOGIN_INTENT_KEY);
+        if (isStale()) return;
         setCoachGate({ mode: 'expired', access });
         return;
       }
 
       if (access.requiresTrialAcceptance) {
+        if (isStale()) return;
         setCoachGate({ mode: 'trial', access });
         return;
       }
 
       const okRole = await waitCoachRole();
+      if (isStale()) return;
       if (!okRole) {
         setMessage('Accesso coach in sincronizzazione. Riprova tra qualche secondo.');
         return;
@@ -100,17 +109,23 @@ export function AuthPage() {
       sessionStorage.removeItem(LOGIN_INTENT_KEY);
       navigate('/app/coach', { replace: true });
     } catch (error) {
+      if (isStale()) return;
       const nextMessage = toMessage(error);
       setMessage(nextMessage);
       showError(nextMessage);
     } finally {
-      setCompletingCoachAccess(false);
+      if (!isStale()) setCompletingCoachAccess(false);
     }
   }
 
   useEffect(() => {
     async function syncNavigation() {
-      if (!user || completingCoachAccess) return;
+      if (!user) {
+        setCompletingCoachAccess(false);
+        if (!isExitingCoachFlow) setMessage('');
+        return;
+      }
+      if (completingCoachAccess || isExitingCoachFlow) return;
 
       const intent = sessionStorage.getItem(LOGIN_INTENT_KEY);
       if (intent === 'coach') {
@@ -127,7 +142,29 @@ export function AuthPage() {
     }
 
     void syncNavigation();
-  }, [user, role, completingCoachAccess]);
+  }, [user, role, completingCoachAccess, isExitingCoachFlow]);
+
+  useEffect(() => {
+    if (!isExitingCoachFlow) return;
+    if (user) return;
+    setIsExitingCoachFlow(false);
+    navigate('/auth', { replace: true });
+  }, [isExitingCoachFlow, user, navigate]);
+
+  async function exitCoachTrialFlow() {
+    coachFlowRunId.current += 1;
+    setIsExitingCoachFlow(true);
+    setCompletingCoachAccess(false);
+    setMessage('Uscita in corso...');
+    sessionStorage.removeItem(LOGIN_INTENT_KEY);
+    setCoachGate(null);
+    try {
+      await logoutCurrentUser();
+    } catch (error) {
+      setMessage(toMessage(error));
+      setIsExitingCoachFlow(false);
+    }
+  }
 
   async function confirmTrialAndContinue() {
     setLoading(true);
@@ -218,11 +255,7 @@ export function AuthPage() {
           <button
             className="btn btn-ghost"
             type="button"
-            onClick={() => {
-              void logoutCurrentUser();
-              sessionStorage.removeItem(LOGIN_INTENT_KEY);
-              setCoachGate(null);
-            }}
+            onClick={() => void exitCoachTrialFlow()}
           >
             Esci
           </button>

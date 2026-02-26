@@ -75,11 +75,11 @@ const listCoachesForSupervisorFn = httpsCallable<
     }>;
   }
 >(functions, 'listCoachesForSupervisor');
-const activateCoachSubscriptionFn = httpsCallable<{ uid: string }, { ok: boolean; uid: string; status: CoachAccessStatus; subscriptionEndsAt?: string }>(
+const activateCoachSubscriptionFn = httpsCallable<{ uid: string }, { ok: boolean; uid: string; status: CoachAccessStatus; subscriptionEndsAt?: string | null; mode?: 'unblocked' | 'activated' }>(
   functions,
   'activateCoachSubscription',
 );
-const renewCoachSubscriptionFn = httpsCallable<{ uid: string }, { ok: boolean; uid: string; status: CoachAccessStatus; subscriptionEndsAt?: string }>(
+const renewCoachSubscriptionFn = httpsCallable<{ uid: string }, { ok: boolean; uid: string; status: CoachAccessStatus; subscriptionEndsAt?: string; mode?: 'renewed' }>(
   functions,
   'renewCoachSubscription',
 );

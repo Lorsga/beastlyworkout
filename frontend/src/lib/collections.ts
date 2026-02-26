@@ -127,6 +127,12 @@ export async function listRegisteredUsers() {
   return getDocs(collection(db, 'users'));
 }
 
+export async function listAssignedClientsAsCoach(coachId?: string) {
+  const uid = coachId ?? requireUid();
+  const q = query(collection(db, 'users'), where('assignedCoachId', '==', uid));
+  return getDocs(q);
+}
+
 export async function getUserPrivateDoc(uid: string, docId: string) {
   return getDoc(doc(db, 'users', uid, 'private', docId));
 }

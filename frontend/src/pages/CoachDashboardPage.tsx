@@ -11,9 +11,9 @@ import {
   acceptCoachTrial,
   getCoachAccessState,
   getUserPrivateDoc,
+  listAssignedClientsAsCoach,
   listPlansForRole,
   listCoachesForSupervisor,
-  listRegisteredUsers,
   logoutCurrentUser,
   renewCoachSubscription,
   setClientOnboardingAsCoach,
@@ -125,6 +125,8 @@ type SupervisorCoachItem = {
   subscriptionEndsAt: string | null;
   expiresAt: string | null;
 };
+
+type CoachTabId = 'code' | 'clients' | 'plans' | 'overview' | 'supervisor';
 
 const PROFILE_STEPS = ['Anagrafica', 'Stato fisico', 'Obiettivi', 'Supporto'] as const;
 
@@ -289,6 +291,7 @@ export function CoachDashboardPage() {
   const [supervisorCoaches, setSupervisorCoaches] = useState<SupervisorCoachItem[]>([]);
   const [supervisorSearch, setSupervisorSearch] = useState('');
   const [supervisorActionUid, setSupervisorActionUid] = useState('');
+  const [activeTab, setActiveTab] = useState<CoachTabId>('clients');
 
   const [selectedClientId, setSelectedClientId] = useState('');
   const [planTitle, setPlanTitle] = useState('');
@@ -315,8 +318,16 @@ export function CoachDashboardPage() {
 
   const selectedClientOption = clientOptions.find((option) => option.value === selectedClientId) ?? null;
   const profileProgress = Math.round(((profileStep + 1) / PROFILE_STEPS.length) * 100);
+  const coachSections = [
+    { id: 'code', label: 'Codice', icon: '🔑' },
+    { id: 'clients', label: 'Clienti', icon: '👥' },
+    { id: 'plans', label: 'Schede', icon: '🔥' },
+    { id: 'overview', label: 'Panoramica', icon: '📊' },
+    ...(isSupervisor ? [{ id: 'supervisor', label: 'Supervisor', icon: '🛡️' }] : []),
+  ];
   const filteredSupervisorCoaches = supervisorCoaches
     .filter((coach) => coach.uid !== user?.uid)
+    .filter((coach) => !coach.isSupervisor)
     .filter((coach) => {
       const needle = supervisorSearch.trim().toLowerCase();
       if (!needle) return true;
@@ -327,6 +338,12 @@ export function CoachDashboardPage() {
       const bTime = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
       return aTime - bTime;
     });
+
+  useEffect(() => {
+    if (!isSupervisor && activeTab === 'supervisor') {
+      setActiveTab('clients');
+    }
+  }, [isSupervisor, activeTab]);
 
   const customStyles: StylesConfig<ClientOption, false> = useMemo(
     () => ({
@@ -390,19 +407,12 @@ export function CoachDashboardPage() {
     if (!role) return;
     setLoading(true);
     try {
-      const usersSnap = await listRegisteredUsers();
+      const usersSnap = await listAssignedClientsAsCoach(user?.uid);
       const allUsers = usersSnap.docs.map((docItem) => ({
         id: docItem.id,
         ...(docItem.data() as UserProfileDoc),
       }));
       const candidates = allUsers
-        .filter((item) => item.id !== user?.uid)
-        .filter((item) => {
-          const roleValue = asText(item.role).toLowerCase();
-          const requestedRoleValue = asText(item.requestedRole).toLowerCase();
-          const isClientLike = roleValue === 'client' || requestedRoleValue === 'client' || item.onboardingCompleted === true;
-          return isClientLike;
-        })
         .sort((a, b) => {
           const aLabel = asText(a.displayName || a.email || a.id).toLowerCase();
           const bLabel = asText(b.displayName || b.email || b.id).toLowerCase();
@@ -721,15 +731,21 @@ export function CoachDashboardPage() {
     setIsPlanModalOpen(false);
   }
 
-  async function runSupervisorAction(uid: string, action: 'activate' | 'renew' | 'disable') {
+  async function runSupervisorAction(uid: string, action: 'activate' | 'disable') {
     setSupervisorActionUid(uid);
     try {
       if (action === 'activate') {
-        await activateCoachSubscription(uid);
-        showSuccess('Abbonamento attivato.');
-      } else if (action === 'renew') {
-        await renewCoachSubscription(uid);
-        showSuccess('Abbonamento rinnovato di 1 anno.');
+        const targetCoach = supervisorCoaches.find((coach) => coach.uid === uid);
+        if (targetCoach?.status === 'disabled') {
+          await activateCoachSubscription(uid);
+          showSuccess('Coach sbloccato con successo.');
+        } else if (targetCoach?.status === 'active_paid') {
+          await renewCoachSubscription(uid);
+          showSuccess('Abbonamento rinnovato di 1 anno.');
+        } else {
+          await activateCoachSubscription(uid);
+          showSuccess('Abbonamento attivato.');
+        }
       } else {
         await disableCoachSubscription(uid);
         showSuccess('Abbonamento disattivato.');
@@ -759,8 +775,11 @@ export function CoachDashboardPage() {
   return (
     <AppShell
       role={role === 'trainer' ? 'trainer' : 'admin'}
-      subtitle="Gestisci clienti, anagrafica completa e schede tecniche da un unico posto."
+      subtitle="Flusso diviso per tab: clienti, schede e controllo accessi."
       title="Area Coach"
+      sections={coachSections}
+      activeSection={activeTab}
+      onSectionChange={(nextTab) => setActiveTab(nextTab as CoachTabId)}
     >
       {coachAccess?.requiresTrialAcceptance ? (
         <section className="modal-overlay" role="dialog" aria-modal="true">
@@ -786,22 +805,24 @@ export function CoachDashboardPage() {
         </section>
       ) : null}
 
-      <article className="card">
-        <h2>Il tuo codice coach</h2>
-        <p className="hero-sub">Invia questo codice al cliente: è obbligatorio per associarlo a te in onboarding.</p>
-        <p className="coach-code">{coachAccess?.coachCode || 'Caricamento...'}</p>
-        {loadingCoachAccess ? <p className="hint">Sto verificando il tuo accesso...</p> : null}
-        {coachAccess?.isSupervisor ? (
-          <p className="hint">Account supervisor: accesso sempre attivo, senza trial.</p>
-        ) : (
-          <p className="hint">
-            Stato accesso: <strong>{coachAccess?.status ?? 'non disponibile'}</strong>
-            {' · '}Scadenza: <strong>{formatDate(coachAccess?.expiresAt ?? coachAccess?.trialEndsAt ?? coachAccess?.subscriptionEndsAt)}</strong>
-          </p>
-        )}
-      </article>
+      {activeTab === 'code' ? (
+        <article className="card">
+          <h2>Il tuo codice coach</h2>
+          <p className="hero-sub">Invia questo codice al cliente: è obbligatorio per associarlo a te in onboarding.</p>
+          <p className="coach-code">{coachAccess?.coachCode || 'Caricamento...'}</p>
+          {loadingCoachAccess ? <p className="hint">Sto verificando il tuo accesso...</p> : null}
+          {coachAccess?.isSupervisor ? (
+            <p className="hint">Account supervisor: accesso sempre attivo, senza trial.</p>
+          ) : (
+            <p className="hint">
+              Stato accesso: <strong>{coachAccess?.status ?? 'non disponibile'}</strong>
+              {' · '}Scadenza: <strong>{formatDate(coachAccess?.expiresAt ?? coachAccess?.trialEndsAt ?? coachAccess?.subscriptionEndsAt)}</strong>
+            </p>
+          )}
+        </article>
+      ) : null}
 
-      {isSupervisor ? (
+      {isSupervisor && activeTab === 'supervisor' ? (
         <article className="card">
           <h2>Gestione coach (Supervisor)</h2>
           <label>
@@ -829,15 +850,7 @@ export function CoachDashboardPage() {
                     disabled={coach.isSupervisor || supervisorActionUid === coach.uid}
                     onClick={() => void runSupervisorAction(coach.uid, 'activate')}
                   >
-                    Attiva
-                  </button>
-                  <button
-                    className="btn btn-ghost"
-                    type="button"
-                    disabled={coach.isSupervisor || supervisorActionUid === coach.uid}
-                    onClick={() => void runSupervisorAction(coach.uid, 'renew')}
-                  >
-                    Rinnova +1 anno
+                    {coach.status === 'disabled' ? 'Sblocca' : coach.status === 'active_paid' ? 'Rinnova +1 anno' : 'Attiva'}
                   </button>
                   <button
                     className="btn btn-danger"
@@ -861,6 +874,7 @@ export function CoachDashboardPage() {
         </article>
       ) : null}
 
+      {activeTab === 'clients' || activeTab === 'plans' ? (
       <article className="card">
         <h2>Gestione cliente</h2>
         <label>
@@ -879,77 +893,95 @@ export function CoachDashboardPage() {
           Aggiorna lista clienti
         </button>
 
-        <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
-          <h2>Anagrafica cliente</h2>
-          <p className="hint">L&apos;utente compila i dati base. Il questionario completo lo compili qui.</p>
-          <button className="btn" type="button" onClick={openProfileModal} disabled={loading || !selectedClientId}>
-            {selectedClientOnboarding ? 'Modifica anagrafica completa' : 'Compila anagrafica completa'}
-          </button>
-          {selectedClientWhatsappUrl ? (
-            <a className="btn btn-whatsapp" href={selectedClientWhatsappUrl} target="_blank" rel="noreferrer">
-              Scrivi al cliente su WhatsApp
-            </a>
-          ) : (
-            <p className="hint">Numero WhatsApp cliente non disponibile.</p>
-          )}
+        {registeredClients.length === 0 ? (
+          <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
+            <h2>Nessun cliente associato</h2>
+            <p className="hint">
+              Al momento non hai clienti legati al tuo codice coach. Quando un cliente inserisce il tuo codice in onboarding, apparirà qui.
+            </p>
+          </article>
+        ) : (
+          <>
+            {activeTab === 'clients' ? (
+            <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
+              <h2>Anagrafica cliente</h2>
+              <p className="hint">L&apos;utente compila i dati base. Il questionario completo lo compili qui.</p>
+              <button className="btn" type="button" onClick={openProfileModal} disabled={loading || !selectedClientId}>
+                {selectedClientOnboarding ? 'Modifica anagrafica completa' : 'Compila anagrafica completa'}
+              </button>
+              {selectedClientWhatsappUrl ? (
+                <a className="btn btn-whatsapp" href={selectedClientWhatsappUrl} target="_blank" rel="noreferrer">
+                  Scrivi al cliente su WhatsApp
+                </a>
+              ) : (
+                <p className="hint">Numero WhatsApp cliente non disponibile.</p>
+              )}
 
-          <div className="client-info-block">
-            <h3>Anagrafica</h3>
-            <p className="hint"><strong>Nome:</strong> {onboardingValue(selectedClientOnboarding?.fullName)}</p>
-            <p className="hint"><strong>Età:</strong> {onboardingValue(selectedClientOnboarding?.age)}</p>
-            <p className="hint"><strong>Sesso:</strong> {onboardingValue(selectedClientOnboarding?.sex)}</p>
-            <p className="hint"><strong>Email:</strong> {onboardingValue(selectedClientOnboarding?.email)}</p>
-            <p className="hint"><strong>Telefono:</strong> {onboardingValue(selectedClientOnboarding?.phone)}</p>
-            <p className="hint"><strong>Come ci ha conosciuto:</strong> {onboardingValue(selectedClientOnboarding?.discoverySource)}</p>
-          </div>
+              <div className="client-info-block">
+                <h3>Anagrafica</h3>
+                <p className="hint"><strong>Nome:</strong> {onboardingValue(selectedClientOnboarding?.fullName)}</p>
+                <p className="hint"><strong>Età:</strong> {onboardingValue(selectedClientOnboarding?.age)}</p>
+                <p className="hint"><strong>Sesso:</strong> {onboardingValue(selectedClientOnboarding?.sex)}</p>
+                <p className="hint"><strong>Email:</strong> {onboardingValue(selectedClientOnboarding?.email)}</p>
+                <p className="hint"><strong>Telefono:</strong> {onboardingValue(selectedClientOnboarding?.phone)}</p>
+                <p className="hint"><strong>Come ci ha conosciuto:</strong> {onboardingValue(selectedClientOnboarding?.discoverySource)}</p>
+              </div>
 
-          <div className="client-info-block">
-            <h3>Stato fisico e allenamento</h3>
-            <p className="hint"><strong>Altezza:</strong> {onboardingValue(selectedClientOnboarding?.heightCm)} cm</p>
-            <p className="hint"><strong>Peso:</strong> {onboardingValue(selectedClientOnboarding?.weightKg)} kg</p>
-            <p className="hint"><strong>Esperienza programmi:</strong> {onboardingValue(selectedClientOnboarding?.pastProgram || selectedClientOnboarding?.experienceLevel)}</p>
-            <p className="hint"><strong>Allenamenti settimanali:</strong> {onboardingValue(selectedClientOnboarding?.trainingFrequency || selectedClientOnboarding?.trainingDaysPerWeek)}</p>
-            <p className="hint"><strong>Durata sessione:</strong> {onboardingValue(selectedClientOnboarding?.workoutDuration)}</p>
-            <p className="hint"><strong>Luogo allenamento:</strong> {onboardingValue(selectedClientOnboarding?.workoutLocation)}</p>
-            <p className="hint"><strong>Attrezzatura:</strong> {onboardingValue(selectedClientOnboarding?.equipment)}</p>
-            <p className="hint"><strong>Allenamenti svolti:</strong> {onboardingValue(selectedClientOnboarding?.trainingTypeHistory)}</p>
-            <p className="hint"><strong>Infortuni/problemi:</strong> {onboardingValue(selectedClientOnboarding?.hasInjuries)}</p>
-            <p className="hint"><strong>Dettagli infortuni:</strong> {onboardingValue(selectedClientOnboarding?.injuryDetails)}</p>
-          </div>
+              <div className="client-info-block">
+                <h3>Stato fisico e allenamento</h3>
+                <p className="hint"><strong>Altezza:</strong> {onboardingValue(selectedClientOnboarding?.heightCm)} cm</p>
+                <p className="hint"><strong>Peso:</strong> {onboardingValue(selectedClientOnboarding?.weightKg)} kg</p>
+                <p className="hint"><strong>Esperienza programmi:</strong> {onboardingValue(selectedClientOnboarding?.pastProgram || selectedClientOnboarding?.experienceLevel)}</p>
+                <p className="hint"><strong>Allenamenti settimanali:</strong> {onboardingValue(selectedClientOnboarding?.trainingFrequency || selectedClientOnboarding?.trainingDaysPerWeek)}</p>
+                <p className="hint"><strong>Durata sessione:</strong> {onboardingValue(selectedClientOnboarding?.workoutDuration)}</p>
+                <p className="hint"><strong>Luogo allenamento:</strong> {onboardingValue(selectedClientOnboarding?.workoutLocation)}</p>
+                <p className="hint"><strong>Attrezzatura:</strong> {onboardingValue(selectedClientOnboarding?.equipment)}</p>
+                <p className="hint"><strong>Allenamenti svolti:</strong> {onboardingValue(selectedClientOnboarding?.trainingTypeHistory)}</p>
+                <p className="hint"><strong>Infortuni/problemi:</strong> {onboardingValue(selectedClientOnboarding?.hasInjuries)}</p>
+                <p className="hint"><strong>Dettagli infortuni:</strong> {onboardingValue(selectedClientOnboarding?.injuryDetails)}</p>
+              </div>
 
-          <div className="client-info-block">
-            <h3>Obiettivi</h3>
-            <p className="hint"><strong>Obiettivo principale:</strong> {onboardingValue(selectedClientOnboarding?.objectivePrimary || selectedClientOnboarding?.goal)}</p>
-            <p className="hint"><strong>Perché:</strong> {onboardingValue(selectedClientOnboarding?.objectiveReason)}</p>
-            <p className="hint"><strong>Timeline risultati:</strong> {onboardingValue(selectedClientOnboarding?.expectedTimeline)}</p>
-            <p className="hint"><strong>Cosa lo ha bloccato:</strong> {onboardingValue(selectedClientOnboarding?.whatBlockedSoFar || selectedClientOnboarding?.notes)}</p>
-            <p className="hint"><strong>Miglioramento desiderato (3 mesi):</strong> {onboardingValue(selectedClientOnboarding?.oneThingToImprove)}</p>
-            <p className="hint"><strong>Importanza obiettivo:</strong> {onboardingValue(selectedClientOnboarding?.importanceScore)} / 10</p>
-            <p className="hint"><strong>Rischio se non cambia:</strong> {onboardingValue(selectedClientOnboarding?.riskIfNoChange)}</p>
-          </div>
+              <div className="client-info-block">
+                <h3>Obiettivi</h3>
+                <p className="hint"><strong>Obiettivo principale:</strong> {onboardingValue(selectedClientOnboarding?.objectivePrimary || selectedClientOnboarding?.goal)}</p>
+                <p className="hint"><strong>Perché:</strong> {onboardingValue(selectedClientOnboarding?.objectiveReason)}</p>
+                <p className="hint"><strong>Timeline risultati:</strong> {onboardingValue(selectedClientOnboarding?.expectedTimeline)}</p>
+                <p className="hint"><strong>Cosa lo ha bloccato:</strong> {onboardingValue(selectedClientOnboarding?.whatBlockedSoFar || selectedClientOnboarding?.notes)}</p>
+                <p className="hint"><strong>Miglioramento desiderato (3 mesi):</strong> {onboardingValue(selectedClientOnboarding?.oneThingToImprove)}</p>
+                <p className="hint"><strong>Importanza obiettivo:</strong> {onboardingValue(selectedClientOnboarding?.importanceScore)} / 10</p>
+                <p className="hint"><strong>Rischio se non cambia:</strong> {onboardingValue(selectedClientOnboarding?.riskIfNoChange)}</p>
+              </div>
 
-          <div className="client-info-block">
-            <h3>Supporto e decisione</h3>
-            <p className="hint"><strong>Supporto preferito:</strong> {onboardingValue(selectedClientOnboarding?.supportPreference)}</p>
-            <p className="hint"><strong>Altro supporto:</strong> {onboardingValue(selectedClientOnboarding?.supportPreferenceOther)}</p>
-            <p className="hint"><strong>Fascia investimento:</strong> {onboardingValue(selectedClientOnboarding?.investmentRange)}</p>
-            <p className="hint"><strong>Disponibilità a partire:</strong> {onboardingValue(selectedClientOnboarding?.readiness)}</p>
-          </div>
-        </article>
+              <div className="client-info-block">
+                <h3>Supporto e decisione</h3>
+                <p className="hint"><strong>Supporto preferito:</strong> {onboardingValue(selectedClientOnboarding?.supportPreference)}</p>
+                <p className="hint"><strong>Altro supporto:</strong> {onboardingValue(selectedClientOnboarding?.supportPreferenceOther)}</p>
+                <p className="hint"><strong>Fascia investimento:</strong> {onboardingValue(selectedClientOnboarding?.investmentRange)}</p>
+                <p className="hint"><strong>Disponibilità a partire:</strong> {onboardingValue(selectedClientOnboarding?.readiness)}</p>
+              </div>
+            </article>
+            ) : null}
 
-        <p className="hint">
-          {existingPlanForClient ? 'Questo cliente ha già una scheda: puoi modificarla.' : 'Questo cliente non ha ancora una scheda: ne creerai una nuova.'}
-        </p>
+            {activeTab === 'plans' ? (
+              <>
+                <p className="hint">
+                  {existingPlanForClient ? 'Questo cliente ha già una scheda: puoi modificarla.' : 'Questo cliente non ha ancora una scheda: ne creerai una nuova.'}
+                </p>
 
-        <button className="btn" disabled={loading} onClick={openCreatePlanModal} type="button">
-          {existingPlanForClient ? 'Modifica scheda' : 'Crea scheda'}
-        </button>
-        {existingPlanForClient ? (
-          <button className="btn btn-danger" disabled={loading} onClick={() => void deleteCurrentPlan()} type="button">
-            Elimina scheda
-          </button>
-        ) : null}
+                <button className="btn" disabled={loading} onClick={openCreatePlanModal} type="button">
+                  {existingPlanForClient ? 'Modifica scheda' : 'Crea scheda'}
+                </button>
+                {existingPlanForClient ? (
+                  <button className="btn btn-danger" disabled={loading} onClick={() => void deleteCurrentPlan()} type="button">
+                    Elimina scheda
+                  </button>
+                ) : null}
+              </>
+            ) : null}
+          </>
+        )}
       </article>
+      ) : null}
 
       {isProfileModalOpen ? (
         <section className="modal-overlay" role="dialog" aria-modal="true">
@@ -1138,18 +1170,20 @@ export function CoachDashboardPage() {
         </section>
       ) : null}
 
-      <article className="card">
-        <h2>Panoramica</h2>
-        <p className="hint">Clienti registrati: {registeredClients.length}</p>
-        <p className="hint">Programmi creati: {plans.length}</p>
-        <ul className="list">
-          {plans.slice(0, 5).map((plan) => (
-            <li key={plan.id}>
-              <strong>{plan.title}</strong> · {plan.exercises?.length ?? 0} esercizi · cliente {clientLabelById[plan.clientId] || plan.clientId}
-            </li>
-          ))}
-        </ul>
-      </article>
+      {activeTab === 'overview' ? (
+        <article className="card">
+          <h2>Panoramica</h2>
+          <p className="hint">Clienti registrati: {registeredClients.length}</p>
+          <p className="hint">Programmi creati: {plans.length}</p>
+          <ul className="list">
+            {plans.slice(0, 5).map((plan) => (
+              <li key={plan.id}>
+                <strong>{plan.title}</strong> · {plan.exercises?.length ?? 0} esercizi · cliente {clientLabelById[plan.clientId] || plan.clientId}
+              </li>
+            ))}
+          </ul>
+        </article>
+      ) : null}
 
       {loading ? <p className="message">Caricamento...</p> : null}
     </AppShell>

@@ -56,6 +56,18 @@ p {
   padding: 20px 16px 90px;
 }
 
+.shell-page {
+  width: min(1320px, 100%);
+}
+
+.shell-main {
+  min-width: 0;
+}
+
+.app-stack {
+  gap: 14px;
+}
+
 .page-center {
   min-height: 100vh;
   display: grid;
@@ -75,6 +87,10 @@ p {
 .hero h1 {
   font-size: clamp(30px, 8vw, 54px);
   line-height: 1;
+}
+
+.hero-compact h1 {
+  font-size: clamp(24px, 7.2vw, 38px);
 }
 
 .hero-sub {
@@ -420,6 +436,59 @@ a.btn {
   backdrop-filter: blur(8px);
 }
 
+.shell-mobile-nav {
+  gap: 4px;
+  align-items: stretch;
+}
+
+.shell-tab {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 12px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 10px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.shell-tab-mobile {
+  flex: 1;
+}
+
+.shell-tab-desktop {
+  width: 100%;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 11px 12px;
+}
+
+.shell-tab-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.shell-tab-label {
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.shell-tab-desktop .shell-tab-label {
+  font-size: 14px;
+}
+
+.shell-tab-active {
+  color: #fff;
+  background: linear-gradient(120deg, var(--brand), var(--brand-2));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
 .mobile-nav a,
 .mobile-nav button {
   border: 0;
@@ -428,6 +497,10 @@ a.btn {
   text-decoration: none;
   font-size: 14px;
   font-weight: 700;
+}
+
+.mobile-nav .shell-tab-active {
+  color: #fff;
 }
 
 .modal-overlay {
@@ -556,6 +629,10 @@ a.btn {
     grid-column: 1 / -1;
   }
 
+  .app-stack {
+    grid-template-columns: 1fr;
+  }
+
   .mobile-nav {
     display: none;
   }
@@ -590,6 +667,43 @@ a.btn {
   .supervisor-row {
     grid-template-columns: 1fr auto;
     align-items: center;
+  }
+
+  .shell-page {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+
+  .shell-sidebar {
+    position: sticky;
+    top: 20px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(24, 33, 38, 0.08);
+    border-radius: calc(var(--radius) + 2px);
+    box-shadow: var(--shadow);
+    padding: 18px;
+    display: grid;
+    gap: 12px;
+  }
+
+  .shell-sidebar h2 {
+    font-size: 28px;
+    line-height: 1;
+  }
+
+  .shell-sidebar-nav {
+    display: grid;
+    gap: 8px;
+  }
+
+  .shell-main .hero {
+    margin-bottom: 0;
+  }
+
+  .shell-main .hero h1 {
+    font-size: clamp(28px, 3vw, 42px);
   }
 }
 

@@ -35,6 +35,7 @@ interface CoachSubscriptionDoc {
   subscriptionStartedAt?: admin.firestore.Timestamp | null;
   subscriptionEndsAt?: admin.firestore.Timestamp | null;
   renewalPeriod: 'yearly';
+  accessBlocked?: boolean;
   expiresAt?: admin.firestore.Timestamp | null;
   updatedBySupervisor?: string | null;
   createdAt?: admin.firestore.Timestamp | null;
@@ -73,8 +74,7 @@ function normalizeCoachCodeInput(value: string): string {
 function coachCodeBaseFromEmail(email: string): string {
   const localPart = email.split('@')[0] ?? '';
   const normalized = normalizeCoachCodeInput(localPart);
-  const base = normalized || 'coach';
-  return `${base}beastly`;
+  return normalized || 'coach';
 }
 
 function addDays(date: Date, days: number): Date {
@@ -98,7 +98,8 @@ function toMillis(value: unknown): number {
 
 async function getOrCreateCoachCode(uid: string, email: string, currentCoachCode: unknown): Promise<string> {
   const existing = typeof currentCoachCode === 'string' ? normalizeCoachCodeInput(currentCoachCode) : '';
-  if (existing) return existing;
+  const legacySuffix = 'beastly';
+  if (existing && !existing.endsWith(legacySuffix)) return existing;
 
   const base = coachCodeBaseFromEmail(email);
   let candidate = base;
@@ -127,8 +128,9 @@ async function applyUserClaims(uid: string, role: AppRole, supervisor: boolean):
 }
 
 function resolveCoachSubscriptionStatus(data: CoachSubscriptionDoc, nowMillis: number): CoachSubscriptionStatus {
+  const isBlocked = data.accessBlocked === true || data.status === 'disabled';
+  if (isBlocked) return 'disabled';
   if (data.isSupervisor) return 'active_paid';
-  if (data.status === 'disabled') return 'disabled';
   if (data.status === 'active_paid') {
     const subscriptionEnds = toMillis(data.subscriptionEndsAt);
     return subscriptionEnds > nowMillis ? 'active_paid' : 'expired';
@@ -195,6 +197,7 @@ async function upsertCoachSubscription(uid: string, email: string, displayName: 
       status: 'active_paid',
       trialDays: 15,
       renewalPeriod: 'yearly',
+      accessBlocked: false,
       expiresAt: null,
       updatedBySupervisor: uid,
       updatedAt: now,
@@ -220,6 +223,7 @@ async function upsertCoachSubscription(uid: string, email: string, displayName: 
       subscriptionStartedAt: null,
       subscriptionEndsAt: null,
       renewalPeriod: 'yearly',
+      accessBlocked: false,
       expiresAt: null,
       updatedBySupervisor: null,
       createdAt: now,
@@ -238,6 +242,7 @@ async function upsertCoachSubscription(uid: string, email: string, displayName: 
     isSupervisor: false,
     status: nextStatus,
     renewalPeriod: 'yearly',
+    accessBlocked: current.accessBlocked === true ? false : current.accessBlocked ?? false,
     updatedAt: now,
   };
 
@@ -589,11 +594,38 @@ export const activateCoachSubscription = onCall(
     if (current.isSupervisor) throw new HttpsError('failed-precondition', 'Supervisor account cannot be modified.');
 
     const now = new Date();
+    const nowMillis = now.getTime();
+    const wasBlocked = current.accessBlocked === true || current.status === 'disabled';
+    if (wasBlocked) {
+      const trialEndsMillis = toMillis(current.trialEndsAt);
+      const subscriptionEndsMillis = toMillis(current.subscriptionEndsAt);
+      const restoredStatus: CoachSubscriptionStatus = subscriptionEndsMillis > nowMillis
+        ? 'active_paid'
+        : trialEndsMillis > nowMillis
+          ? 'trial_active'
+          : 'expired';
+      const patch: Partial<CoachSubscriptionDoc> = {
+        accessBlocked: false,
+        status: restoredStatus,
+        updatedBySupervisor: supervisorUid,
+        updatedAt: admin.firestore.Timestamp.fromDate(now),
+      };
+      await subRef.set(patch, {merge: true});
+      return {
+        ok: true,
+        uid: targetUid,
+        status: restoredStatus,
+        subscriptionEndsAt: current.subscriptionEndsAt?.toDate().toISOString() ?? null,
+        mode: 'unblocked',
+      };
+    }
+
     const currentEndsMillis = toMillis(current.subscriptionEndsAt);
     const baseDate = currentEndsMillis > now.getTime() ? new Date(currentEndsMillis) : now;
     const nextEnd = addYears(baseDate, 1);
 
     const patch = subscriptionStatePayload(current, now, 'active_paid', nextEnd, supervisorUid);
+    patch.accessBlocked = false;
     await subRef.set(patch, {merge: true});
 
     return {
@@ -601,6 +633,7 @@ export const activateCoachSubscription = onCall(
       uid: targetUid,
       status: 'active_paid',
       subscriptionEndsAt: nextEnd.toISOString(),
+      mode: 'activated',
     };
   },
 );
@@ -625,6 +658,7 @@ export const renewCoachSubscription = onCall(
     const nextEnd = addYears(baseDate, 1);
 
     const patch = subscriptionStatePayload(current, now, 'active_paid', nextEnd, supervisorUid);
+    patch.accessBlocked = false;
     await subRef.set(patch, {merge: true});
 
     return {
@@ -632,6 +666,7 @@ export const renewCoachSubscription = onCall(
       uid: targetUid,
       status: 'active_paid',
       subscriptionEndsAt: nextEnd.toISOString(),
+      mode: 'renewed',
     };
   },
 );
@@ -651,7 +686,11 @@ export const disableCoachSubscription = onCall(
     if (current.isSupervisor) throw new HttpsError('failed-precondition', 'Supervisor account cannot be modified.');
 
     const now = new Date();
-    const patch = subscriptionStatePayload(current, now, 'disabled', null, supervisorUid);
+    const patch: Partial<CoachSubscriptionDoc> = {
+      accessBlocked: true,
+      updatedBySupervisor: supervisorUid,
+      updatedAt: admin.firestore.Timestamp.fromDate(now),
+    };
     await subRef.set(patch, {merge: true});
 
     return {ok: true, uid: targetUid, status: 'disabled'};
