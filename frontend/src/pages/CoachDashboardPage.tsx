@@ -1375,12 +1375,14 @@ export function CoachDashboardPage() {
             <button className="btn btn-ghost" type="button" onClick={addExercise}>
               Aggiungi esercizio
             </button>
-            <button className="btn" type="button" disabled={loading || isUploadingMedia} onClick={() => void savePlan()}>
-              {isUploadingMedia ? 'Attendi caricamento media...' : 'Salva'}
-            </button>
-            <button className="btn btn-ghost" type="button" onClick={closePlanModalWithoutSaving}>
-              Chiudi
-            </button>
+            <div className="action-row-split">
+              <button className="btn btn-ghost" type="button" onClick={closePlanModalWithoutSaving}>
+                Chiudi
+              </button>
+              <button className="btn btn-primary" type="button" disabled={loading || isUploadingMedia} onClick={() => void savePlan()}>
+                {isUploadingMedia ? 'Attendi caricamento media...' : 'Salva'}
+              </button>
+            </div>
           </article>
         </section>
       ) : null}
