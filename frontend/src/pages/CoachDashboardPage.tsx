@@ -925,10 +925,10 @@ export function CoachDashboardPage() {
         <article className="card">
           <h2>Il tuo codice coach</h2>
           <p className="hero-sub">Invia questo codice al cliente: è obbligatorio per associarlo a te in onboarding.</p>
-          <div className="exercise-head">
+          <div className="coach-code-wrap">
             <p className="coach-code">{coachAccess?.coachCode || 'Caricamento...'}</p>
             <button
-              className="icon-btn"
+              className="icon-btn coach-copy-btn"
               type="button"
               aria-label="Copia codice coach"
               title="Copia codice coach"
