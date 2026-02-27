@@ -970,10 +970,7 @@ export function CoachDashboardPage() {
                         placeholder="Es. 3405882404"
                       />
                     </label>
-                    <div className="supervisor-actions">
-                      <button className="btn" type="button" disabled={savingCoachPhone} onClick={() => void saveCoachPhone()}>
-                        {savingCoachPhone ? 'Salvataggio...' : 'Salva numero'}
-                      </button>
+                    <div className="action-row-split">
                       <button
                         className="btn btn-ghost"
                         type="button"
@@ -984,6 +981,9 @@ export function CoachDashboardPage() {
                         }}
                       >
                         Annulla
+                      </button>
+                      <button className="btn btn-primary" type="button" disabled={savingCoachPhone} onClick={() => void saveCoachPhone()}>
+                        {savingCoachPhone ? 'Salvataggio...' : 'Salva numero'}
                       </button>
                     </div>
                   </>
@@ -1173,12 +1173,12 @@ export function CoachDashboardPage() {
                   <button className="btn" disabled={loading || !selectedClientId} onClick={openCreatePlanModal} type="button">
                     {existingPlanForClient ? 'Modifica scheda' : 'Crea scheda'}
                   </button>
+                  {existingPlanForClient ? (
+                    <button className="btn btn-danger" disabled={loading} onClick={() => void deleteCurrentPlan()} type="button">
+                      Elimina scheda
+                    </button>
+                  ) : null}
                 </div>
-                {existingPlanForClient ? (
-                  <button className="btn btn-danger" disabled={loading} onClick={() => void deleteCurrentPlan()} type="button">
-                    Elimina scheda
-                  </button>
-                ) : null}
               </>
             ) : null}
           </>

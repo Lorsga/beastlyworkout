@@ -156,6 +156,17 @@ p {
   gap: 10px;
 }
 
+.action-row-split {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-row-split .btn-primary {
+  margin-left: auto;
+}
+
 .client-info-block {
   border: 1px solid rgba(18, 18, 18, 0.1);
   border-radius: 12px;
@@ -273,6 +284,9 @@ a.btn {
 .btn-whatsapp {
   background: linear-gradient(120deg, #15803d, #22c55e);
   color: #fff;
+}
+
+.btn-block {
   width: 100%;
 }
 
@@ -637,7 +651,9 @@ a.btn {
 }
 
 .supervisor-actions {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 

@@ -252,7 +252,7 @@ export function ClientDashboardPage() {
       headerAction={
         <div className="mobile-only">
           <a
-            className={`btn btn-whatsapp ${hasCoachWhatsapp ? '' : 'btn-disabled'}`.trim()}
+            className={`btn btn-whatsapp btn-block ${hasCoachWhatsapp ? '' : 'btn-disabled'}`.trim()}
             href={coachWhatsappUrl}
             onClick={(event) => {
               if (!hasCoachWhatsapp) event.preventDefault();
@@ -271,7 +271,7 @@ export function ClientDashboardPage() {
             <h2>Parla con il tuo Personal Trainer</h2>
             <p className="hint">Per feedback sulla scheda o qualsiasi dubbio, scrivi direttamente su WhatsApp.</p>
             <a
-              className={`btn btn-whatsapp ${hasCoachWhatsapp ? '' : 'btn-disabled'}`.trim()}
+              className={`btn btn-whatsapp btn-block ${hasCoachWhatsapp ? '' : 'btn-disabled'}`.trim()}
               href={coachWhatsappUrl}
               onClick={(event) => {
                 if (!hasCoachWhatsapp) event.preventDefault();
@@ -334,7 +334,7 @@ export function ClientDashboardPage() {
             <p className="hint">Anagrafica non ancora disponibile.</p>
           )}
           <a
-            className={`btn btn-whatsapp ${hasCoachWhatsapp ? '' : 'btn-disabled'}`.trim()}
+            className={`btn btn-whatsapp btn-block ${hasCoachWhatsapp ? '' : 'btn-disabled'}`.trim()}
             href={coachWhatsappUrl}
             onClick={(event) => {
               if (!hasCoachWhatsapp) event.preventDefault();

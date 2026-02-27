@@ -307,16 +307,18 @@ export function AuthPage() {
           <p className="hero-sub">
             Hai 15 giorni gratuiti da oggi. Alla scadenza l&apos;accesso sarà bloccato finché non attiverai l&apos;abbonamento.
           </p>
-          <button className="btn" type="button" disabled={loading} onClick={() => void confirmTrialAndContinue()}>
-            {loading ? 'Attivazione...' : 'Accetta e continua'}
-          </button>
-          <button
-            className="btn btn-ghost"
-            type="button"
-            onClick={() => void exitCoachTrialFlow()}
-          >
-            Esci
-          </button>
+          <div className="action-row-split">
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => void exitCoachTrialFlow()}
+            >
+              Esci
+            </button>
+            <button className="btn btn-primary" type="button" disabled={loading} onClick={() => void confirmTrialAndContinue()}>
+              {loading ? 'Attivazione...' : 'Accetta e continua'}
+            </button>
+          </div>
         </section>
       </main>
     );
@@ -331,19 +333,21 @@ export function AuthPage() {
           <p className="hero-sub">
             Per riattivare l&apos;accesso alla piattaforma, contattaci su WhatsApp e richiedi la sottoscrizione dell&apos;abbonamento.
           </p>
-          <a className="btn btn-whatsapp" href={paymentWhatsappUrl} target="_blank" rel="noreferrer">
-            Richiedi attivazione su WhatsApp
-          </a>
-          <button
-            className="btn btn-ghost"
-            type="button"
-            onClick={() => {
-              setCoachGate(null);
-              sessionStorage.removeItem(LOGIN_INTENT_KEY);
-            }}
-          >
-            Torna all&apos;accesso
-          </button>
+          <div className="action-row-split">
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => {
+                setCoachGate(null);
+                sessionStorage.removeItem(LOGIN_INTENT_KEY);
+              }}
+            >
+              Torna all&apos;accesso
+            </button>
+            <a className="btn btn-whatsapp btn-primary" href={paymentWhatsappUrl} target="_blank" rel="noreferrer">
+              Richiedi attivazione su WhatsApp
+            </a>
+          </div>
         </section>
       </main>
     );
@@ -367,12 +371,14 @@ export function AuthPage() {
               onChange={(event) => setCoachPhoneGate((prev) => (prev ? { ...prev, phone: event.target.value } : prev))}
             />
           </label>
-          <button className="btn" type="button" disabled={savingCoachPhone} onClick={() => void submitCoachPhone()}>
-            {savingCoachPhone ? 'Salvataggio...' : 'Continua'}
-          </button>
-          <button className="btn btn-ghost" type="button" disabled={savingCoachPhone} onClick={() => void exitCoachTrialFlow()}>
-            Esci
-          </button>
+          <div className="action-row-split">
+            <button className="btn btn-ghost" type="button" disabled={savingCoachPhone} onClick={() => void exitCoachTrialFlow()}>
+              Esci
+            </button>
+            <button className="btn btn-primary" type="button" disabled={savingCoachPhone} onClick={() => void submitCoachPhone()}>
+              {savingCoachPhone ? 'Salvataggio...' : 'Continua'}
+            </button>
+          </div>
           {message ? <p className="message">{message}</p> : null}
         </section>
       </main>

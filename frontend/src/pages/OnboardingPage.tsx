@@ -113,13 +113,14 @@ export function OnboardingPage() {
           />
         </label>
 
-        <button className="btn" disabled={loading} type="button" onClick={() => void submitOnboarding()}>
-          {loading ? 'Salvataggio...' : 'Continua'}
-        </button>
-
-        <button className="btn btn-ghost" type="button" onClick={() => void logoutCurrentUser()}>
-          Esci e cambia account
-        </button>
+        <div className="action-row-split">
+          <button className="btn btn-ghost" type="button" onClick={() => void logoutCurrentUser()}>
+            Esci e cambia account
+          </button>
+          <button className="btn btn-primary" disabled={loading} type="button" onClick={() => void submitOnboarding()}>
+            {loading ? 'Salvataggio...' : 'Continua'}
+          </button>
+        </div>
       </section>
     </main>
   );
