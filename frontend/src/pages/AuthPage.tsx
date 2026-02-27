@@ -394,8 +394,6 @@ export function AuthPage() {
       <section className="card auth-card">
         <img className="auth-logo" src="/brand/beastly-logo.jpeg" alt="Beastly Workout logo" />
         <p className="eyebrow">Beastly Workout</p>
-        <h1>Accesso piattaforma</h1>
-        <p className="hero-sub">Scegli il tipo di accesso corretto: cliente oppure coach/supervisor.</p>
 
         <h2>Accesso Cliente</h2>
         <p className="hint">Se usi la piattaforma per ricevere e seguire la tua scheda tecnica, entra da qui.</p>
