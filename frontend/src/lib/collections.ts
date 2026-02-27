@@ -1,4 +1,5 @@
 import {
+  arrayUnion,
   addDoc,
   collection,
   deleteDoc,
@@ -27,12 +28,13 @@ import {
 export type PlanStatus = 'draft' | 'active' | 'archived';
 
 export interface PlanInput {
-  clientId: string;
+  clientId?: string;
   status: PlanStatus;
   title: string;
   description?: string;
   kind?: 'series_reps' | 'circuit';
   notes?: string;
+  assignedClientIds?: string[];
   exercises: PlanExerciseInput[];
 }
 
@@ -156,12 +158,13 @@ export async function createPlanAsCoach(input: PlanInput) {
   const trainerId = requireUid();
   const planRef = await addDoc(collection(db, 'plans'), {
     trainerId,
-    clientId: input.clientId,
+    clientId: input.clientId ?? '',
     status: input.status,
     title: input.title,
     description: input.description ?? '',
     kind: input.kind ?? 'series_reps',
     notes: input.notes ?? '',
+    assignedClientIds: input.assignedClientIds ?? [],
     exercises: input.exercises,
     clientNotes: '',
     lastViewedAt: null,
@@ -172,9 +175,17 @@ export async function createPlanAsCoach(input: PlanInput) {
 
 export async function listPlansForRole(role: AppRole, userId?: string) {
   const uid = userId ?? requireUid();
-  const field = role === 'client' ? 'clientId' : 'trainerId';
-  const q = query(collection(db, 'plans'), where(field, '==', uid));
+  const q = role === 'client'
+    ? query(collection(db, 'plans'), where('assignedClientIds', 'array-contains', uid))
+    : query(collection(db, 'plans'), where('trainerId', '==', uid));
   return getDocs(q);
+}
+
+export async function assignPlanToClientAsCoach(planId: string, clientId: string) {
+  await updateDoc(doc(db, 'plans', planId), {
+    assignedClientIds: arrayUnion(clientId),
+    ...updateTimestamp(),
+  });
 }
 
 export async function getPlanByClientId(clientId?: string) {
