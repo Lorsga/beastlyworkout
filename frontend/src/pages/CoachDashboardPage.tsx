@@ -6,6 +6,7 @@ import { useToast } from '../components/ToastProvider';
 import {
   activateCoachSubscription,
   disableCoachSubscription,
+  deleteMyProfile,
   createPlanAsCoach,
   deletePlanAsCoach,
   acceptCoachTrial,
@@ -284,6 +285,8 @@ export function CoachDashboardPage() {
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isPlanPreviewOpen, setIsPlanPreviewOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingProfile, setDeletingProfile] = useState(false);
   const [profileStep, setProfileStep] = useState(0);
   const [onboardingDraft, setOnboardingDraft] = useState<OnboardingDraft>(emptyOnboardingDraft());
   const [uploadingExerciseIndex, setUploadingExerciseIndex] = useState<number | null>(null);
@@ -777,6 +780,20 @@ export function CoachDashboardPage() {
     }
   }
 
+  async function handleDeleteProfile() {
+    setDeletingProfile(true);
+    try {
+      await deleteMyProfile();
+      await logoutCurrentUser().catch(() => undefined);
+      navigate('/auth', {replace: true});
+    } catch (error) {
+      showError(toMessage(error));
+    } finally {
+      setDeletingProfile(false);
+      setIsDeleteModalOpen(false);
+    }
+  }
+
   return (
     <AppShell
       role={role === 'trainer' ? 'trainer' : 'admin'}
@@ -819,10 +836,20 @@ export function CoachDashboardPage() {
           {coachAccess?.isSupervisor ? (
             <p className="hint">Account supervisor: accesso sempre attivo, senza trial.</p>
           ) : (
-            <p className="hint">
-              Stato accesso: <strong>{coachAccess?.status ?? 'non disponibile'}</strong>
-              {' · '}Scadenza: <strong>{formatDate(coachAccess?.expiresAt ?? coachAccess?.trialEndsAt ?? coachAccess?.subscriptionEndsAt)}</strong>
-            </p>
+            <>
+              <p className="hint">
+                Stato accesso: <strong>{coachAccess?.status ?? 'non disponibile'}</strong>
+                {' · '}Scadenza: <strong>{formatDate(coachAccess?.expiresAt ?? coachAccess?.trialEndsAt ?? coachAccess?.subscriptionEndsAt)}</strong>
+              </p>
+              <div className="divider" />
+              <h3>Elimina profilo</h3>
+              <p className="hint">
+                Se elimini il profilo coach perderai accesso, abbonamento, clienti associati e tutti i dati collegati.
+              </p>
+              <button className="btn btn-danger" type="button" onClick={() => setIsDeleteModalOpen(true)}>
+                Elimina il mio profilo
+              </button>
+            </>
           )}
         </article>
       ) : null}
@@ -1221,6 +1248,28 @@ export function CoachDashboardPage() {
             <button className="btn btn-ghost" type="button" onClick={() => setIsPlanPreviewOpen(false)}>
               Chiudi
             </button>
+          </article>
+        </section>
+      ) : null}
+
+      {isDeleteModalOpen && !coachAccess?.isSupervisor ? (
+        <section className="modal-overlay" role="dialog" aria-modal="true">
+          <article className="card modal-card">
+            <h2>Conferma eliminazione profilo coach</h2>
+            <p className="hint">
+              Eliminando il profilo perderai definitivamente dati, abbonamento e associazioni clienti legate al tuo account coach.
+            </p>
+            <p className="hint">
+              L&apos;operazione segue le policy aziendali. Termini, Condizioni d&apos;uso e Privacy Policy verranno pubblicati e linkati qui.
+            </p>
+            <div className="onboarding-actions">
+              <button className="btn btn-ghost" type="button" disabled={deletingProfile} onClick={() => setIsDeleteModalOpen(false)}>
+                Annulla
+              </button>
+              <button className="btn btn-danger" type="button" disabled={deletingProfile} onClick={() => void handleDeleteProfile()}>
+                {deletingProfile ? 'Eliminazione...' : 'Conferma eliminazione'}
+              </button>
+            </div>
           </article>
         </section>
       ) : null}

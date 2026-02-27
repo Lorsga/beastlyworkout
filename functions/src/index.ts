@@ -531,6 +531,65 @@ function subscriptionStatePayload(current: CoachSubscriptionDoc, now: Date, stat
   };
 }
 
+async function deleteQueryDocs(query: admin.firestore.Query): Promise<void> {
+  const snapshot = await query.get();
+  if (snapshot.empty) return;
+  const batch = db.batch();
+  snapshot.docs.forEach((docSnap) => {
+    batch.delete(docSnap.ref);
+  });
+  await batch.commit();
+}
+
+async function deleteUserPrivateDocs(uid: string): Promise<void> {
+  const privateCollection = db.collection('users').doc(uid).collection('private');
+  const privateDocs = await privateCollection.listDocuments();
+  await Promise.all(privateDocs.map((docRef) => docRef.delete()));
+}
+
+async function clearCoachAssignments(coachUid: string): Promise<void> {
+  const assignedClients = await db.collection('users').where('assignedCoachId', '==', coachUid).get();
+  const batch = db.batch();
+  assignedClients.docs.forEach((docSnap) => {
+    batch.set(
+      docSnap.ref,
+      {
+        assignedCoachId: admin.firestore.FieldValue.delete(),
+        assignedCoachCode: admin.firestore.FieldValue.delete(),
+        assignedCoachEmail: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
+  });
+  if (!assignedClients.empty) await batch.commit();
+}
+
+async function deleteCoachOwnedData(coachUid: string): Promise<void> {
+  await clearCoachAssignments(coachUid);
+  await deleteQueryDocs(db.collection('trainerClients').where('trainerId', '==', coachUid));
+  await deleteQueryDocs(db.collection('plans').where('trainerId', '==', coachUid));
+  await deleteQueryDocs(db.collection('sessions').where('trainerId', '==', coachUid));
+  await deleteQueryDocs(db.collection('workoutLogs').where('trainerId', '==', coachUid));
+  await deleteQueryDocs(db.collection('metrics').where('trainerId', '==', coachUid));
+  await db.collection('coachSubscriptions').doc(coachUid).delete().catch(() => undefined);
+  await deleteUserPrivateDocs(coachUid);
+  await db.collection('users').doc(coachUid).delete().catch(() => undefined);
+  await admin.storage().bucket().deleteFiles({prefix: `workout-media/${coachUid}/`, force: true}).catch(() => undefined);
+  await admin.storage().bucket().deleteFiles({prefix: `profile-images/${coachUid}/`, force: true}).catch(() => undefined);
+}
+
+async function deleteClientOwnedData(clientUid: string): Promise<void> {
+  await deleteQueryDocs(db.collection('trainerClients').where('clientId', '==', clientUid));
+  await db.collection('plans').doc(clientUid).delete().catch(() => undefined);
+  await deleteQueryDocs(db.collection('sessions').where('clientId', '==', clientUid));
+  await deleteQueryDocs(db.collection('workoutLogs').where('clientId', '==', clientUid));
+  await deleteQueryDocs(db.collection('metrics').where('clientId', '==', clientUid));
+  await deleteUserPrivateDocs(clientUid);
+  await db.collection('users').doc(clientUid).delete().catch(() => undefined);
+  await admin.storage().bucket().deleteFiles({prefix: `profile-images/${clientUid}/`, force: true}).catch(() => undefined);
+}
+
 export const listCoachesForSupervisor = onCall(
   {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
   async (request) => {
@@ -694,6 +753,38 @@ export const disableCoachSubscription = onCall(
     await subRef.set(patch, {merge: true});
 
     return {ok: true, uid: targetUid, status: 'disabled'};
+  },
+);
+
+export const deleteMyProfile = onCall(
+  {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    const uid = request.auth.uid;
+    const token = request.auth.token as Record<string, unknown>;
+    const roleFromClaim = typeof token.role === 'string' ? token.role : '';
+    const supervisorClaim = token.supervisor === true;
+    const userSnap = await db.collection('users').doc(uid).get();
+    const userData = userSnap.data() ?? {};
+    const roleFromDoc = typeof userData.role === 'string' ? userData.role : '';
+    const isSupervisor = supervisorClaim || userData.supervisor === true || isSupervisorEmail(userData.email);
+
+    if (isSupervisor) {
+      throw new HttpsError('failed-precondition', 'Supervisor account cannot be deleted from app.');
+    }
+
+    const resolvedRole = roleFromClaim || roleFromDoc;
+    if (resolvedRole === 'trainer' || resolvedRole === 'admin') {
+      await deleteCoachOwnedData(uid);
+    } else {
+      await deleteClientOwnedData(uid);
+    }
+
+    await admin.auth().deleteUser(uid);
+    return {ok: true};
   },
 );
 

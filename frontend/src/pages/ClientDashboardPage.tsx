@@ -3,10 +3,12 @@ import { Navigate, useNavigate } from 'react-router-dom';
 
 import { useToast } from '../components/ToastProvider';
 import {
+  deleteMyProfile,
   getPlanByClientId,
   getUserPrivateDoc,
   getUserProfile,
   listPlansForRole,
+  logoutCurrentUser,
   useAuthState,
 } from '../lib';
 import { AppShell } from '../components/AppShell';
@@ -96,6 +98,8 @@ export function ClientDashboardPage() {
   const [mediaPreview, setMediaPreview] = useState<{ url: string; label: string } | null>(null);
   const [onboarding, setOnboarding] = useState<OnboardingDoc | null>(null);
   const [activeTab, setActiveTab] = useState<ClientTabId>('plan');
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingProfile, setDeletingProfile] = useState(false);
   const whatsappMessage = 'Ciao coach, avrei bisogno di un feedback sulla mia scheda.';
 
   useEffect(() => {
@@ -166,6 +170,20 @@ export function ClientDashboardPage() {
   useEffect(() => {
     if (user && (role === 'client' || role === null)) void loadData();
   }, [role, user?.uid]);
+
+  async function handleDeleteProfile() {
+    setDeletingProfile(true);
+    try {
+      await deleteMyProfile();
+      await logoutCurrentUser().catch(() => undefined);
+      navigate('/auth', { replace: true });
+    } catch (error) {
+      showError(toMessage(error));
+    } finally {
+      setDeletingProfile(false);
+      setIsDeleteModalOpen(false);
+    }
+  }
 
   const topPlan = plans[0];
   const topPlanExercises = normalizeExercises(topPlan?.exercises);
@@ -300,6 +318,14 @@ export function ClientDashboardPage() {
             Scrivi al tuo PT su WhatsApp
           </a>
           {!HAS_PT_WHATSAPP ? <p className="message">Numero WhatsApp PT non ancora configurato.</p> : null}
+          <div className="divider" />
+          <h3>Elimina profilo</h3>
+          <p className="hint">
+            Se elimini il profilo perderai tutti i dati associati al tuo account, in linea con le policy aziendali.
+          </p>
+          <button className="btn btn-danger" type="button" onClick={() => setIsDeleteModalOpen(true)}>
+            Elimina il mio profilo
+          </button>
         </article>
       ) : null}
 
@@ -332,6 +358,28 @@ export function ClientDashboardPage() {
             <button className="btn btn-ghost" type="button" onClick={() => setMediaPreview(null)}>
               Chiudi
             </button>
+          </article>
+        </section>
+      ) : null}
+
+      {isDeleteModalOpen ? (
+        <section className="modal-overlay" role="dialog" aria-modal="true">
+          <article className="card modal-card">
+            <h2>Conferma eliminazione profilo</h2>
+            <p className="hint">
+              Eliminando il profilo perderai definitivamente account, anagrafica, scheda e dati collegati.
+            </p>
+            <p className="hint">
+              L&apos;operazione segue le policy aziendali. Termini, Condizioni d&apos;uso e Privacy Policy verranno pubblicati e linkati qui.
+            </p>
+            <div className="onboarding-actions">
+              <button className="btn btn-ghost" type="button" disabled={deletingProfile} onClick={() => setIsDeleteModalOpen(false)}>
+                Annulla
+              </button>
+              <button className="btn btn-danger" type="button" disabled={deletingProfile} onClick={() => void handleDeleteProfile()}>
+                {deletingProfile ? 'Eliminazione...' : 'Conferma eliminazione'}
+              </button>
+            </div>
           </article>
         </section>
       ) : null}
