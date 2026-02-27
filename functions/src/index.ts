@@ -123,6 +123,21 @@ function parseClientWeightOverrides(value: unknown): Record<string, Record<strin
   return output;
 }
 
+function parseClientWeightOverridesFromPlanData(planData: Record<string, unknown>): Record<string, Record<string, number>> {
+  const nested = parseClientWeightOverrides(planData.clientWeightOverrides);
+  const output: Record<string, Record<string, number>> = {...nested};
+  for (const [key, rawValue] of Object.entries(planData)) {
+    if (!key.startsWith('clientWeightOverrides.')) continue;
+    const [, clientId, exerciseIndex] = key.split('.');
+    if (!clientId || exerciseIndex == null) continue;
+    const weight = typeof rawValue === 'number' ? rawValue : Number(rawValue);
+    if (!Number.isFinite(weight) || weight < 0) continue;
+    output[clientId] = output[clientId] ?? {};
+    output[clientId][exerciseIndex] = weight;
+  }
+  return output;
+}
+
 async function getOrCreateCoachCode(uid: string, email: string, currentCoachCode: unknown): Promise<string> {
   const existing = typeof currentCoachCode === 'string' ? normalizeCoachCodeInput(currentCoachCode) : '';
   const legacySuffix = 'beastly';
@@ -592,7 +607,7 @@ export const getMyAssignedPlans = onCall(
       if (!isAssigned) continue;
       if (assignmentNotStarted) continue;
       const baseExercises = Array.isArray(data.exercises) ? data.exercises : [];
-      const clientOverridesByUser = parseClientWeightOverrides(data.clientWeightOverrides);
+      const clientOverridesByUser = parseClientWeightOverridesFromPlanData(data);
       const clientOverrides = clientOverridesByUser[uid] ?? {};
       const exercises = baseExercises.map((exercise, index) => {
         if (!exercise || typeof exercise !== 'object' || Array.isArray(exercise)) return exercise;
@@ -674,13 +689,10 @@ export const updateMyPlanExerciseWeight = onCall(
       throw new HttpsError('permission-denied', 'Plan not currently assigned to this client.');
     }
 
-    await planRef.set(
-      {
-        [`clientWeightOverrides.${uid}.${exerciseIndex}`]: weightKg,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      {merge: true},
-    );
+    await planRef.update({
+      [`clientWeightOverrides.${uid}.${exerciseIndex}`]: weightKg,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
     return {ok: true};
   },
@@ -741,9 +753,7 @@ export const syncMyPlanWeightOverrides = onCall(
         hasPatch = true;
       }
 
-      if (hasPatch) {
-        writeJobs.push(planRef.set(patch, {merge: true}));
-      }
+      if (hasPatch) writeJobs.push(planRef.update(patch));
     }
 
     if (writeJobs.length > 0) {
@@ -816,9 +826,7 @@ export const syncPlanWeightOverridesForCoach = onCall(
       }
     }
 
-    if (synced > 0) {
-      await planRef.set(patch, {merge: true});
-    }
+    if (synced > 0) await planRef.update(patch);
 
     return {ok: true, synced};
   },

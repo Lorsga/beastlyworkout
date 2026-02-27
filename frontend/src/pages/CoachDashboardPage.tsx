@@ -439,12 +439,38 @@ function coachExpiryChip(status: string, expiresAt: string | null): {label: stri
   return null;
 }
 
+function extractClientWeightOverridesFromPlan(plan: PlanDoc & { id: string }): Record<string, Record<string, number>> {
+  const output: Record<string, Record<string, number>> = {};
+  const nested = plan.clientWeightOverrides;
+  if (nested && typeof nested === 'object') {
+    for (const [clientId, rawByExercise] of Object.entries(nested)) {
+      if (!rawByExercise || typeof rawByExercise !== 'object') continue;
+      for (const [exerciseIndex, rawWeight] of Object.entries(rawByExercise)) {
+        const weight = Number(rawWeight);
+        if (!Number.isFinite(weight) || weight < 0) continue;
+        output[clientId] = output[clientId] ?? {};
+        output[clientId][exerciseIndex] = weight;
+      }
+    }
+  }
+  for (const [key, rawWeight] of Object.entries(plan as unknown as Record<string, unknown>)) {
+    if (!key.startsWith('clientWeightOverrides.')) continue;
+    const [, clientId, exerciseIndex] = key.split('.');
+    if (!clientId || exerciseIndex == null) continue;
+    const weight = Number(rawWeight);
+    if (!Number.isFinite(weight) || weight < 0) continue;
+    output[clientId] = output[clientId] ?? {};
+    output[clientId][exerciseIndex] = weight;
+  }
+  return output;
+}
+
 function getPlanWeightFeedback(
   plan: PlanDoc & { id: string },
   clientLabelById: Record<string, string>,
 ) {
-  const overrides = plan.clientWeightOverrides;
-  if (!overrides || typeof overrides !== 'object') return [];
+  const overrides = extractClientWeightOverridesFromPlan(plan);
+  if (Object.keys(overrides).length === 0) return [];
   const baseExercises = normalizePlanExercises(plan.exercises);
   const feedback: Array<{clientId: string; clientLabel: string; lines: string[]}> = [];
 
