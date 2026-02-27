@@ -754,6 +754,76 @@ export const syncMyPlanWeightOverrides = onCall(
   },
 );
 
+export const syncPlanWeightOverridesForCoach = onCall(
+  {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    const uid = request.auth.uid;
+    const token = request.auth.token ?? {};
+    const isSupervisor = hasSupervisorAccess(token);
+    const isCoach = token.role === 'trainer' || token.role === 'admin';
+    if (!isCoach && !isSupervisor) {
+      throw new HttpsError('permission-denied', 'Coach access required.');
+    }
+
+    const payload = request.data as {planId?: unknown};
+    const planId = typeof payload.planId === 'string' ? payload.planId.trim() : '';
+    if (!planId) {
+      throw new HttpsError('invalid-argument', 'planId is required.');
+    }
+
+    const planRef = db.collection('plans').doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      throw new HttpsError('not-found', 'Plan not found.');
+    }
+
+    const planData = planSnap.data() ?? {};
+    const trainerId = typeof planData.trainerId === 'string' ? planData.trainerId : '';
+    if (!isSupervisor && trainerId !== uid) {
+      throw new HttpsError('permission-denied', 'You cannot sync this plan.');
+    }
+
+    const exercises = Array.isArray(planData.exercises) ? planData.exercises : [];
+    const assignedClientIds = Array.isArray(planData.assignedClientIds)
+      ? planData.assignedClientIds.filter((item: unknown): item is string => typeof item === 'string')
+      : [];
+    const legacyClientId = typeof planData.clientId === 'string' ? planData.clientId : '';
+    const targetClientIds = new Set<string>(assignedClientIds);
+    if (legacyClientId) targetClientIds.add(legacyClientId);
+
+    const patch: Record<string, unknown> = {updatedAt: admin.firestore.FieldValue.serverTimestamp()};
+    let synced = 0;
+
+    for (const clientId of targetClientIds) {
+      const privateSnap = await db.collection('users').doc(clientId).collection('private').doc('planWeights').get();
+      const privateData = privateSnap.data() ?? {};
+      const rawWeights = privateData.weights;
+      if (!rawWeights || typeof rawWeights !== 'object' || Array.isArray(rawWeights)) continue;
+      const planWeights = (rawWeights as Record<string, unknown>)[planId];
+      if (!planWeights || typeof planWeights !== 'object' || Array.isArray(planWeights)) continue;
+
+      for (const [rawIndex, rawWeight] of Object.entries(planWeights as Record<string, unknown>)) {
+        const exerciseIndex = Number(rawIndex);
+        const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight);
+        if (!Number.isInteger(exerciseIndex) || exerciseIndex < 0 || exerciseIndex >= exercises.length) continue;
+        if (!Number.isFinite(weight) || weight < 0) continue;
+        patch[`clientWeightOverrides.${clientId}.${exerciseIndex}`] = weight;
+        synced += 1;
+      }
+    }
+
+    if (synced > 0) {
+      await planRef.set(patch, {merge: true});
+    }
+
+    return {ok: true, synced};
+  },
+);
+
 export const cleanupExpiredPlanAssignments = onSchedule(
   {region: 'us-central1', schedule: 'every 24 hours', timeZone: 'Europe/Rome'},
   async () => {

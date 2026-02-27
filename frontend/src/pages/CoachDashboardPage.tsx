@@ -22,6 +22,7 @@ import {
   renewCoachSubscription,
   removePlanAssignmentAsCoach,
   setPlanAssignmentDurationWithStartAsCoach,
+  syncPlanWeightOverridesForCoach,
   setClientOnboardingAsCoach,
   updateMyCoachPhone,
   uploadWorkoutMediaAsCoach,
@@ -1043,6 +1044,11 @@ export function CoachDashboardPage() {
   async function openPlanPreview(planId: string) {
     const plan = coachPlanTemplates.find((item) => item.id === planId);
     if (!plan) return;
+    try {
+      await syncPlanWeightOverridesForCoach(planId);
+    } catch {
+      // Best effort sync from clients' private weights to plan overrides.
+    }
     try {
       const freshSnap = await getPlanById(planId);
       if (freshSnap.exists()) {
