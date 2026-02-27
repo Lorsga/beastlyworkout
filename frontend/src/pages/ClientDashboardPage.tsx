@@ -117,6 +117,7 @@ export function ClientDashboardPage() {
   const [loading, setLoading] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [mediaPreview, setMediaPreview] = useState<{ url: string; label: string } | null>(null);
+  const [mediaPreviewLoading, setMediaPreviewLoading] = useState(false);
   const [onboarding, setOnboarding] = useState<OnboardingDoc | null>(null);
   const [activeTab, setActiveTab] = useState<ClientTabId>('plan');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -216,6 +217,11 @@ export function ClientDashboardPage() {
       setDeletingProfile(false);
       setIsDeleteModalOpen(false);
     }
+  }
+
+  function openMediaPreview(url: string, label: string) {
+    setMediaPreview({ url, label });
+    setMediaPreviewLoading(isImageUrl(url));
   }
 
   const topPlan = plans[0];
@@ -325,7 +331,7 @@ export function ClientDashboardPage() {
                         <span>{exercise.restSeconds || 0} sec recupero</span>
                       </div>
                       {exercise.mediaUrl ? (
-                        <button className="btn-link" type="button" onClick={() => setMediaPreview({ url: exercise.mediaUrl, label: exercise.name || `Esercizio ${index + 1}` })}>
+                        <button className="btn-link" type="button" onClick={() => openMediaPreview(exercise.mediaUrl, exercise.name || `Esercizio ${index + 1}`)}>
                           {toYouTubeEmbedUrl(exercise.mediaUrl) || isVideoUrl(exercise.mediaUrl) ? 'Apri video' : isImageUrl(exercise.mediaUrl) ? 'Apri immagine' : 'Apri link'}
                         </button>
                       ) : (
@@ -394,7 +400,22 @@ export function ClientDashboardPage() {
                 allowFullScreen
               />
             ) : isImageUrl(mediaPreview.url) ? (
-              <img src={mediaPreview.url} alt={mediaPreview.label} className="media-frame media-image" />
+              <>
+                {mediaPreviewLoading ? (
+                  <div className="media-loading" aria-live="polite">
+                    <span className="spinner" aria-hidden="true" />
+                    <span>Caricamento immagine...</span>
+                  </div>
+                ) : null}
+                <img
+                  src={mediaPreview.url}
+                  alt={mediaPreview.label}
+                  className="media-frame media-image"
+                  style={{ display: mediaPreviewLoading ? 'none' : 'block' }}
+                  onLoad={() => setMediaPreviewLoading(false)}
+                  onError={() => setMediaPreviewLoading(false)}
+                />
+              </>
             ) : isVideoUrl(mediaPreview.url) ? (
               <video src={mediaPreview.url} controls className="media-frame" />
             ) : (
@@ -405,7 +426,10 @@ export function ClientDashboardPage() {
                 </a>
               </p>
             )}
-            <button className="btn btn-ghost" type="button" onClick={() => setMediaPreview(null)}>
+            <button className="btn btn-ghost" type="button" onClick={() => {
+              setMediaPreview(null);
+              setMediaPreviewLoading(false);
+            }}>
               Chiudi
             </button>
           </article>
