@@ -983,7 +983,7 @@ export function CoachDashboardPage() {
                         Annulla
                       </button>
                       <button className="btn btn-primary" type="button" disabled={savingCoachPhone} onClick={() => void saveCoachPhone()}>
-                        {savingCoachPhone ? 'Salvataggio...' : 'Salva numero'}
+                        {savingCoachPhone ? 'Salvataggio...' : 'Salva'}
                       </button>
                     </div>
                   </>
@@ -1266,7 +1266,7 @@ export function CoachDashboardPage() {
                 </button>
               ) : (
                 <button className="btn" type="button" onClick={() => void saveCoachOnboarding()} disabled={loading}>
-                  {loading ? 'Salvataggio...' : 'Salva anagrafica'}
+                  {loading ? 'Salvataggio...' : 'Salva'}
                 </button>
               )}
             </div>
@@ -1364,7 +1364,7 @@ export function CoachDashboardPage() {
               Aggiungi esercizio
             </button>
             <button className="btn" type="button" disabled={loading || isUploadingMedia} onClick={() => void savePlan()}>
-              {isUploadingMedia ? 'Attendi caricamento media...' : existingPlanForClient ? 'Salva modifiche' : 'Salva scheda tecnica'}
+              {isUploadingMedia ? 'Attendi caricamento media...' : 'Salva'}
             </button>
             <button className="btn btn-ghost" type="button" onClick={closePlanModalWithoutSaving}>
               Chiudi
