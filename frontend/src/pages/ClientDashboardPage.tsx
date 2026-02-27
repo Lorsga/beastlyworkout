@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FocusEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 import { useToast } from '../components/ToastProvider';
@@ -175,6 +175,10 @@ function normalizeWhatsappPhone(raw: string): string {
   if (digits.startsWith('39')) return digits;
   if (digits.length >= 9) return `39${digits}`;
   return digits;
+}
+
+function selectNumericInputContents(event: FocusEvent<HTMLInputElement>) {
+  event.currentTarget.select();
 }
 
 function applyClientWeightOverridesToPlan(plan: PlanDoc & { id: string }, clientUid: string): PlanDoc & { id: string } {
@@ -599,6 +603,7 @@ export function ClientDashboardPage() {
                                 type="number"
                                 min={0}
                                 inputMode="decimal"
+                                onFocus={selectNumericInputContents}
                                 value={exerciseWeightDrafts[weightKey] ?? String(exercise.weightKg || 0)}
                                 onChange={(event) =>
                                   setExerciseWeightDrafts((prev) => ({

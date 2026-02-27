@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FocusEvent } from 'react';
 import Select, { type MultiValue, type StylesConfig } from 'react-select';
 import { useNavigate } from 'react-router-dom';
 
@@ -303,6 +303,10 @@ function hasExerciseDraftData(exercise: {
     exercise.weightKg > 0 ||
     exercise.restSeconds !== 60
   );
+}
+
+function selectNumericInputContents(event: FocusEvent<HTMLInputElement>) {
+  event.currentTarget.select();
 }
 
 function emptyOnboardingDraft(base?: { name?: string; email?: string }): OnboardingDraft {
@@ -1738,7 +1742,7 @@ export function CoachDashboardPage() {
             {profileStep === 0 ? (
               <div className="modal-grid">
                 <label>Nome e cognome *<input value={onboardingDraft.fullName} onChange={(event) => updateOnboardingField('fullName', event.target.value)} /></label>
-                <label>Età *<input type="number" min={12} max={99} value={onboardingDraft.age} onChange={(event) => updateOnboardingField('age', event.target.value)} /></label>
+                <label>Età *<input type="number" min={12} max={99} onFocus={selectNumericInputContents} value={onboardingDraft.age} onChange={(event) => updateOnboardingField('age', event.target.value)} /></label>
                 <label>Sesso *<input value={onboardingDraft.sex} onChange={(event) => updateOnboardingField('sex', event.target.value)} /></label>
                 <label>E-mail *<input type="email" value={onboardingDraft.email} onChange={(event) => updateOnboardingField('email', event.target.value)} /></label>
                 <label>Telefono *<input type="tel" value={onboardingDraft.phone} onChange={(event) => updateOnboardingField('phone', event.target.value)} /></label>
@@ -1748,8 +1752,8 @@ export function CoachDashboardPage() {
 
             {profileStep === 1 ? (
               <div className="modal-grid">
-                <label>Altezza (cm) *<input type="number" min={100} max={250} value={onboardingDraft.heightCm} onChange={(event) => updateOnboardingField('heightCm', event.target.value)} /></label>
-                <label>Peso (kg) *<input type="number" min={30} max={250} value={onboardingDraft.weightKg} onChange={(event) => updateOnboardingField('weightKg', event.target.value)} /></label>
+                <label>Altezza (cm) *<input type="number" min={100} max={250} onFocus={selectNumericInputContents} value={onboardingDraft.heightCm} onChange={(event) => updateOnboardingField('heightCm', event.target.value)} /></label>
+                <label>Peso (kg) *<input type="number" min={30} max={250} onFocus={selectNumericInputContents} value={onboardingDraft.weightKg} onChange={(event) => updateOnboardingField('weightKg', event.target.value)} /></label>
                 <label>Programmi precedenti *<input value={onboardingDraft.pastProgram} onChange={(event) => updateOnboardingField('pastProgram', event.target.value)} placeholder="Es. Si con coach online" /></label>
                 <label>Frequenza allenamenti *<input value={onboardingDraft.trainingFrequency} onChange={(event) => updateOnboardingField('trainingFrequency', event.target.value)} placeholder="Es. 3-4 a settimana" /></label>
                 <label>Durata allenamento *<input value={onboardingDraft.workoutDuration} onChange={(event) => updateOnboardingField('workoutDuration', event.target.value)} placeholder="Es. 45 minuti" /></label>
@@ -1768,7 +1772,7 @@ export function CoachDashboardPage() {
                 <label>Timeline risultati *<input value={onboardingDraft.expectedTimeline} onChange={(event) => updateOnboardingField('expectedTimeline', event.target.value)} /></label>
                 <label>Cosa lo ha bloccato<textarea value={onboardingDraft.whatBlockedSoFar} onChange={(event) => updateOnboardingField('whatBlockedSoFar', event.target.value)} /></label>
                 <label>Miglioramento nei prossimi 3 mesi<textarea value={onboardingDraft.oneThingToImprove} onChange={(event) => updateOnboardingField('oneThingToImprove', event.target.value)} /></label>
-                <label>Importanza obiettivo (1-10)<input type="number" min={1} max={10} value={onboardingDraft.importanceScore} onChange={(event) => updateOnboardingField('importanceScore', event.target.value)} /></label>
+                <label>Importanza obiettivo (1-10)<input type="number" min={1} max={10} onFocus={selectNumericInputContents} value={onboardingDraft.importanceScore} onChange={(event) => updateOnboardingField('importanceScore', event.target.value)} /></label>
                 <label>Rischio se non cambia<textarea value={onboardingDraft.riskIfNoChange} onChange={(event) => updateOnboardingField('riskIfNoChange', event.target.value)} /></label>
                 <label>Note coach (opzionale)<textarea value={onboardingDraft.notes} onChange={(event) => updateOnboardingField('notes', event.target.value)} /></label>
               </div>
@@ -1871,6 +1875,7 @@ export function CoachDashboardPage() {
                           type="number"
                           min={0}
                           inputMode="numeric"
+                          onFocus={selectNumericInputContents}
                           value={exercise.sets}
                           onChange={(event) => updateExercise(index, {sets: Number(event.target.value)})}
                         />
@@ -1881,6 +1886,7 @@ export function CoachDashboardPage() {
                           type="number"
                           min={0}
                           inputMode="numeric"
+                          onFocus={selectNumericInputContents}
                           value={exercise.reps}
                           onChange={(event) => updateExercise(index, {reps: Number(event.target.value)})}
                         />
@@ -1893,6 +1899,7 @@ export function CoachDashboardPage() {
                         type="number"
                         min={0}
                         inputMode="numeric"
+                        onFocus={selectNumericInputContents}
                         value={exercise.workValue}
                         onChange={(event) => updateExercise(index, {workValue: Number(event.target.value)})}
                       />
@@ -1904,6 +1911,7 @@ export function CoachDashboardPage() {
                       type="number"
                       min={0}
                       inputMode="decimal"
+                      onFocus={selectNumericInputContents}
                       value={exercise.weightKg}
                       onChange={(event) => updateExercise(index, {weightKg: Number(event.target.value)})}
                     />
@@ -1914,6 +1922,7 @@ export function CoachDashboardPage() {
                       type="number"
                       min={0}
                       inputMode="numeric"
+                      onFocus={selectNumericInputContents}
                       value={exercise.restSeconds}
                       onChange={(event) => updateExercise(index, {restSeconds: Number(event.target.value)})}
                     />
@@ -2285,6 +2294,7 @@ export function CoachDashboardPage() {
                     type="number"
                     min={1}
                     step={1}
+                    onFocus={selectNumericInputContents}
                     value={assignmentWeeksDraft}
                     onChange={(event) => setAssignmentWeeksDraft(event.target.value)}
                   />
