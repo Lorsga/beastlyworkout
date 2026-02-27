@@ -394,18 +394,20 @@ export function AuthPage() {
       <section className="card auth-card">
         <img className="auth-logo" src="/brand/beastly-logo.jpeg" alt="Beastly Workout logo" />
         <p className="eyebrow">Beastly Workout</p>
-        <h1>Accedi con Google</h1>
-        <p className="hero-sub">Entra in pochi secondi e inizia subito il tuo percorso.</p>
+        <h1>Accesso piattaforma</h1>
+        <p className="hero-sub">Scegli il tipo di accesso corretto: cliente oppure coach/supervisor.</p>
 
+        <h2>Accesso Cliente</h2>
+        <p className="hint">Se usi la piattaforma per ricevere e seguire la tua scheda tecnica, entra da qui.</p>
         <button className="btn" disabled={loading || completingCoachAccess} onClick={() => void signInAsClient()} type="button">
-          {loading ? 'Connessione...' : 'Continua con Google'}
+          {loading ? 'Connessione...' : 'Continua come Cliente'}
         </button>
 
         <div className="divider" />
-        <h2>Sei un Coach?</h2>
-        <p className="hint">Accedi o registrati come coach con Google.</p>
+        <h2>Accesso Coach / Supervisor</h2>
+        <p className="hint">Se devi gestire clienti e schede, accedi da qui. Se è il primo accesso, verrà avviata la registrazione coach.</p>
         <button className="btn btn-ghost" disabled={loading || completingCoachAccess} onClick={() => void signInAsCoach()} type="button">
-          {completingCoachAccess ? 'Verifica accesso coach...' : 'Continua come Coach'}
+          {completingCoachAccess ? 'Verifica accesso coach...' : 'Continua come Coach/Supervisor'}
         </button>
 
         {message ? <p className="message">{message}</p> : null}

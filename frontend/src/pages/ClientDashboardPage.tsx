@@ -316,6 +316,9 @@ export function ClientDashboardPage() {
           return bTime - aTime;
         });
       setPlans(mergedPlans);
+      if (mergedPlans.length > 0 && Object.keys(nextPersonalOverrides).length > 0) {
+        void syncPersonalOverridesToCoach(mergedPlans, nextPersonalOverrides);
+      }
       if (mergedPlans.length > 0) {
         setSelectedPlanId((prev) => (prev && mergedPlans.some((plan) => plan.id === prev) ? prev : mergedPlans[0].id));
       } else {
@@ -326,6 +329,27 @@ export function ClientDashboardPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function syncPersonalOverridesToCoach(
+    currentPlans: Array<PlanDoc & { id: string }>,
+    overridesByPlan: Record<string, Record<string, number>>,
+  ) {
+    const allowedPlanIds = new Set(currentPlans.map((plan) => plan.id));
+    const syncJobs: Array<Promise<unknown>> = [];
+    for (const [planId, mapByExercise] of Object.entries(overridesByPlan)) {
+      if (!allowedPlanIds.has(planId)) continue;
+      if (!mapByExercise || typeof mapByExercise !== 'object') continue;
+      for (const [exerciseIndex, rawWeight] of Object.entries(mapByExercise)) {
+        const idx = Number(exerciseIndex);
+        const weight = Number(rawWeight);
+        if (!Number.isInteger(idx) || idx < 0) continue;
+        if (!Number.isFinite(weight) || weight < 0) continue;
+        syncJobs.push(updateMyPlanExerciseWeight(planId, idx, weight));
+      }
+    }
+    if (syncJobs.length === 0) return;
+    await Promise.allSettled(syncJobs);
   }
 
   useEffect(() => {
@@ -396,7 +420,11 @@ export function ClientDashboardPage() {
           [String(exerciseIndex)]: nextWeight,
         },
       }));
-      void updateMyPlanExerciseWeight(planId, exerciseIndex, nextWeight).catch(() => undefined);
+      try {
+        await updateMyPlanExerciseWeight(planId, exerciseIndex, nextWeight);
+      } catch {
+        showError('Peso salvato per te, ma non ancora sincronizzato lato coach. Riprova tra poco.');
+      }
       setPlans((prev) =>
         prev.map((plan) => {
           if (plan.id !== planId) return plan;
