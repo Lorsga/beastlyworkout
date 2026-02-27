@@ -151,7 +151,7 @@ type SupervisorCoachItem = {
 
 type CoachTabId = 'code' | 'clients' | 'plans' | 'overview' | 'supervisor';
 
-const PROFILE_STEPS = ['Anagrafica', 'Stato fisico', 'Obiettivi', 'Supporto'] as const;
+const PROFILE_STEPS = ['Anagrafica', 'Stato fisico', 'Obiettivi'] as const;
 
 function asText(value: unknown): string {
   return typeof value === 'string' ? value : value == null ? '' : String(value);
@@ -814,9 +814,6 @@ export function CoachDashboardPage() {
     if (!onboardingDraft.objectivePrimary.trim()) return 'Compila obiettivo principale.';
     if (!onboardingDraft.objectiveReason.trim()) return 'Compila motivo obiettivo.';
     if (!onboardingDraft.expectedTimeline.trim()) return 'Compila timeline risultati.';
-    if (!onboardingDraft.supportPreference.trim()) return 'Compila supporto preferito.';
-    if (!onboardingDraft.investmentRange.trim()) return 'Compila fascia investimento.';
-    if (!onboardingDraft.readiness.trim()) return 'Compila disponibilità a partire.';
     return null;
   }
 
@@ -1482,18 +1479,11 @@ export function CoachDashboardPage() {
                 <p className="hint"><strong>Obiettivo principale:</strong> {onboardingValue(selectedClientOnboarding?.objectivePrimary || selectedClientOnboarding?.goal)}</p>
                 <p className="hint"><strong>Perché:</strong> {onboardingValue(selectedClientOnboarding?.objectiveReason)}</p>
                 <p className="hint"><strong>Timeline risultati:</strong> {onboardingValue(selectedClientOnboarding?.expectedTimeline)}</p>
-                <p className="hint"><strong>Cosa lo ha bloccato:</strong> {onboardingValue(selectedClientOnboarding?.whatBlockedSoFar || selectedClientOnboarding?.notes)}</p>
+                <p className="hint"><strong>Cosa lo ha bloccato:</strong> {onboardingValue(selectedClientOnboarding?.whatBlockedSoFar)}</p>
                 <p className="hint"><strong>Miglioramento desiderato (3 mesi):</strong> {onboardingValue(selectedClientOnboarding?.oneThingToImprove)}</p>
                 <p className="hint"><strong>Importanza obiettivo:</strong> {onboardingValue(selectedClientOnboarding?.importanceScore)} / 10</p>
                 <p className="hint"><strong>Rischio se non cambia:</strong> {onboardingValue(selectedClientOnboarding?.riskIfNoChange)}</p>
-              </div>
-
-              <div className="client-info-block">
-                <h3>Supporto e decisione</h3>
-                <p className="hint"><strong>Supporto preferito:</strong> {onboardingValue(selectedClientOnboarding?.supportPreference)}</p>
-                <p className="hint"><strong>Altro supporto:</strong> {onboardingValue(selectedClientOnboarding?.supportPreferenceOther)}</p>
-                <p className="hint"><strong>Fascia investimento:</strong> {onboardingValue(selectedClientOnboarding?.investmentRange)}</p>
-                <p className="hint"><strong>Disponibilità a partire:</strong> {onboardingValue(selectedClientOnboarding?.readiness)}</p>
+                <p className="hint"><strong>Note coach:</strong> {onboardingValue(selectedClientOnboarding?.notes)}</p>
               </div>
             </article>
             ) : null}
@@ -1613,16 +1603,7 @@ export function CoachDashboardPage() {
                 <label>Miglioramento nei prossimi 3 mesi<textarea value={onboardingDraft.oneThingToImprove} onChange={(event) => updateOnboardingField('oneThingToImprove', event.target.value)} /></label>
                 <label>Importanza obiettivo (1-10)<input type="number" min={1} max={10} value={onboardingDraft.importanceScore} onChange={(event) => updateOnboardingField('importanceScore', event.target.value)} /></label>
                 <label>Rischio se non cambia<textarea value={onboardingDraft.riskIfNoChange} onChange={(event) => updateOnboardingField('riskIfNoChange', event.target.value)} /></label>
-              </div>
-            ) : null}
-
-            {profileStep === 3 ? (
-              <div className="modal-grid">
-                <label>Supporto preferito *<input value={onboardingDraft.supportPreference} onChange={(event) => updateOnboardingField('supportPreference', event.target.value)} /></label>
-                <label>Altro supporto<input value={onboardingDraft.supportPreferenceOther} onChange={(event) => updateOnboardingField('supportPreferenceOther', event.target.value)} /></label>
-                <label>Fascia investimento *<input value={onboardingDraft.investmentRange} onChange={(event) => updateOnboardingField('investmentRange', event.target.value)} placeholder="Es. 150-250€" /></label>
-                <label>Disponibilità a partire *<input value={onboardingDraft.readiness} onChange={(event) => updateOnboardingField('readiness', event.target.value)} /></label>
-                <label>Note coach<textarea value={onboardingDraft.notes} onChange={(event) => updateOnboardingField('notes', event.target.value)} /></label>
+                <label>Note coach (opzionale)<textarea value={onboardingDraft.notes} onChange={(event) => updateOnboardingField('notes', event.target.value)} /></label>
               </div>
             ) : null}
 
