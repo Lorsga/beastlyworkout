@@ -443,6 +443,14 @@ a.btn {
   display: none;
 }
 
+.screen-only {
+  display: inline-flex;
+}
+
+.print-only {
+  display: none;
+}
+
 .mobile-nav {
   position: fixed;
   left: 14px;
@@ -832,5 +840,45 @@ a.btn {
   .card,
   .hero {
     animation: none;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .shell-sidebar,
+  .mobile-nav,
+  .hero,
+  .install-banner,
+  .toast-wrap,
+  .screen-only {
+    display: none !important;
+  }
+
+  .modal-overlay {
+    position: static;
+    background: transparent;
+    padding: 0;
+    display: block;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .exercise-upload-preview {
+    max-height: 240px;
+    object-fit: contain;
   }
 }

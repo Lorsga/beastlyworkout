@@ -663,6 +663,10 @@ export function CoachDashboardPage() {
     setPlanKind(nextKind);
   }
 
+  function printPlanPreview() {
+    window.print();
+  }
+
   function openProfileModal() {
     if (!selectedClientId) {
       showError('Seleziona prima un cliente.');
@@ -1510,8 +1514,19 @@ export function CoachDashboardPage() {
 
       {isPlanPreviewOpen && existingPlanForClient ? (
         <section className="modal-overlay" role="dialog" aria-modal="true">
-          <article className="card modal-card">
-            <h2>Scheda in sola lettura</h2>
+          <article className="card modal-card print-sheet">
+            <div className="exercise-head">
+              <h2>Scheda in sola lettura</h2>
+              <button
+                className="icon-btn screen-only"
+                type="button"
+                aria-label="Stampa scheda"
+                title="Stampa scheda"
+                onClick={printPlanPreview}
+              >
+                🖨
+              </button>
+            </div>
             <p className="hint">Cliente: {clientLabelById[selectedClientId] || selectedClientId}</p>
             <div className="plan-head">
               <p className="hint">Titolo programma</p>
@@ -1542,16 +1557,29 @@ export function CoachDashboardPage() {
                     <span>{exercise.restSeconds || 0} sec recupero</span>
                   </div>
                   {exercise.mediaUrl ? (
-                    <a className="btn-link" href={exercise.mediaUrl} target="_blank" rel="noreferrer">
-                      {isVideoMediaUrl(exercise.mediaUrl) ? 'Apri video' : isImageMediaUrl(exercise.mediaUrl) ? 'Apri immagine' : 'Apri link'}
-                    </a>
+                    <>
+                      {isImageMediaUrl(exercise.mediaUrl) ? (
+                        <img
+                          src={exercise.mediaUrl}
+                          alt={`Media esercizio ${index + 1}`}
+                          className="exercise-upload-preview"
+                        />
+                      ) : null}
+                      {isVideoMediaUrl(exercise.mediaUrl) ? (
+                        <p className="hint">URL video: {exercise.mediaUrl}</p>
+                      ) : (
+                        <a className="btn-link" href={exercise.mediaUrl} target="_blank" rel="noreferrer">
+                          {isImageMediaUrl(exercise.mediaUrl) ? 'Apri immagine' : 'Apri link'}
+                        </a>
+                      )}
+                    </>
                   ) : (
                     <p className="hint">Nessun media allegato</p>
                   )}
                 </article>
               ))}
             </div>
-            <button className="btn btn-ghost" type="button" onClick={() => setIsPlanPreviewOpen(false)}>
+            <button className="btn btn-ghost screen-only" type="button" onClick={() => setIsPlanPreviewOpen(false)}>
               Chiudi
             </button>
           </article>
