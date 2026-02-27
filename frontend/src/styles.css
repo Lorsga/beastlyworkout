@@ -767,6 +767,20 @@ a.btn {
   border: 1px solid rgba(225, 36, 36, 0.32);
 }
 
+.plan-carousel {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scroll-snap-type: x proximity;
+}
+
+.plan-card {
+  min-width: min(86vw, 340px);
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
 .card,
 .hero {
   animation: rise 420ms ease both;

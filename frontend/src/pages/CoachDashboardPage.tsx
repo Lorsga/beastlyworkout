@@ -922,6 +922,32 @@ export function CoachDashboardPage() {
     setIsPlanPreviewOpen(false);
   }
 
+  async function duplicatePlan(planId: string) {
+    const source = coachPlanTemplates.find((plan) => plan.id === planId);
+    if (!source) return;
+    const sourceExercises = normalizePlanExercises(source.exercises).map((exercise) => ({
+      name: exercise.name,
+      sets: exercise.sets,
+      reps: exercise.reps,
+      workValue: exercise.workValue,
+      weightKg: exercise.weightKg,
+      restSeconds: exercise.restSeconds,
+      mediaUrl: exercise.mediaUrl,
+    }));
+    const duplicated = await runAction(
+      () =>
+        createPlanAsCoach({
+          title: `${source.title || 'Scheda'} (Copia)`,
+          kind: source.kind === 'circuit' ? 'circuit' : 'series_reps',
+          notes: asText(source.notes),
+          status: source.status === 'archived' ? 'draft' : 'active',
+          exercises: sourceExercises,
+        }),
+      'Scheda duplicata.',
+    );
+    if (duplicated?.id) setSelectedPlanId(duplicated.id);
+  }
+
   async function assignPlan() {
     if (!selectedPlan) {
       showError('Seleziona prima una scheda.');
@@ -1309,9 +1335,9 @@ export function CoachDashboardPage() {
                   </button>
                 </div>
                 {coachPlanTemplates.length > 0 ? (
-                  <div className="stack">
+                  <div className="plan-carousel">
                     {coachPlanTemplates.map((plan) => (
-                      <article className="card" key={plan.id} style={{ boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)' }}>
+                      <article className="card plan-card" key={plan.id} style={{ boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)' }}>
                         <h3>{plan.title || 'Scheda senza titolo'}</h3>
                         <p className="hint">Tipo: {plan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</p>
                         <p className="hint">Esercizi: {normalizePlanExercises(plan.exercises).length}</p>
@@ -1322,6 +1348,9 @@ export function CoachDashboardPage() {
                           </button>
                           <button className="btn" disabled={loading} onClick={() => openEditPlanModal(plan.id)} type="button">
                             Modifica
+                          </button>
+                          <button className="btn btn-ghost" disabled={loading} onClick={() => void duplicatePlan(plan.id)} type="button">
+                            Duplica
                           </button>
                           <button className="btn btn-danger" disabled={loading} onClick={() => void deletePlan(plan.id)} type="button">
                             Elimina
