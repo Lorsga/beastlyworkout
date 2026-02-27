@@ -1220,9 +1220,11 @@ export function CoachDashboardPage() {
             />
           </label>
         ) : null}
-        <button className="btn btn-ghost" type="button" onClick={() => void loadData()}>
-          Aggiorna dati
-        </button>
+        {activeTab !== 'plans' ? (
+          <button className="btn btn-ghost" type="button" onClick={() => void loadData()}>
+            Aggiorna dati
+          </button>
+        ) : null}
 
         {activeTab === 'clients' && registeredClients.length === 0 ? (
           <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
