@@ -295,13 +295,24 @@ function accessStatusLabel(status?: string): string {
   }
 }
 
+function toTimestamp(value?: string | null): number | null {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function getCoachEffectiveExpiry(coach: Pick<SupervisorCoachItem, 'status' | 'expiresAt' | 'trialEndsAt' | 'subscriptionEndsAt'>): string | null {
+  if (coach.status === 'trial_active') return coach.trialEndsAt ?? coach.expiresAt ?? coach.subscriptionEndsAt ?? null;
+  if (coach.status === 'active_paid') return coach.subscriptionEndsAt ?? coach.expiresAt ?? coach.trialEndsAt ?? null;
+  return coach.expiresAt ?? coach.trialEndsAt ?? coach.subscriptionEndsAt ?? null;
+}
+
 function coachExpiryChip(status: string, expiresAt: string | null): {label: string; tone: 'warning' | 'danger'} | null {
   if (status === 'expired') {
     return {label: 'Scaduto', tone: 'danger'};
   }
-  if (!expiresAt) return null;
-  const expiresTime = new Date(expiresAt).getTime();
-  if (Number.isNaN(expiresTime)) return null;
+  const expiresTime = toTimestamp(expiresAt);
+  if (!expiresTime) return null;
   const now = Date.now();
   if (expiresTime <= now) {
     return {label: 'Scaduto', tone: 'danger'};
@@ -381,8 +392,8 @@ export function CoachDashboardPage() {
       return coach.displayName.toLowerCase().includes(needle) || coach.email.toLowerCase().includes(needle);
     })
     .sort((a, b) => {
-      const aTime = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
-      const bTime = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.MAX_SAFE_INTEGER;
+      const aTime = toTimestamp(getCoachEffectiveExpiry(a)) ?? Number.MAX_SAFE_INTEGER;
+      const bTime = toTimestamp(getCoachEffectiveExpiry(b)) ?? Number.MAX_SAFE_INTEGER;
       return aTime - bTime;
     });
 
@@ -1019,7 +1030,8 @@ export function CoachDashboardPage() {
           </label>
           <div className="supervisor-list">
             {filteredSupervisorCoaches.map((coach) => {
-              const expiryChip = coachExpiryChip(coach.status, coach.expiresAt);
+              const effectiveExpiry = getCoachEffectiveExpiry(coach);
+              const expiryChip = coachExpiryChip(coach.status, effectiveExpiry);
               return (
                 <article className="supervisor-row" key={coach.uid}>
                   <div>
@@ -1027,7 +1039,7 @@ export function CoachDashboardPage() {
                     <p className="hint">{coach.email}</p>
                     <p className="hint">Codice: {coach.coachCode || '-'}</p>
                     <p className="hint">Stato: {accessStatusLabel(coach.isSupervisor ? 'supervisor_active' : coach.status)}</p>
-                    <p className="hint">Scadenza: {formatDate(coach.expiresAt)}</p>
+                    <p className="hint">Scadenza: {formatDate(effectiveExpiry)}</p>
                     {expiryChip ? <span className={`status-chip status-chip-${expiryChip.tone}`.trim()}>{expiryChip.label}</span> : null}
                   </div>
                   <div className="supervisor-actions">
