@@ -794,6 +794,59 @@ export const deleteMyProfile = onCall(
   },
 );
 
+export const updateMyCoachPhone = onCall(
+  {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    const uid = request.auth.uid;
+    const phone = typeof (request.data as {phone?: unknown}).phone === 'string'
+      ? (request.data as {phone: string}).phone.trim()
+      : '';
+    if (phone.length < 8) {
+      throw new HttpsError('invalid-argument', 'Valid phone number is required.');
+    }
+
+    const userRef = db.collection('users').doc(uid);
+    const userSnap = await userRef.get();
+    const userData = userSnap.data() ?? {};
+    const roleFromDoc = typeof userData.role === 'string' ? userData.role : '';
+    const roleFromClaim = typeof request.auth.token.role === 'string' ? request.auth.token.role : '';
+    const resolvedRole = roleFromClaim || roleFromDoc;
+    if (resolvedRole !== 'trainer' && resolvedRole !== 'admin') {
+      throw new HttpsError('permission-denied', 'Only coach accounts can update this field.');
+    }
+
+    await userRef.set(
+      {
+        phone,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
+
+    const assignedClients = await db.collection('users').where('assignedCoachId', '==', uid).get();
+    if (!assignedClients.empty) {
+      const batch = db.batch();
+      assignedClients.docs.forEach((docSnap) => {
+        batch.set(
+          docSnap.ref,
+          {
+            assignedCoachPhone: phone,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          {merge: true},
+        );
+      });
+      await batch.commit();
+    }
+
+    return {ok: true, phone};
+  },
+);
+
 export const setUserRole = onCall({region: 'us-central1', cors: allowedOrigins, invoker: 'public'}, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');

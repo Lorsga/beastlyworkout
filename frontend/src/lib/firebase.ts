@@ -88,6 +88,7 @@ const disableCoachSubscriptionFn = httpsCallable<{ uid: string }, { ok: boolean;
   'disableCoachSubscription',
 );
 const deleteMyProfileFn = httpsCallable<undefined, { ok: boolean }>(functions, 'deleteMyProfile');
+const updateMyCoachPhoneFn = httpsCallable<{ phone: string }, { ok: boolean; phone: string }>(functions, 'updateMyCoachPhone');
 
 export async function bootstrapFirstAdmin() {
   const result = await bootstrapFirstAdminFn();
@@ -142,6 +143,11 @@ export async function disableCoachSubscription(uid: string) {
 
 export async function deleteMyProfile() {
   const result = await deleteMyProfileFn();
+  return result.data;
+}
+
+export async function updateMyCoachPhone(phone: string) {
+  const result = await updateMyCoachPhoneFn({ phone });
   return result.data;
 }
 

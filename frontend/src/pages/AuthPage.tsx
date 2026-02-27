@@ -317,7 +317,6 @@ export function AuthPage() {
           >
             Esci
           </button>
-          {message ? <p className="message">{message}</p> : null}
         </section>
       </main>
     );

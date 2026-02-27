@@ -7,6 +7,7 @@ import {
   activateCoachSubscription,
   disableCoachSubscription,
   deleteMyProfile,
+  getUserProfile,
   createPlanAsCoach,
   deletePlanAsCoach,
   acceptCoachTrial,
@@ -18,6 +19,7 @@ import {
   logoutCurrentUser,
   renewCoachSubscription,
   setClientOnboardingAsCoach,
+  updateMyCoachPhone,
   uploadWorkoutMediaAsCoach,
   updatePlanAsCoach,
   useAuthState,
@@ -306,6 +308,10 @@ export function CoachDashboardPage() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingProfile, setDeletingProfile] = useState(false);
+  const [coachPhone, setCoachPhone] = useState('');
+  const [coachPhoneDraft, setCoachPhoneDraft] = useState('');
+  const [editingCoachPhone, setEditingCoachPhone] = useState(false);
+  const [savingCoachPhone, setSavingCoachPhone] = useState(false);
   const [profileStep, setProfileStep] = useState(0);
   const [onboardingDraft, setOnboardingDraft] = useState<OnboardingDraft>(emptyOnboardingDraft());
   const [uploadingExerciseIndex, setUploadingExerciseIndex] = useState<number | null>(null);
@@ -497,6 +503,23 @@ export function CoachDashboardPage() {
     }
     void loadAccessState();
   }, [role, user?.uid]);
+
+  useEffect(() => {
+    async function loadCoachPhone() {
+      if (!user?.uid) return;
+      try {
+        const profileSnap = await getUserProfile(user.uid);
+        const data = profileSnap.data() as { phone?: unknown } | undefined;
+        const nextPhone = asText(data?.phone).trim();
+        setCoachPhone(nextPhone);
+        setCoachPhoneDraft(nextPhone);
+      } catch {
+        setCoachPhone('');
+        setCoachPhoneDraft('');
+      }
+    }
+    void loadCoachPhone();
+  }, [user?.uid]);
 
   async function loadSupervisorCoaches() {
     if (!isSupervisor) return;
@@ -813,6 +836,26 @@ export function CoachDashboardPage() {
     }
   }
 
+  async function saveCoachPhone() {
+    const normalized = coachPhoneDraft.replace(/[^\d+]/g, '').trim();
+    if (normalized.length < 8) {
+      showError('Inserisci un numero WhatsApp valido.');
+      return;
+    }
+    setSavingCoachPhone(true);
+    try {
+      const result = await updateMyCoachPhone(normalized);
+      setCoachPhone(result.phone);
+      setCoachPhoneDraft(result.phone);
+      setEditingCoachPhone(false);
+      showSuccess('Numero aggiornato. I clienti associati useranno subito il nuovo contatto.');
+    } catch (error) {
+      showError(toMessage(error));
+    } finally {
+      setSavingCoachPhone(false);
+    }
+  }
+
   return (
     <AppShell
       role={role === 'trainer' ? 'trainer' : 'admin'}
@@ -856,6 +899,53 @@ export function CoachDashboardPage() {
             <p className="hint">Account supervisor: accesso sempre attivo, senza trial.</p>
           ) : (
             <>
+              <div className="client-info-block">
+                <div className="exercise-head">
+                  <h3>Numero WhatsApp coach</h3>
+                  {!editingCoachPhone ? (
+                    <button
+                      className="icon-btn"
+                      type="button"
+                      aria-label="Modifica numero coach"
+                      title="Modifica numero coach"
+                      onClick={() => setEditingCoachPhone(true)}
+                    >
+                      ✎
+                    </button>
+                  ) : null}
+                </div>
+                {!editingCoachPhone ? (
+                  <p className="hint"><strong>{coachPhone || 'Non configurato'}</strong></p>
+                ) : (
+                  <>
+                    <label>
+                      Numero telefono / WhatsApp
+                      <input
+                        type="tel"
+                        value={coachPhoneDraft}
+                        onChange={(event) => setCoachPhoneDraft(event.target.value)}
+                        placeholder="Es. 3405882404"
+                      />
+                    </label>
+                    <div className="supervisor-actions">
+                      <button className="btn" type="button" disabled={savingCoachPhone} onClick={() => void saveCoachPhone()}>
+                        {savingCoachPhone ? 'Salvataggio...' : 'Salva numero'}
+                      </button>
+                      <button
+                        className="btn btn-ghost"
+                        type="button"
+                        disabled={savingCoachPhone}
+                        onClick={() => {
+                          setCoachPhoneDraft(coachPhone);
+                          setEditingCoachPhone(false);
+                        }}
+                      >
+                        Annulla
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
               <p className="hint">
                 Stato accesso: <strong>{accessStatusLabel(coachAccess?.status)}</strong>
                 {' · '}Scadenza: <strong>{formatDate(coachAccess?.expiresAt ?? coachAccess?.trialEndsAt ?? coachAccess?.subscriptionEndsAt)}</strong>
