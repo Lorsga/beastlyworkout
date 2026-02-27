@@ -624,6 +624,9 @@ a.btn {
 
 .exercise-fields-inline label {
   flex: 1 1 120px;
+  display: grid;
+  grid-template-rows: minmax(40px, auto) auto;
+  align-content: start;
 }
 
 .exercise-fields-inline input {
