@@ -51,6 +51,8 @@ interface PlanDoc {
     notes?: string;
     advancedMethod?: 'rest_pause' | 'drop_set' | '';
     advancedMethodNotes?: string;
+    restPauseNotes?: string;
+    dropSetNotes?: string;
     sets?: number;
     reps?: number;
     workValue?: number;
@@ -172,11 +174,16 @@ function normalizePlanExercises(value: unknown) {
       const legacyWeight = Number(asText(raw.weight).replace(/[^\d.-]/g, ''));
       const rawAdvancedMethod = asText(raw.advancedMethod).trim();
       const advancedMethod = rawAdvancedMethod === 'rest_pause' || rawAdvancedMethod === 'drop_set' ? rawAdvancedMethod : '';
+      const legacyAdvancedMethodNotes = asText(raw.advancedMethodNotes);
+      const rawRestPauseNotes = asText(raw.restPauseNotes);
+      const rawDropSetNotes = asText(raw.dropSetNotes);
       return {
         name: asText(raw.name),
         notes: asText(raw.notes),
         advancedMethod,
-        advancedMethodNotes: asText(raw.advancedMethodNotes),
+        advancedMethodNotes: legacyAdvancedMethodNotes,
+        restPauseNotes: rawRestPauseNotes || (advancedMethod === 'rest_pause' ? legacyAdvancedMethodNotes : ''),
+        dropSetNotes: rawDropSetNotes || (advancedMethod === 'drop_set' ? legacyAdvancedMethodNotes : ''),
         sets: Number(raw.sets ?? 3) || 3,
         reps: Number(raw.reps ?? 10) || 10,
         workValue: Number(raw.workValue ?? raw.reps ?? 10) || 10,
@@ -185,7 +192,20 @@ function normalizePlanExercises(value: unknown) {
         mediaUrl: asText(raw.mediaUrl),
       };
     })
-    .filter((item): item is {name: string; notes: string; advancedMethod: '' | 'rest_pause' | 'drop_set'; advancedMethodNotes: string; sets: number; reps: number; workValue: number; weightKg: number; restSeconds: number; mediaUrl: string} => Boolean(item));
+    .filter((item): item is {
+      name: string;
+      notes: string;
+      advancedMethod: '' | 'rest_pause' | 'drop_set';
+      advancedMethodNotes: string;
+      restPauseNotes: string;
+      dropSetNotes: string;
+      sets: number;
+      reps: number;
+      workValue: number;
+      weightKg: number;
+      restSeconds: number;
+      mediaUrl: string;
+    } => Boolean(item));
 }
 
 function onboardingValue(value: unknown): string {
@@ -224,6 +244,8 @@ function defaultExercise() {
     notes: '',
     advancedMethod: '' as '' | 'rest_pause' | 'drop_set',
     advancedMethodNotes: '',
+    restPauseNotes: '',
+    dropSetNotes: '',
     sets: 3,
     reps: 10,
     workValue: 10,
@@ -238,6 +260,8 @@ function hasExerciseDraftData(exercise: {
   notes: string;
   advancedMethod: '' | 'rest_pause' | 'drop_set';
   advancedMethodNotes: string;
+  restPauseNotes: string;
+  dropSetNotes: string;
   sets: number;
   reps: number;
   workValue: number;
@@ -250,6 +274,8 @@ function hasExerciseDraftData(exercise: {
     exercise.notes.trim().length > 0 ||
     exercise.advancedMethod.trim().length > 0 ||
     exercise.advancedMethodNotes.trim().length > 0 ||
+    exercise.restPauseNotes.trim().length > 0 ||
+    exercise.dropSetNotes.trim().length > 0 ||
     exercise.mediaUrl.trim().length > 0 ||
     exercise.sets !== 3 ||
     exercise.reps !== 10 ||
@@ -711,6 +737,8 @@ export function CoachDashboardPage() {
       notes: string;
       advancedMethod: '' | 'rest_pause' | 'drop_set';
       advancedMethodNotes: string;
+      restPauseNotes: string;
+      dropSetNotes: string;
       sets: number;
       reps: number;
       workValue: number;
@@ -889,7 +917,13 @@ export function CoachDashboardPage() {
         name: item.name.trim(),
         notes: item.notes.trim(),
         advancedMethod: item.advancedMethod || '',
-        advancedMethodNotes: item.advancedMethod ? item.advancedMethodNotes.trim() : '',
+        restPauseNotes: item.restPauseNotes.trim(),
+        dropSetNotes: item.dropSetNotes.trim(),
+        advancedMethodNotes: item.advancedMethod === 'rest_pause'
+          ? item.restPauseNotes.trim()
+          : item.advancedMethod === 'drop_set'
+            ? item.dropSetNotes.trim()
+            : '',
         sets: planKind === 'series_reps' ? Number(item.sets) || 0 : 0,
         reps: planKind === 'series_reps' ? Number(item.reps) || 0 : 0,
         workValue: planKind === 'circuit' ? Number(item.workValue) || 0 : 0,
@@ -1014,6 +1048,8 @@ export function CoachDashboardPage() {
       notes: exercise.notes,
       advancedMethod: exercise.advancedMethod,
       advancedMethodNotes: exercise.advancedMethodNotes,
+      restPauseNotes: exercise.restPauseNotes,
+      dropSetNotes: exercise.dropSetNotes,
       sets: exercise.sets,
       reps: exercise.reps,
       workValue: exercise.workValue,
@@ -1759,8 +1795,8 @@ export function CoachDashboardPage() {
                       className={`btn btn-ghost ${exercise.advancedMethod === 'rest_pause' ? 'exercise-method-toggle-active' : ''}`.trim()}
                       type="button"
                       onClick={() => updateExercise(index, exercise.advancedMethod === 'rest_pause'
-                        ? { advancedMethod: '', advancedMethodNotes: '' }
-                        : { advancedMethod: 'rest_pause', advancedMethodNotes: '' })}
+                        ? { advancedMethod: '' }
+                        : { advancedMethod: 'rest_pause' })}
                     >
                       Rest Pause
                     </button>
@@ -1768,8 +1804,8 @@ export function CoachDashboardPage() {
                       className={`btn btn-ghost ${exercise.advancedMethod === 'drop_set' ? 'exercise-method-toggle-active' : ''}`.trim()}
                       type="button"
                       onClick={() => updateExercise(index, exercise.advancedMethod === 'drop_set'
-                        ? { advancedMethod: '', advancedMethodNotes: '' }
-                        : { advancedMethod: 'drop_set', advancedMethodNotes: '' })}
+                        ? { advancedMethod: '' }
+                        : { advancedMethod: 'drop_set' })}
                     >
                       Drop set
                     </button>
@@ -1779,8 +1815,10 @@ export function CoachDashboardPage() {
                   <label>
                     {exercise.advancedMethod === 'rest_pause' ? 'Note Rest Pause' : 'Note Drop set'}
                     <textarea
-                      value={exercise.advancedMethodNotes}
-                      onChange={(event) => updateExercise(index, { advancedMethodNotes: event.target.value })}
+                      value={exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}
+                      onChange={(event) => updateExercise(index, exercise.advancedMethod === 'rest_pause'
+                        ? { restPauseNotes: event.target.value, advancedMethodNotes: event.target.value }
+                        : { dropSetNotes: event.target.value, advancedMethodNotes: event.target.value })}
                       placeholder="Inserisci indicazioni per il cliente"
                     />
                   </label>
@@ -1932,8 +1970,8 @@ export function CoachDashboardPage() {
                       <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
                     </p>
                   ) : null}
-                  {exercise.advancedMethod && exercise.advancedMethodNotes.trim() ? (
-                    <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethodNotes}</p>
+                  {exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim() ? (
+                    <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
                   ) : null}
                   {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
                   {exercise.mediaUrl ? (

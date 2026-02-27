@@ -23,11 +23,14 @@ interface PlanDoc {
   kind?: 'series_reps' | 'circuit';
   notes?: string;
   warmup?: string;
+  clientWeightOverrides?: Record<string, Record<string, number>>;
   exercises?: Array<{
     name?: string;
     notes?: string;
     advancedMethod?: 'rest_pause' | 'drop_set' | '';
     advancedMethodNotes?: string;
+    restPauseNotes?: string;
+    dropSetNotes?: string;
     sets?: number;
     reps?: number;
     workValue?: number;
@@ -89,6 +92,8 @@ function normalizeExercises(value: unknown): Array<{
   notes: string;
   advancedMethod: '' | 'rest_pause' | 'drop_set';
   advancedMethodNotes: string;
+  restPauseNotes: string;
+  dropSetNotes: string;
   sets: number;
   reps: number;
   workValue: number;
@@ -104,11 +109,20 @@ function normalizeExercises(value: unknown): Array<{
       const legacyWeight = Number((typeof raw.weight === 'string' ? raw.weight : '').replace(/[^\d.-]/g, ''));
       const rawAdvancedMethod = typeof raw.advancedMethod === 'string' ? raw.advancedMethod.trim() : '';
       const advancedMethod = rawAdvancedMethod === 'rest_pause' || rawAdvancedMethod === 'drop_set' ? rawAdvancedMethod : '';
+      const legacyAdvancedMethodNotes = typeof raw.advancedMethodNotes === 'string' ? raw.advancedMethodNotes : '';
+      const restPauseNotes = typeof raw.restPauseNotes === 'string'
+        ? raw.restPauseNotes
+        : (advancedMethod === 'rest_pause' ? legacyAdvancedMethodNotes : '');
+      const dropSetNotes = typeof raw.dropSetNotes === 'string'
+        ? raw.dropSetNotes
+        : (advancedMethod === 'drop_set' ? legacyAdvancedMethodNotes : '');
       return {
         name: typeof raw.name === 'string' ? raw.name : '',
         notes: typeof raw.notes === 'string' ? raw.notes : '',
         advancedMethod,
-        advancedMethodNotes: typeof raw.advancedMethodNotes === 'string' ? raw.advancedMethodNotes : '',
+        advancedMethodNotes: legacyAdvancedMethodNotes,
+        restPauseNotes,
+        dropSetNotes,
         sets: typeof raw.sets === 'number' ? raw.sets : Number(raw.sets ?? 0) || 0,
         reps: typeof raw.reps === 'number' ? raw.reps : Number(raw.reps ?? 0) || 0,
         workValue: typeof raw.workValue === 'number' ? raw.workValue : Number(raw.workValue ?? raw.reps ?? 0) || 0,
@@ -122,6 +136,8 @@ function normalizeExercises(value: unknown): Array<{
       notes: string;
       advancedMethod: '' | 'rest_pause' | 'drop_set';
       advancedMethodNotes: string;
+      restPauseNotes: string;
+      dropSetNotes: string;
       sets: number;
       reps: number;
       workValue: number;
@@ -139,6 +155,30 @@ function normalizeWhatsappPhone(raw: string): string {
   if (digits.startsWith('39')) return digits;
   if (digits.length >= 9) return `39${digits}`;
   return digits;
+}
+
+function applyClientWeightOverridesToPlan(plan: PlanDoc & { id: string }, clientUid: string): PlanDoc & { id: string } {
+  const byClient = plan.clientWeightOverrides && typeof plan.clientWeightOverrides === 'object'
+    ? plan.clientWeightOverrides
+    : {};
+  const overrides = byClient[clientUid];
+  if (!overrides || typeof overrides !== 'object') return plan;
+  if (!Array.isArray(plan.exercises) || plan.exercises.length === 0) return plan;
+
+  const nextExercises = plan.exercises.map((exercise, index) => {
+    if (!exercise || typeof exercise !== 'object') return exercise;
+    const override = overrides[String(index)];
+    if (!Number.isFinite(Number(override))) return exercise;
+    return {
+      ...exercise,
+      weightKg: Number(override),
+    };
+  });
+
+  return {
+    ...plan,
+    exercises: nextExercises,
+  };
 }
 
 export function ClientDashboardPage() {
@@ -232,7 +272,7 @@ export function ClientDashboardPage() {
         }
       }
 
-      const mergedPlans = Array.from(mergedMap.values()).sort((a, b) => {
+      const mergedPlans = Array.from(mergedMap.values()).map((plan) => applyClientWeightOverridesToPlan(plan, authUid)).sort((a, b) => {
         const aTime = new Date(String((a as {updatedAt?: unknown}).updatedAt ?? '')).getTime() || 0;
         const bTime = new Date(String((b as {updatedAt?: unknown}).updatedAt ?? '')).getTime() || 0;
         return bTime - aTime;
@@ -451,8 +491,8 @@ export function ClientDashboardPage() {
                           <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
                         </p>
                       ) : null}
-                      {exercise.advancedMethod && exercise.advancedMethodNotes.trim() ? (
-                        <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethodNotes}</p>
+                      {exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim() ? (
+                        <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
                       ) : null}
                       {(() => {
                         const weightKey = `${selectedPlan.id}:${index}`;
