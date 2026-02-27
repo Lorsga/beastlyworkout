@@ -1361,17 +1361,9 @@ export function CoachDashboardPage() {
                         </div>
                         <p className="hint">Tipo: {plan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</p>
                         <p className="hint">Esercizi: {normalizePlanExercises(plan.exercises).length}</p>
-                        <button
-                          className="status-chip status-chip-warning chip-btn"
-                          type="button"
-                          onClick={() => {
-                            setSelectedPlanId(plan.id);
-                            setAssigningClientId('');
-                            setIsAssignModalOpen(true);
-                          }}
-                        >
+                        <span className="status-chip status-chip-warning">
                           Assegnata a: {Array.isArray(plan.assignedClientIds) ? plan.assignedClientIds.length : 0} clienti
-                        </button>
+                        </span>
                         <div className="plan-card-actions">
                           <button className="btn btn-ghost" disabled={loading} onClick={() => openPlanPreview(plan.id)} type="button">
                             Visualizza
