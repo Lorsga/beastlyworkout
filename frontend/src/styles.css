@@ -874,6 +874,25 @@ a.btn {
     background: #fff;
   }
 
+  body.print-plan-only * {
+    visibility: hidden !important;
+  }
+
+  body.print-plan-only .print-sheet,
+  body.print-plan-only .print-sheet * {
+    visibility: visible !important;
+  }
+
+  body.print-plan-only .print-sheet {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+    background: #fff;
+  }
+
   .shell-sidebar,
   .mobile-nav,
   .hero,

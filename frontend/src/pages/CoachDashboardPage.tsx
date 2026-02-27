@@ -671,7 +671,17 @@ export function CoachDashboardPage() {
   }
 
   function printPlanPreview() {
+    const body = document.body;
+    let restored = false;
+    const restore = () => {
+      if (restored) return;
+      restored = true;
+      body.classList.remove('print-plan-only');
+    };
+    body.classList.add('print-plan-only');
+    window.addEventListener('afterprint', restore, { once: true });
     window.print();
+    window.setTimeout(restore, 1200);
   }
 
   function openProfileModal() {
