@@ -504,6 +504,10 @@ a.btn {
   background: rgba(255, 255, 255, 0.95);
 }
 
+.shell-tab-desktop.shell-tab-active::after {
+  display: none;
+}
+
 .mobile-nav a:not(.shell-tab),
 .mobile-nav button:not(.shell-tab) {
   border: 0;
