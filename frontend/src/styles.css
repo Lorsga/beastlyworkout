@@ -730,6 +730,18 @@ a.btn {
   min-width: 0;
 }
 
+.preview-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.preview-head-actions .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .status-chip {
   display: inline-flex;
   align-items: center;
