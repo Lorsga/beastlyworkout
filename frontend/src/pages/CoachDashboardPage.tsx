@@ -295,6 +295,24 @@ function accessStatusLabel(status?: string): string {
   }
 }
 
+function coachExpiryChip(status: string, expiresAt: string | null): {label: string; tone: 'warning' | 'danger'} | null {
+  if (status === 'expired') {
+    return {label: 'Scaduto', tone: 'danger'};
+  }
+  if (!expiresAt) return null;
+  const expiresTime = new Date(expiresAt).getTime();
+  if (Number.isNaN(expiresTime)) return null;
+  const now = Date.now();
+  if (expiresTime <= now) {
+    return {label: 'Scaduto', tone: 'danger'};
+  }
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  if (expiresTime - now <= sevenDaysMs) {
+    return {label: 'In scadenza', tone: 'warning'};
+  }
+  return null;
+}
+
 export function CoachDashboardPage() {
   const { role, user, isSupervisor } = useAuthState();
   const navigate = useNavigate();
@@ -1000,35 +1018,39 @@ export function CoachDashboardPage() {
             />
           </label>
           <div className="supervisor-list">
-            {filteredSupervisorCoaches.map((coach) => (
-              <article className="supervisor-row" key={coach.uid}>
-                <div>
-                  <p><strong>{coach.displayName || 'Coach senza nome'}</strong></p>
-                  <p className="hint">{coach.email}</p>
-                  <p className="hint">Codice: {coach.coachCode || '-'}</p>
-                  <p className="hint">Stato: {accessStatusLabel(coach.isSupervisor ? 'supervisor_active' : coach.status)}</p>
-                  <p className="hint">Scadenza: {formatDate(coach.expiresAt)}</p>
-                </div>
-                <div className="supervisor-actions">
-                  <button
-                    className="btn btn-ghost"
-                    type="button"
-                    disabled={coach.isSupervisor || supervisorActionUid === coach.uid}
-                    onClick={() => void runSupervisorAction(coach.uid, 'activate')}
-                  >
-                    {coach.status === 'disabled' ? 'Sblocca' : coach.status === 'active_paid' ? 'Rinnova +1 anno' : 'Attiva'}
-                  </button>
-                  <button
-                    className="btn btn-danger"
-                    type="button"
-                    disabled={coach.isSupervisor || supervisorActionUid === coach.uid}
-                    onClick={() => void runSupervisorAction(coach.uid, 'disable')}
-                  >
-                    Disattiva
-                  </button>
-                </div>
-              </article>
-            ))}
+            {filteredSupervisorCoaches.map((coach) => {
+              const expiryChip = coachExpiryChip(coach.status, coach.expiresAt);
+              return (
+                <article className="supervisor-row" key={coach.uid}>
+                  <div>
+                    <p><strong>{coach.displayName || 'Coach senza nome'}</strong></p>
+                    <p className="hint">{coach.email}</p>
+                    <p className="hint">Codice: {coach.coachCode || '-'}</p>
+                    <p className="hint">Stato: {accessStatusLabel(coach.isSupervisor ? 'supervisor_active' : coach.status)}</p>
+                    <p className="hint">Scadenza: {formatDate(coach.expiresAt)}</p>
+                    {expiryChip ? <span className={`status-chip status-chip-${expiryChip.tone}`.trim()}>{expiryChip.label}</span> : null}
+                  </div>
+                  <div className="supervisor-actions">
+                    <button
+                      className="btn btn-ghost"
+                      type="button"
+                      disabled={coach.isSupervisor || supervisorActionUid === coach.uid}
+                      onClick={() => void runSupervisorAction(coach.uid, 'activate')}
+                    >
+                      {coach.status === 'disabled' ? 'Sblocca' : coach.status === 'active_paid' ? 'Rinnova +1 anno' : 'Attiva'}
+                    </button>
+                    <button
+                      className="btn btn-danger"
+                      type="button"
+                      disabled={coach.isSupervisor || supervisorActionUid === coach.uid}
+                      onClick={() => void runSupervisorAction(coach.uid, 'disable')}
+                    >
+                      Disattiva
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
             {filteredSupervisorCoaches.length === 0 ? (
               <article className="supervisor-row">
                 <p className="hint">
