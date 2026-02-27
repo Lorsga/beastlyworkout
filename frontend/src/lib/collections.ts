@@ -154,8 +154,7 @@ export async function setClientOnboardingAsCoach(clientId: string, payload: Reco
 
 export async function createPlanAsCoach(input: PlanInput) {
   const trainerId = requireUid();
-  const planRef = doc(db, 'plans', input.clientId);
-  await setDoc(planRef, {
+  const planRef = await addDoc(collection(db, 'plans'), {
     trainerId,
     clientId: input.clientId,
     status: input.status,
@@ -196,18 +195,10 @@ export async function deletePlanAsCoach(planId: string) {
 
   if (planSnap.exists()) {
     const data = planSnap.data() as {
-      trainerId?: unknown;
-      clientId?: unknown;
       exercises?: Array<{ imageUrl?: unknown; mediaUrl?: unknown }>;
     };
     const mediaUrls = collectPlanStorageUrls(data.exercises);
     await Promise.allSettled(mediaUrls.map((url) => deleteStorageUrl(url)));
-
-    const trainerId = typeof data.trainerId === 'string' ? data.trainerId : '';
-    const clientId = typeof data.clientId === 'string' ? data.clientId : '';
-    if (trainerId && clientId) {
-      await deleteWorkoutMediaFolder(trainerId, clientId);
-    }
   }
 
   await deleteDoc(planRef);

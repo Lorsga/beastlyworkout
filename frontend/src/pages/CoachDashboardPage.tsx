@@ -381,6 +381,8 @@ export function CoachDashboardPage() {
   const [activeTab, setActiveTab] = useState<CoachTabId>('clients');
 
   const [selectedClientId, setSelectedClientId] = useState('');
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [isCreatingPlan, setIsCreatingPlan] = useState(false);
   const [planKind, setPlanKind] = useState<'series_reps' | 'circuit'>('series_reps');
   const [planTitle, setPlanTitle] = useState('');
   const [planNotes, setPlanNotes] = useState('');
@@ -388,7 +390,16 @@ export function CoachDashboardPage() {
   const isUploadingMedia = uploadingExerciseIndex !== null;
 
   const selectedClientProfile = registeredClients.find((item) => getClientAuthUid(item) === selectedClientId) ?? null;
-  const existingPlanForClient = plans.find((plan) => plan.id === selectedClientId) ?? plans.find((plan) => plan.clientId === selectedClientId);
+  const selectedClientPlans = plans
+    .filter((plan) => plan.clientId === selectedClientId || plan.id === selectedClientId)
+    .sort((a, b) => {
+      const aTime = toTimestamp(asText((a as {createdAt?: unknown}).createdAt as string)) ?? 0;
+      const bTime = toTimestamp(asText((b as {createdAt?: unknown}).createdAt as string)) ?? 0;
+      return bTime - aTime;
+    });
+  const selectedPlan = selectedClientPlans.find((plan) => plan.id === selectedPlanId) ?? null;
+  const editingPlan = isPlanModalOpen ? selectedPlan : null;
+  const previewPlan = isPlanPreviewOpen ? selectedPlan : null;
   const selectedClientWhatsappUrl = buildClientWhatsappUrl(
     asText(selectedClientOnboarding?.phone),
     asText(selectedClientOnboarding?.fullName),
@@ -480,31 +491,25 @@ export function CoachDashboardPage() {
 
   useEffect(() => {
     if (!selectedClientId) return;
-    if (!existingPlanForClient) {
-      setPlanKind('series_reps');
-      setPlanTitle('');
-      setPlanNotes('');
-      setExercises([defaultExercise()]);
-      return;
+    if (!selectedPlanId && selectedClientPlans.length > 0 && !isCreatingPlan) {
+      setSelectedPlanId(selectedClientPlans[0].id);
     }
-
-    setPlanKind(existingPlanForClient.kind === 'circuit' ? 'circuit' : 'series_reps');
-    setPlanTitle(existingPlanForClient.title ?? '');
-    setPlanNotes(asText(existingPlanForClient.notes));
-    const nextExercises = normalizePlanExercises(existingPlanForClient.exercises)
-      .filter((item) => item.name.trim().length > 0);
-    setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
-  }, [selectedClientId, existingPlanForClient?.id]);
+    if (selectedPlanId && !selectedClientPlans.some((plan) => plan.id === selectedPlanId)) {
+      setSelectedPlanId(selectedClientPlans[0]?.id ?? '');
+    }
+  }, [selectedClientId, selectedPlanId, isCreatingPlan, selectedClientPlans.map((plan) => plan.id).join('|')]);
 
   useEffect(() => {
-    if (!existingPlanForClient) setIsPlanPreviewOpen(false);
-  }, [existingPlanForClient?.id]);
+    if (!selectedPlan) {
+      setIsPlanPreviewOpen(false);
+    }
+  }, [selectedPlan?.id]);
 
   useEffect(() => {
     if (!isPlanPreviewOpen) {
       setPreviewImageLoading({});
     }
-  }, [isPlanPreviewOpen, existingPlanForClient?.id]);
+  }, [isPlanPreviewOpen, selectedPlan?.id]);
 
   async function loadData() {
     if (!role) return;
@@ -605,17 +610,19 @@ export function CoachDashboardPage() {
     void loadSupervisorCoaches();
   }, [isSupervisor, user?.uid]);
 
-  async function runAction(action: () => Promise<unknown>, okMessage: string) {
+  async function runAction<T>(action: () => Promise<T>, okMessage: string): Promise<T | undefined> {
     setLoading(true);
     try {
-      await action();
+      const result = await action();
       showSuccess(okMessage);
       await loadData();
+      return result;
     } catch (error) {
       showError(toMessage(error));
     } finally {
       setLoading(false);
     }
+    return undefined;
   }
 
   function addExercise() {
@@ -642,17 +649,17 @@ export function CoachDashboardPage() {
   }
 
   function reloadModalDraftFromServer() {
-    if (!existingPlanForClient) {
+    if (!selectedPlan) {
       setPlanKind('series_reps');
       setPlanTitle('');
       setPlanNotes('');
       setExercises([defaultExercise()]);
       return;
     }
-    setPlanKind(existingPlanForClient.kind === 'circuit' ? 'circuit' : 'series_reps');
-    setPlanTitle(existingPlanForClient.title ?? '');
-    setPlanNotes(asText(existingPlanForClient.notes));
-    const nextExercises = normalizePlanExercises(existingPlanForClient.exercises).filter((item) => item.name.trim().length > 0);
+    setPlanKind(selectedPlan.kind === 'circuit' ? 'circuit' : 'series_reps');
+    setPlanTitle(selectedPlan.title ?? '');
+    setPlanNotes(asText(selectedPlan.notes));
+    const nextExercises = normalizePlanExercises(selectedPlan.exercises).filter((item) => item.name.trim().length > 0);
     setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
   }
 
@@ -816,10 +823,10 @@ export function CoachDashboardPage() {
       return;
     }
 
-    if (existingPlanForClient) {
+    if (editingPlan) {
       await runAction(
         () =>
-          updatePlanAsCoach(existingPlanForClient.id, {
+          updatePlanAsCoach(editingPlan.id, {
             title: normalizedTitle,
             kind: planKind,
             notes: planKind === 'circuit' ? planNotes.trim() : '',
@@ -828,8 +835,9 @@ export function CoachDashboardPage() {
           }),
         'Scheda aggiornata con successo.',
       );
+      setSelectedPlanId(editingPlan.id);
     } else {
-      await runAction(
+      const created = await runAction(
         () =>
           createPlanAsCoach({
             clientId: selectedClientId,
@@ -841,7 +849,9 @@ export function CoachDashboardPage() {
           }),
         'Scheda creata e subito visibile al cliente.',
       );
+      if (created?.id) setSelectedPlanId(created.id);
     }
+    setIsCreatingPlan(false);
     setIsPlanModalOpen(false);
   }
 
@@ -850,11 +860,37 @@ export function CoachDashboardPage() {
       showError('Seleziona prima un cliente.');
       return;
     }
-    reloadModalDraftFromServer();
+    setIsCreatingPlan(true);
+    setSelectedPlanId('');
+    setPlanKind('series_reps');
+    setPlanTitle('');
+    setPlanNotes('');
+    setExercises([defaultExercise()]);
     setIsPlanModalOpen(true);
   }
 
+  function openEditPlanModal(planId: string) {
+    const plan = selectedClientPlans.find((item) => item.id === planId);
+    if (!plan) return;
+    setIsCreatingPlan(false);
+    setSelectedPlanId(plan.id);
+    setPlanKind(plan.kind === 'circuit' ? 'circuit' : 'series_reps');
+    setPlanTitle(plan.title ?? '');
+    setPlanNotes(asText(plan.notes));
+    const nextExercises = normalizePlanExercises(plan.exercises).filter((item) => item.name.trim().length > 0);
+    setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
+    setIsPlanModalOpen(true);
+  }
+
+  function openPlanPreview(planId: string) {
+    const plan = selectedClientPlans.find((item) => item.id === planId);
+    if (!plan) return;
+    setSelectedPlanId(plan.id);
+    setIsPlanPreviewOpen(true);
+  }
+
   function closePlanModalWithoutSaving() {
+    setIsCreatingPlan(false);
     reloadModalDraftFromServer();
     setIsPlanModalOpen(false);
   }
@@ -882,14 +918,15 @@ export function CoachDashboardPage() {
     }
   }
 
-  async function deleteCurrentPlan() {
-    if (!existingPlanForClient) return;
+  async function deletePlan(planId: string) {
+    const target = selectedClientPlans.find((plan) => plan.id === planId);
+    if (!target) return;
     const confirmDelete = window.confirm('Vuoi davvero eliminare tutta la scheda tecnica di questo cliente?');
     if (!confirmDelete) return;
-    await runAction(() => deletePlanAsCoach(existingPlanForClient.id), 'Scheda eliminata con successo.');
-    setPlanTitle('');
-    setExercises([defaultExercise()]);
+    await runAction(() => deletePlanAsCoach(target.id), 'Scheda eliminata con successo.');
+    setSelectedPlanId((prev) => (prev === target.id ? '' : prev));
     setIsPlanModalOpen(false);
+    setIsPlanPreviewOpen(false);
   }
 
   async function runSupervisorAction(uid: string, action: 'activate' | 'disable') {
@@ -1255,24 +1292,42 @@ export function CoachDashboardPage() {
                   </article>
                 ) : null}
                 <p className="hint">
-                  {existingPlanForClient ? 'Questo cliente ha già una scheda: puoi modificarla.' : 'Questo cliente non ha ancora una scheda: ne creerai una nuova.'}
+                  {selectedClientPlans.length > 0
+                    ? `Questo cliente ha ${selectedClientPlans.length} scheda/e: puoi crearne altre o modificarle.`
+                    : 'Questo cliente non ha ancora schede: puoi crearne una nuova.'}
                 </p>
 
                 <div className="supervisor-actions">
-                  {existingPlanForClient ? (
-                    <button className="btn btn-ghost" disabled={loading} onClick={() => setIsPlanPreviewOpen(true)} type="button">
-                      Visualizza scheda
-                    </button>
-                  ) : null}
                   <button className="btn" disabled={loading || !selectedClientId} onClick={openCreatePlanModal} type="button">
-                    {existingPlanForClient ? 'Modifica scheda' : 'Crea scheda'}
+                    Crea nuova scheda
                   </button>
-                  {existingPlanForClient ? (
-                    <button className="btn btn-danger" disabled={loading} onClick={() => void deleteCurrentPlan()} type="button">
-                      Elimina scheda
-                    </button>
-                  ) : null}
                 </div>
+                {selectedClientPlans.length > 0 ? (
+                  <div className="stack">
+                    {selectedClientPlans.map((plan) => (
+                      <article className="card" key={plan.id} style={{ boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)' }}>
+                        <h3>{plan.title || 'Scheda senza titolo'}</h3>
+                        <p className="hint">Tipo: {plan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</p>
+                        <p className="hint">Esercizi: {normalizePlanExercises(plan.exercises).length}</p>
+                        <div className="supervisor-actions">
+                          <button className="btn btn-ghost" disabled={loading} onClick={() => openPlanPreview(plan.id)} type="button">
+                            Visualizza
+                          </button>
+                          <button className="btn" disabled={loading} onClick={() => openEditPlanModal(plan.id)} type="button">
+                            Modifica
+                          </button>
+                          <button className="btn btn-danger" disabled={loading} onClick={() => void deletePlan(plan.id)} type="button">
+                            Elimina
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
+                    <p className="hint">Nessuna scheda creata per questo cliente.</p>
+                  </article>
+                )}
               </>
             ) : null}
           </>
@@ -1375,7 +1430,7 @@ export function CoachDashboardPage() {
       {isPlanModalOpen ? (
         <section className="modal-overlay" role="dialog" aria-modal="true">
           <article className="card modal-card">
-            <h2>{existingPlanForClient ? 'Modifica scheda' : 'Compila la scheda'}</h2>
+            <h2>{editingPlan ? 'Modifica scheda' : 'Compila la scheda'}</h2>
             <p className="hint">Aggiungi esercizi uno alla volta per completare il programma.</p>
             <div className="step-tabs plan-kind-tabs">
               <button
@@ -1529,7 +1584,7 @@ export function CoachDashboardPage() {
         </section>
       ) : null}
 
-      {isPlanPreviewOpen && existingPlanForClient ? (
+      {isPlanPreviewOpen && previewPlan ? (
         <section className="modal-overlay" role="dialog" aria-modal="true">
           <article className="card modal-card print-sheet">
             <div className="exercise-head">
@@ -1547,27 +1602,27 @@ export function CoachDashboardPage() {
             <p className="hint">Cliente: {clientLabelById[selectedClientId] || selectedClientId}</p>
             <div className="plan-head">
               <p className="hint">Titolo programma</p>
-              <h3>{existingPlanForClient.title || 'Senza titolo'}</h3>
+              <h3>{previewPlan.title || 'Senza titolo'}</h3>
             </div>
             <p className="hint">
-              Tipo scheda: <strong>{existingPlanForClient.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
+              Tipo scheda: <strong>{previewPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
             </p>
-            {existingPlanForClient.kind === 'circuit' && asText(existingPlanForClient.notes).trim() ? (
+            {previewPlan.kind === 'circuit' && asText(previewPlan.notes).trim() ? (
               <div className="client-info-block">
-                <p className="hint"><strong>Note coach:</strong> {asText(existingPlanForClient.notes)}</p>
+                <p className="hint"><strong>Note coach:</strong> {asText(previewPlan.notes)}</p>
               </div>
             ) : null}
             <div className="exercise-grid">
-              {normalizePlanExercises(existingPlanForClient.exercises).map((exercise, index) => (
+              {normalizePlanExercises(previewPlan.exercises).map((exercise, index) => (
                 <article className="exercise-card" key={`preview-ex-${index}`}>
                   {(() => {
-                    const imageKey = `${existingPlanForClient.id}-${index}`;
+                    const imageKey = `${previewPlan.id}-${index}`;
                     const isImageLoading = previewImageLoading[imageKey] !== false;
                     return (
                       <>
                   <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
                   <div className="exercise-meta">
-                    {existingPlanForClient.kind === 'circuit' ? (
+                    {previewPlan.kind === 'circuit' ? (
                       <span>{exercise.workValue || '-'} reps/tempo</span>
                     ) : (
                       <>

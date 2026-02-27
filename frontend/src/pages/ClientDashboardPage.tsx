@@ -120,6 +120,7 @@ export function ClientDashboardPage() {
   const [mediaPreviewLoading, setMediaPreviewLoading] = useState(false);
   const [onboarding, setOnboarding] = useState<OnboardingDoc | null>(null);
   const [activeTab, setActiveTab] = useState<ClientTabId>('plan');
+  const [selectedPlanId, setSelectedPlanId] = useState('');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingProfile, setDeletingProfile] = useState(false);
   const [coachWhatsappNumber, setCoachWhatsappNumber] = useState('');
@@ -194,6 +195,11 @@ export function ClientDashboardPage() {
         return aIsDirect - bIsDirect;
       });
       setPlans(mergedPlans);
+      if (mergedPlans.length > 0) {
+        setSelectedPlanId((prev) => (prev && mergedPlans.some((plan) => plan.id === prev) ? prev : mergedPlans[0].id));
+      } else {
+        setSelectedPlanId('');
+      }
     } catch (error) {
       showError(toMessage(error));
     } finally {
@@ -224,8 +230,8 @@ export function ClientDashboardPage() {
     setMediaPreviewLoading(isImageUrl(url));
   }
 
-  const topPlan = plans[0];
-  const topPlanExercises = normalizeExercises(topPlan?.exercises);
+  const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? plans[0];
+  const selectedPlanExercises = normalizeExercises(selectedPlan?.exercises);
   const hasCoachWhatsapp = coachWhatsappNumber.length > 6;
   const coachWhatsappUrl = hasCoachWhatsapp ? buildWhatsAppUrl(whatsappMessage, coachWhatsappNumber) : '#';
   const profileRows = [
@@ -300,26 +306,38 @@ export function ClientDashboardPage() {
 
           <article className="card">
             <h2>La tua scheda tecnica</h2>
-            {topPlan ? (
+            {selectedPlan ? (
               <>
+                {plans.length > 1 ? (
+                  <label>
+                    Scegli scheda
+                    <select value={selectedPlan.id} onChange={(event) => setSelectedPlanId(event.target.value)}>
+                      {plans.map((plan) => (
+                        <option key={plan.id} value={plan.id}>
+                          {plan.title || 'Scheda senza titolo'}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <div className="plan-head">
                   <p className="hint">Programma attivo</p>
-                  <h3>{topPlan.title}</h3>
+                  <h3>{selectedPlan.title}</h3>
                 </div>
                 <p className="hint">
-                  Tipo scheda: <strong>{topPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
+                  Tipo scheda: <strong>{selectedPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
                 </p>
-                {topPlan.kind === 'circuit' && (topPlan.notes ?? '').trim() ? (
+                {selectedPlan.kind === 'circuit' && (selectedPlan.notes ?? '').trim() ? (
                   <div className="client-info-block">
-                    <p className="hint"><strong>Note coach:</strong> {topPlan.notes}</p>
+                    <p className="hint"><strong>Note coach:</strong> {selectedPlan.notes}</p>
                   </div>
                 ) : null}
                 <div className="exercise-grid">
-                  {topPlanExercises.map((exercise, index) => (
+                  {selectedPlanExercises.map((exercise, index) => (
                     <article className="exercise-card" key={`plan-ex-${index}`}>
                       <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
                       <div className="exercise-meta">
-                        {topPlan.kind === 'circuit' ? (
+                        {selectedPlan.kind === 'circuit' ? (
                           <span>{exercise.workValue || '-'} reps/tempo</span>
                         ) : (
                           <>
