@@ -274,6 +274,25 @@ function formatDate(value?: string | null): string {
   return date.toLocaleDateString('it-IT', {day: '2-digit', month: '2-digit', year: 'numeric'});
 }
 
+function accessStatusLabel(status?: string): string {
+  switch (status) {
+  case 'trial_pending':
+    return 'Prova da attivare';
+  case 'trial_active':
+    return 'Prova attiva';
+  case 'active_paid':
+    return 'Abbonamento attivo';
+  case 'expired':
+    return 'Scaduto';
+  case 'disabled':
+    return 'Disattivato';
+  case 'supervisor_active':
+    return 'Supervisor attivo';
+  default:
+    return 'Non disponibile';
+  }
+}
+
 export function CoachDashboardPage() {
   const { role, user, isSupervisor } = useAuthState();
   const navigate = useNavigate();
@@ -838,7 +857,7 @@ export function CoachDashboardPage() {
           ) : (
             <>
               <p className="hint">
-                Stato accesso: <strong>{coachAccess?.status ?? 'non disponibile'}</strong>
+                Stato accesso: <strong>{accessStatusLabel(coachAccess?.status)}</strong>
                 {' · '}Scadenza: <strong>{formatDate(coachAccess?.expiresAt ?? coachAccess?.trialEndsAt ?? coachAccess?.subscriptionEndsAt)}</strong>
               </p>
               <div className="divider" />
@@ -872,7 +891,7 @@ export function CoachDashboardPage() {
                   <p><strong>{coach.displayName || 'Coach senza nome'}</strong></p>
                   <p className="hint">{coach.email}</p>
                   <p className="hint">Codice: {coach.coachCode || '-'}</p>
-                  <p className="hint">Stato: {coach.isSupervisor ? 'supervisor_active' : coach.status}</p>
+                  <p className="hint">Stato: {accessStatusLabel(coach.isSupervisor ? 'supervisor_active' : coach.status)}</p>
                   <p className="hint">Scadenza: {formatDate(coach.expiresAt)}</p>
                 </div>
                 <div className="supervisor-actions">
