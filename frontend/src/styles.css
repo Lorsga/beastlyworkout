@@ -619,6 +619,7 @@ a.btn {
   padding: 14px;
   text-align: center;
   word-break: break-word;
+  flex: 1;
 }
 
 .supervisor-list {

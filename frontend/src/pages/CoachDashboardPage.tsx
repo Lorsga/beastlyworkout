@@ -856,6 +856,20 @@ export function CoachDashboardPage() {
     }
   }
 
+  async function copyCoachCode() {
+    const code = asText(coachAccess?.coachCode).trim();
+    if (!code) {
+      showError('Codice coach non disponibile.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(code);
+      showSuccess('Codice coach copiato.');
+    } catch {
+      showError('Copia non riuscita. Copia manualmente il codice.');
+    }
+  }
+
   return (
     <AppShell
       role={role === 'trainer' ? 'trainer' : 'admin'}
@@ -893,7 +907,18 @@ export function CoachDashboardPage() {
         <article className="card">
           <h2>Il tuo codice coach</h2>
           <p className="hero-sub">Invia questo codice al cliente: è obbligatorio per associarlo a te in onboarding.</p>
-          <p className="coach-code">{coachAccess?.coachCode || 'Caricamento...'}</p>
+          <div className="exercise-head">
+            <p className="coach-code">{coachAccess?.coachCode || 'Caricamento...'}</p>
+            <button
+              className="icon-btn"
+              type="button"
+              aria-label="Copia codice coach"
+              title="Copia codice coach"
+              onClick={() => void copyCoachCode()}
+            >
+              ⧉
+            </button>
+          </div>
           {loadingCoachAccess ? <p className="hint">Sto verificando il tuo accesso...</p> : null}
           {coachAccess?.isSupervisor ? (
             <p className="hint">Account supervisor: accesso sempre attivo, senza trial.</p>
