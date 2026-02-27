@@ -1595,7 +1595,7 @@ export function CoachDashboardPage() {
         <section className="modal-overlay" role="dialog" aria-modal="true">
           <article className="card modal-card print-sheet">
             <div className="exercise-head">
-              <h2>Scheda in sola lettura</h2>
+              <h2>Scheda</h2>
               <div className="preview-head-actions screen-only">
                 <button
                   className="btn btn-ghost"
