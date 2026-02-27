@@ -362,6 +362,7 @@ export function CoachDashboardPage() {
   const [selectedClientOnboarding, setSelectedClientOnboarding] = useState<OnboardingDoc | null>(null);
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isPlanPreviewOpen, setIsPlanPreviewOpen] = useState(false);
+  const [previewImageLoading, setPreviewImageLoading] = useState<Record<string, boolean>>({});
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingProfile, setDeletingProfile] = useState(false);
@@ -498,6 +499,12 @@ export function CoachDashboardPage() {
   useEffect(() => {
     if (!existingPlanForClient) setIsPlanPreviewOpen(false);
   }, [existingPlanForClient?.id]);
+
+  useEffect(() => {
+    if (!isPlanPreviewOpen) {
+      setPreviewImageLoading({});
+    }
+  }, [isPlanPreviewOpen, existingPlanForClient?.id]);
 
   async function loadData() {
     if (!role) return;
@@ -1543,6 +1550,11 @@ export function CoachDashboardPage() {
             <div className="exercise-grid">
               {normalizePlanExercises(existingPlanForClient.exercises).map((exercise, index) => (
                 <article className="exercise-card" key={`preview-ex-${index}`}>
+                  {(() => {
+                    const imageKey = `${existingPlanForClient.id}-${index}`;
+                    const isImageLoading = previewImageLoading[imageKey] !== false;
+                    return (
+                      <>
                   <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
                   <div className="exercise-meta">
                     {existingPlanForClient.kind === 'circuit' ? (
@@ -1559,23 +1571,44 @@ export function CoachDashboardPage() {
                   {exercise.mediaUrl ? (
                     <>
                       {isImageMediaUrl(exercise.mediaUrl) ? (
-                        <img
-                          src={exercise.mediaUrl}
-                          alt={`Media esercizio ${index + 1}`}
-                          className="exercise-upload-preview"
-                        />
+                        <>
+                          {isImageLoading ? (
+                            <div className="media-loading" aria-live="polite">
+                              <span className="spinner" aria-hidden="true" />
+                              <span>Caricamento immagine...</span>
+                            </div>
+                          ) : null}
+                          <img
+                            src={exercise.mediaUrl}
+                            alt={`Media esercizio ${index + 1}`}
+                            className="exercise-upload-preview"
+                            style={{display: isImageLoading ? 'none' : 'block'}}
+                            onLoad={() => setPreviewImageLoading((prev) => ({...prev, [imageKey]: false}))}
+                            onError={() => setPreviewImageLoading((prev) => ({...prev, [imageKey]: false}))}
+                          />
+                        </>
                       ) : null}
                       {isVideoMediaUrl(exercise.mediaUrl) ? (
-                        <p className="hint">URL video: {exercise.mediaUrl}</p>
+                        <>
+                          <a className="btn-link screen-only" href={exercise.mediaUrl} target="_blank" rel="noreferrer">
+                            Apri video
+                          </a>
+                          <p className="hint">URL video: {exercise.mediaUrl}</p>
+                        </>
                       ) : (
-                        <a className="btn-link" href={exercise.mediaUrl} target="_blank" rel="noreferrer">
-                          {isImageMediaUrl(exercise.mediaUrl) ? 'Apri immagine' : 'Apri link'}
-                        </a>
+                        isImageMediaUrl(exercise.mediaUrl) ? null : (
+                          <a className="btn-link" href={exercise.mediaUrl} target="_blank" rel="noreferrer">
+                            Apri link
+                          </a>
+                        )
                       )}
                     </>
                   ) : (
                     <p className="hint">Nessun media allegato</p>
                   )}
+                      </>
+                    );
+                  })()}
                 </article>
               ))}
             </div>
