@@ -1603,7 +1603,9 @@ export function CoachDashboardPage() {
                           <a className="btn-link screen-only" href={exercise.mediaUrl} target="_blank" rel="noreferrer">
                             Apri video
                           </a>
-                          <p className="hint">URL video: {exercise.mediaUrl}</p>
+                          <a className="hint print-only print-video-link" href={exercise.mediaUrl} target="_blank" rel="noreferrer">
+                            URL video: {exercise.mediaUrl}
+                          </a>
                         </>
                       ) : (
                         isImageMediaUrl(exercise.mediaUrl) ? null : (

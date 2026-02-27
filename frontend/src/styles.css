@@ -451,6 +451,12 @@ a.btn {
   display: none;
 }
 
+.print-video-link {
+  color: #0a58ca;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
 .mobile-nav {
   position: fixed;
   left: 14px;
