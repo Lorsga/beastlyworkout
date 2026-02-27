@@ -1,5 +1,6 @@
 import {
   arrayUnion,
+  arrayRemove,
   addDoc,
   collection,
   deleteDoc,
@@ -184,6 +185,13 @@ export async function listPlansForRole(role: AppRole, userId?: string) {
 export async function assignPlanToClientAsCoach(planId: string, clientId: string) {
   await updateDoc(doc(db, 'plans', planId), {
     assignedClientIds: arrayUnion(clientId),
+    ...updateTimestamp(),
+  });
+}
+
+export async function removePlanAssignmentAsCoach(planId: string, clientId: string) {
+  await updateDoc(doc(db, 'plans', planId), {
+    assignedClientIds: arrayRemove(clientId),
     ...updateTimestamp(),
   });
 }

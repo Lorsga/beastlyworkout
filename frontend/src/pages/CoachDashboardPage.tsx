@@ -19,6 +19,7 @@ import {
   listCoachesForSupervisor,
   logoutCurrentUser,
   renewCoachSubscription,
+  removePlanAssignmentAsCoach,
   setClientOnboardingAsCoach,
   updateMyCoachPhone,
   uploadWorkoutMediaAsCoach,
@@ -965,6 +966,14 @@ export function CoachDashboardPage() {
     setAssigningClientId('');
   }
 
+  async function removeAssignedClient(clientId: string) {
+    if (!selectedPlan) return;
+    await runAction(
+      () => removePlanAssignmentAsCoach(selectedPlan.id, clientId),
+      'Assegnazione rimossa.',
+    );
+  }
+
   async function runSupervisorAction(uid: string, action: 'activate' | 'disable') {
     setSupervisorActionUid(uid);
     try {
@@ -1341,7 +1350,17 @@ export function CoachDashboardPage() {
                         <h3>{plan.title || 'Scheda senza titolo'}</h3>
                         <p className="hint">Tipo: {plan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</p>
                         <p className="hint">Esercizi: {normalizePlanExercises(plan.exercises).length}</p>
-                        <p className="hint">Assegnata a: {Array.isArray(plan.assignedClientIds) ? plan.assignedClientIds.length : 0} clienti</p>
+                        <button
+                          className="status-chip status-chip-warning chip-btn"
+                          type="button"
+                          onClick={() => {
+                            setSelectedPlanId(plan.id);
+                            setAssigningClientId('');
+                            setIsAssignModalOpen(true);
+                          }}
+                        >
+                          Assegnata a: {Array.isArray(plan.assignedClientIds) ? plan.assignedClientIds.length : 0} clienti
+                        </button>
                         <div className="supervisor-actions">
                           <button className="btn btn-ghost" disabled={loading} onClick={() => openPlanPreview(plan.id)} type="button">
                             Visualizza
@@ -1745,8 +1764,8 @@ export function CoachDashboardPage() {
       {isAssignModalOpen && selectedPlan ? (
         <section className="modal-overlay" role="dialog" aria-modal="true">
           <article className="card modal-card">
-            <h2>Assegna scheda</h2>
-            <p className="hint">Scegli un cliente da associare a questa scheda: {selectedPlan.title || 'Scheda senza titolo'}.</p>
+            <h2>Gestisci assegnazioni</h2>
+            <p className="hint">Scheda: {selectedPlan.title || 'Scheda senza titolo'}</p>
             <label>
               Cliente
               <Select
@@ -1760,11 +1779,30 @@ export function CoachDashboardPage() {
               />
             </label>
             <div className="action-row-split">
-              <button className="btn btn-ghost" type="button" onClick={() => setIsAssignModalOpen(false)}>
-                Annulla
-              </button>
               <button className="btn btn-primary" type="button" disabled={loading || !assigningClientId} onClick={() => void assignPlan()}>
                 Assegna
+              </button>
+            </div>
+            <div className="client-info-block">
+              <h3>Clienti assegnati</h3>
+              {Array.isArray(selectedPlan.assignedClientIds) && selectedPlan.assignedClientIds.length > 0 ? (
+                <div className="stack">
+                  {selectedPlan.assignedClientIds.map((clientId) => (
+                    <div key={clientId} className="supervisor-row">
+                      <p className="hint"><strong>{clientLabelById[clientId] || clientId}</strong></p>
+                      <button className="btn btn-danger" type="button" disabled={loading} onClick={() => void removeAssignedClient(clientId)}>
+                        Rimuovi
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="hint">Nessun cliente assegnato a questa scheda.</p>
+              )}
+            </div>
+            <div className="action-row-split">
+              <button className="btn btn-ghost" type="button" onClick={() => setIsAssignModalOpen(false)}>
+                Chiudi
               </button>
             </div>
           </article>
