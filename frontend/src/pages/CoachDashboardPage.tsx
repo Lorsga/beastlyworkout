@@ -533,6 +533,7 @@ export function CoachDashboardPage() {
   const [supervisorCoaches, setSupervisorCoaches] = useState<SupervisorCoachItem[]>([]);
   const [supervisorSearch, setSupervisorSearch] = useState('');
   const [supervisorActionUid, setSupervisorActionUid] = useState('');
+  const [previewLoadingPlanId, setPreviewLoadingPlanId] = useState('');
   const [activeTab, setActiveTab] = useState<CoachTabId>('clients');
 
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -1070,22 +1071,32 @@ export function CoachDashboardPage() {
   async function openPlanPreview(planId: string) {
     const plan = coachPlanTemplates.find((item) => item.id === planId);
     if (!plan) return;
+    setPreviewLoadingPlanId(planId);
     try {
-      await syncPlanWeightOverridesForCoach(planId);
-    } catch {
-      // Best effort sync from clients' private weights to plan overrides.
-    }
-    try {
-      const freshSnap = await getPlanById(planId);
-      if (freshSnap.exists()) {
-        const freshPlan = { id: freshSnap.id, ...(freshSnap.data() as PlanDoc) };
-        setPlans((prev) => prev.map((item) => (item.id === planId ? freshPlan : item)));
+      let syncOverrides: Record<string, Record<string, number>> | undefined;
+      try {
+        const syncResult = await syncPlanWeightOverridesForCoach(planId);
+        syncOverrides = syncResult.clientWeightOverrides;
+      } catch {
+        // Best effort sync from clients' private weights to plan overrides.
       }
-    } catch {
-      // If fresh fetch fails, open preview with local cached data.
+      if (syncOverrides && Object.keys(syncOverrides).length > 0) {
+        setPlans((prev) => prev.map((item) => (item.id === planId ? {...item, clientWeightOverrides: syncOverrides} : item)));
+      }
+      try {
+        const freshSnap = await getPlanById(planId);
+        if (freshSnap.exists()) {
+          const freshPlan = { id: freshSnap.id, ...(freshSnap.data() as PlanDoc) };
+          setPlans((prev) => prev.map((item) => (item.id === planId ? freshPlan : item)));
+        }
+      } catch {
+        // If fresh fetch fails, open preview with local cached data.
+      }
+      setSelectedPlanId(planId);
+      setIsPlanPreviewOpen(true);
+    } finally {
+      setPreviewLoadingPlanId('');
     }
-    setSelectedPlanId(planId);
-    setIsPlanPreviewOpen(true);
   }
 
   function closePlanModalWithoutSaving() {
@@ -1643,8 +1654,18 @@ export function CoachDashboardPage() {
                         <p className="hint">Assegnata a: {Array.isArray(plan.assignedClientIds) ? plan.assignedClientIds.length : 0} clienti</p>
                         <p className="hint">Modifiche peso clienti: {getPlanWeightFeedbackCount(plan, clientLabelById)}</p>
                         <div className="plan-card-actions">
-                          <button className="btn btn-ghost" disabled={loading} onClick={() => openPlanPreview(plan.id)} type="button">
-                            Visualizza
+                          <button
+                            className="btn btn-ghost btn-inline-loading"
+                            disabled={loading || previewLoadingPlanId.length > 0}
+                            onClick={() => openPlanPreview(plan.id)}
+                            type="button"
+                          >
+                            {previewLoadingPlanId === plan.id ? (
+                              <>
+                                <span className="spinner" aria-hidden="true" />
+                                Caricamento...
+                              </>
+                            ) : 'Visualizza'}
                           </button>
                           <button className="btn" disabled={loading} onClick={() => openEditPlanModal(plan.id)} type="button">
                             Modifica

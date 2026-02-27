@@ -114,7 +114,7 @@ const updateMyPlanExerciseWeightFn = httpsCallable<
 >(functions, 'updateMyPlanExerciseWeight');
 const syncPlanWeightOverridesForCoachFn = httpsCallable<
   { planId: string },
-  { ok: boolean; synced: number }
+  { ok: boolean; synced: number; clientWeightOverrides?: Record<string, Record<string, number>> }
 >(functions, 'syncPlanWeightOverridesForCoach');
 const syncMyPlanWeightOverridesFn = httpsCallable<
   undefined,

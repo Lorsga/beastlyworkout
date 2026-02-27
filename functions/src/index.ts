@@ -805,6 +805,8 @@ export const syncPlanWeightOverridesForCoach = onCall(
     const targetClientIds = new Set<string>(assignedClientIds);
     if (legacyClientId) targetClientIds.add(legacyClientId);
 
+    const existingOverrides = parseClientWeightOverridesFromPlanData(planData);
+    const mergedOverrides: Record<string, Record<string, number>> = {...existingOverrides};
     const patch: Record<string, unknown> = {updatedAt: admin.firestore.FieldValue.serverTimestamp()};
     let synced = 0;
 
@@ -822,13 +824,15 @@ export const syncPlanWeightOverridesForCoach = onCall(
         if (!Number.isInteger(exerciseIndex) || exerciseIndex < 0 || exerciseIndex >= exercises.length) continue;
         if (!Number.isFinite(weight) || weight < 0) continue;
         patch[`clientWeightOverrides.${clientId}.${exerciseIndex}`] = weight;
+        mergedOverrides[clientId] = mergedOverrides[clientId] ?? {};
+        mergedOverrides[clientId][String(exerciseIndex)] = weight;
         synced += 1;
       }
     }
 
     if (synced > 0) await planRef.update(patch);
 
-    return {ok: true, synced};
+    return {ok: true, synced, clientWeightOverrides: mergedOverrides};
   },
 );
 
