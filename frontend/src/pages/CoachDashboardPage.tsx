@@ -847,7 +847,7 @@ export function CoachDashboardPage() {
             status: 'active',
             exercises: preparedExercises,
           }),
-        'Scheda creata e subito visibile al cliente.',
+        'Scheda creata.',
       );
       if (created?.id) setSelectedPlanId(created.id);
     }
