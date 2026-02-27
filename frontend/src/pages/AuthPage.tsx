@@ -300,7 +300,7 @@ export function AuthPage() {
 
   if (coachGate?.mode === 'trial') {
     return (
-      <main className="page page-center">
+      <main className="page page-top">
         <section className="card auth-card fullscreen-gate">
           <p className="eyebrow">Accesso Coach</p>
           <h1>Prova gratuita 15 giorni</h1>
@@ -325,7 +325,7 @@ export function AuthPage() {
 
   if (coachGate?.mode === 'expired') {
     return (
-      <main className="page page-center">
+      <main className="page page-top">
         <section className="card auth-card fullscreen-gate">
           <p className="eyebrow">Accesso Coach</p>
           <h1>Periodo di prova terminato</h1>
@@ -352,7 +352,7 @@ export function AuthPage() {
 
   if (coachPhoneGate) {
     return (
-      <main className="page page-center">
+      <main className="page page-top">
         <section className="card auth-card fullscreen-gate">
           <p className="eyebrow">Registrazione Coach</p>
           <h1>Inserisci numero WhatsApp</h1>

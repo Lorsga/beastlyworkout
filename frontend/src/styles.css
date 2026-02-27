@@ -74,6 +74,14 @@ p {
   place-items: center;
 }
 
+.page-top {
+  min-height: 100vh;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  padding-top: 20px;
+}
+
 .hero {
   background: linear-gradient(160deg, rgba(214, 40, 40, 0.1), rgba(255, 122, 0, 0.16));
   border: 1px solid rgba(24, 33, 38, 0.08);
@@ -597,8 +605,8 @@ a.btn {
 
 .fullscreen-gate {
   width: min(100%, 680px);
-  min-height: min(88vh, 760px);
-  align-content: center;
+  min-height: auto;
+  align-content: start;
 }
 
 .coach-code {
