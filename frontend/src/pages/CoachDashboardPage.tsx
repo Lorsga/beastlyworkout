@@ -938,57 +938,57 @@ export function CoachDashboardPage() {
             </button>
           </div>
           {loadingCoachAccess ? <p className="hint">Sto verificando il tuo accesso...</p> : null}
+          <div className="client-info-block">
+            <div className="exercise-head">
+              <h3>Numero WhatsApp coach</h3>
+              {!editingCoachPhone ? (
+                <button
+                  className="icon-btn"
+                  type="button"
+                  aria-label="Modifica numero coach"
+                  title="Modifica numero coach"
+                  onClick={() => setEditingCoachPhone(true)}
+                >
+                  ✎
+                </button>
+              ) : null}
+            </div>
+            {!editingCoachPhone ? (
+              <p className="hint"><strong>{coachPhone || 'Non configurato'}</strong></p>
+            ) : (
+              <>
+                <label>
+                  Numero telefono / WhatsApp
+                  <input
+                    type="tel"
+                    value={coachPhoneDraft}
+                    onChange={(event) => setCoachPhoneDraft(event.target.value)}
+                    placeholder="Es. 3405882404"
+                  />
+                </label>
+                <div className="action-row-split">
+                  <button
+                    className="btn btn-ghost"
+                    type="button"
+                    disabled={savingCoachPhone}
+                    onClick={() => {
+                      setCoachPhoneDraft(coachPhone);
+                      setEditingCoachPhone(false);
+                    }}
+                  >
+                    Annulla
+                  </button>
+                  <button className="btn btn-primary" type="button" disabled={savingCoachPhone} onClick={() => void saveCoachPhone()}>
+                    {savingCoachPhone ? 'Salvataggio...' : 'Salva'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           {coachAccess?.isSupervisor ? (
             <p className="hint">Account supervisor: accesso sempre attivo, senza trial.</p>
           ) : (
             <>
-              <div className="client-info-block">
-                <div className="exercise-head">
-                  <h3>Numero WhatsApp coach</h3>
-                  {!editingCoachPhone ? (
-                    <button
-                      className="icon-btn"
-                      type="button"
-                      aria-label="Modifica numero coach"
-                      title="Modifica numero coach"
-                      onClick={() => setEditingCoachPhone(true)}
-                    >
-                      ✎
-                    </button>
-                  ) : null}
-                </div>
-                {!editingCoachPhone ? (
-                  <p className="hint"><strong>{coachPhone || 'Non configurato'}</strong></p>
-                ) : (
-                  <>
-                    <label>
-                      Numero telefono / WhatsApp
-                      <input
-                        type="tel"
-                        value={coachPhoneDraft}
-                        onChange={(event) => setCoachPhoneDraft(event.target.value)}
-                        placeholder="Es. 3405882404"
-                      />
-                    </label>
-                    <div className="action-row-split">
-                      <button
-                        className="btn btn-ghost"
-                        type="button"
-                        disabled={savingCoachPhone}
-                        onClick={() => {
-                          setCoachPhoneDraft(coachPhone);
-                          setEditingCoachPhone(false);
-                        }}
-                      >
-                        Annulla
-                      </button>
-                      <button className="btn btn-primary" type="button" disabled={savingCoachPhone} onClick={() => void saveCoachPhone()}>
-                        {savingCoachPhone ? 'Salvataggio...' : 'Salva'}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
               <p className="hint">
                 Stato accesso: <strong>{accessStatusLabel(coachAccess?.status)}</strong>
                 {' · '}Scadenza: <strong>{formatDate(coachAccess?.expiresAt ?? coachAccess?.trialEndsAt ?? coachAccess?.subscriptionEndsAt)}</strong>
