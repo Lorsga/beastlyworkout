@@ -46,6 +46,7 @@ interface PlanDoc {
     expiresAt?: unknown;
     assignedAt?: unknown;
   }>;
+  clientWeightOverrides?: Record<string, Record<string, number>>;
   exercises?: Array<{
     name?: string;
     notes?: string;
@@ -436,6 +437,40 @@ function coachExpiryChip(status: string, expiresAt: string | null): {label: stri
   return null;
 }
 
+function getPlanWeightFeedback(
+  plan: PlanDoc & { id: string },
+  clientLabelById: Record<string, string>,
+) {
+  const overrides = plan.clientWeightOverrides;
+  if (!overrides || typeof overrides !== 'object') return [];
+  const baseExercises = normalizePlanExercises(plan.exercises);
+  const feedback: Array<{clientId: string; clientLabel: string; lines: string[]}> = [];
+
+  for (const [clientId, rawExerciseMap] of Object.entries(overrides)) {
+    if (!rawExerciseMap || typeof rawExerciseMap !== 'object') continue;
+    const lines: string[] = [];
+    for (const [rawIndex, rawWeight] of Object.entries(rawExerciseMap)) {
+      const exerciseIndex = Number(rawIndex);
+      if (!Number.isInteger(exerciseIndex) || exerciseIndex < 0 || exerciseIndex >= baseExercises.length) continue;
+      const nextWeight = Number(rawWeight);
+      if (!Number.isFinite(nextWeight)) continue;
+      const base = baseExercises[exerciseIndex];
+      const baseWeight = Number(base.weightKg || 0);
+      if (nextWeight === baseWeight) continue;
+      const exerciseName = base.name.trim() || `Esercizio ${exerciseIndex + 1}`;
+      lines.push(`${exerciseName}: ${baseWeight} kg -> ${nextWeight} kg`);
+    }
+    if (lines.length === 0) continue;
+    feedback.push({
+      clientId,
+      clientLabel: clientLabelById[clientId] || clientId,
+      lines,
+    });
+  }
+
+  return feedback;
+}
+
 export function CoachDashboardPage() {
   const { role, user, isSupervisor } = useAuthState();
   const navigate = useNavigate();
@@ -500,6 +535,7 @@ export function CoachDashboardPage() {
     acc[client.id] = label;
     return acc;
   }, {});
+  const previewPlanWeightFeedback = previewPlan ? getPlanWeightFeedback(previewPlan, clientLabelById) : [];
 
   const clientOptions: ClientOption[] = registeredClients.map((client) => ({
     value: getClientAuthUid(client),
@@ -1942,6 +1978,22 @@ export function CoachDashboardPage() {
             {asText(previewPlan.notes).trim() ? (
               <div className="client-info-block">
                 <p className="hint"><strong>Note coach:</strong> {asText(previewPlan.notes)}</p>
+              </div>
+            ) : null}
+            {previewPlanWeightFeedback.length > 0 ? (
+              <div className="client-info-block">
+                <h3>Feedback peso cliente</h3>
+                <p className="hint">Mostrato solo quando un cliente cambia il peso rispetto alla scheda base.</p>
+                {previewPlanWeightFeedback.map((item) => (
+                  <div key={`weight-feedback-${item.clientId}`} className="divider-block">
+                    <p className="hint"><strong>{item.clientLabel}</strong></p>
+                    <ul className="list">
+                      {item.lines.map((line) => (
+                        <li key={`${item.clientId}-${line}`}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
             ) : null}
             <div className="exercise-grid">
