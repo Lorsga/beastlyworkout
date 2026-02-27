@@ -201,6 +201,26 @@ function defaultExercise() {
   return {name: '', sets: 3, reps: 10, workValue: 10, weightKg: 0, restSeconds: 60, mediaUrl: ''};
 }
 
+function hasExerciseDraftData(exercise: {
+  name: string;
+  sets: number;
+  reps: number;
+  workValue: number;
+  weightKg: number;
+  restSeconds: number;
+  mediaUrl: string;
+}): boolean {
+  return (
+    exercise.name.trim().length > 0 ||
+    exercise.mediaUrl.trim().length > 0 ||
+    exercise.sets !== 3 ||
+    exercise.reps !== 10 ||
+    exercise.workValue !== 10 ||
+    exercise.weightKg > 0 ||
+    exercise.restSeconds !== 60
+  );
+}
+
 function emptyOnboardingDraft(base?: { name?: string; email?: string }): OnboardingDraft {
   return {
     fullName: base?.name ?? '',
@@ -629,6 +649,20 @@ export function CoachDashboardPage() {
     setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
   }
 
+  function handlePlanKindChange(nextKind: 'series_reps' | 'circuit') {
+    if (nextKind === planKind) return;
+    const hasDraftData = exercises.some((exercise) => hasExerciseDraftData(exercise)) || planNotes.trim().length > 0;
+    if (hasDraftData) {
+      const confirmed = window.confirm(
+        'Cambiando categoria di allenamento, i dati inseriti in questa scheda verranno cancellati. Vuoi continuare?',
+      );
+      if (!confirmed) return;
+      setExercises([defaultExercise()]);
+      setPlanNotes('');
+    }
+    setPlanKind(nextKind);
+  }
+
   function openProfileModal() {
     if (!selectedClientId) {
       showError('Seleziona prima un cliente.');
@@ -747,9 +781,9 @@ export function CoachDashboardPage() {
     const preparedExercises = exercises
       .map((item) => ({
         name: item.name.trim(),
-        sets: Number(item.sets) || 0,
-        reps: Number(item.reps) || 0,
-        workValue: Number(item.workValue) || 0,
+        sets: planKind === 'series_reps' ? Number(item.sets) || 0 : 0,
+        reps: planKind === 'series_reps' ? Number(item.reps) || 0 : 0,
+        workValue: planKind === 'circuit' ? Number(item.workValue) || 0 : 0,
         weightKg: Number(item.weightKg) || 0,
         restSeconds: Number(item.restSeconds) || 0,
         mediaUrl: item.mediaUrl.trim(),
@@ -767,7 +801,7 @@ export function CoachDashboardPage() {
           updatePlanAsCoach(existingPlanForClient.id, {
             title: normalizedTitle,
             kind: planKind,
-            notes: planNotes.trim(),
+            notes: planKind === 'circuit' ? planNotes.trim() : '',
             status: 'active',
             exercises: preparedExercises,
           }),
@@ -780,7 +814,7 @@ export function CoachDashboardPage() {
             clientId: selectedClientId,
             title: normalizedTitle,
             kind: planKind,
-            notes: planNotes.trim(),
+            notes: planKind === 'circuit' ? planNotes.trim() : '',
             status: 'active',
             exercises: preparedExercises,
           }),
@@ -1326,14 +1360,14 @@ export function CoachDashboardPage() {
               <button
                 className={`step-tab ${planKind === 'series_reps' ? 'step-tab-active' : ''}`.trim()}
                 type="button"
-                onClick={() => setPlanKind('series_reps')}
+                onClick={() => handlePlanKindChange('series_reps')}
               >
                 Serie e reps
               </button>
               <button
                 className={`step-tab ${planKind === 'circuit' ? 'step-tab-active' : ''}`.trim()}
                 type="button"
-                onClick={() => setPlanKind('circuit')}
+                onClick={() => handlePlanKindChange('circuit')}
               >
                 Circuito
               </button>
