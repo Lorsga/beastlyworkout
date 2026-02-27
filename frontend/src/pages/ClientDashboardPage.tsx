@@ -181,6 +181,12 @@ function selectNumericInputContents(event: FocusEvent<HTMLInputElement>) {
   event.currentTarget.select();
 }
 
+function normalizeNumericRawInput(raw: string): string {
+  if (!raw) return '';
+  if (raw === '0') return '0';
+  return raw.replace(/^0+(?=\d)/, '');
+}
+
 function applyClientWeightOverridesToPlan(plan: PlanDoc & { id: string }, clientUid: string): PlanDoc & { id: string } {
   const byClient = plan.clientWeightOverrides && typeof plan.clientWeightOverrides === 'object'
     ? plan.clientWeightOverrides
@@ -427,6 +433,10 @@ export function ClientDashboardPage() {
   async function saveExerciseWeight(planId: string, exerciseIndex: number, fallbackWeight: number) {
     const draftKey = `${planId}:${exerciseIndex}`;
     const rawValue = (exerciseWeightDrafts[draftKey] ?? String(fallbackWeight)).trim();
+    if (!rawValue) {
+      showError('Inserisci un peso valido (numero >= 0).');
+      return;
+    }
     const nextWeight = Number(rawValue);
     if (!Number.isFinite(nextWeight) || nextWeight < 0) {
       showError('Inserisci un peso valido (numero >= 0).');
@@ -608,7 +618,7 @@ export function ClientDashboardPage() {
                                 onChange={(event) =>
                                   setExerciseWeightDrafts((prev) => ({
                                     ...prev,
-                                    [weightKey]: event.target.value,
+                                    [weightKey]: normalizeNumericRawInput(event.target.value),
                                   }))
                                 }
                               />

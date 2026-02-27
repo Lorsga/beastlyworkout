@@ -157,6 +157,22 @@ type SupervisorCoachItem = {
 };
 
 type CoachTabId = 'code' | 'clients' | 'plans' | 'overview' | 'supervisor';
+type ExerciseDraft = {
+  name: string;
+  notes: string;
+  advancedMethod: '' | 'rest_pause' | 'drop_set';
+  advancedMethodNotes: string;
+  restPauseNotes: string;
+  dropSetNotes: string;
+  sets: number | '';
+  reps: number | '';
+  workValue: number | '';
+  weightKg: number | '';
+  restSeconds: number | '';
+  videoUrl: string;
+  imageUrl: string;
+  mediaUrl: string;
+};
 
 const PROFILE_STEPS = ['Anagrafica', 'Stato fisico', 'Obiettivi'] as const;
 
@@ -264,29 +280,14 @@ function defaultExercise() {
     reps: 10,
     workValue: 10,
     weightKg: 0,
-    restSeconds: 60,
+    restSeconds: 60 as number | '',
     videoUrl: '',
     imageUrl: '',
     mediaUrl: '',
-  };
+  } satisfies ExerciseDraft;
 }
 
-function hasExerciseDraftData(exercise: {
-  name: string;
-  notes: string;
-  advancedMethod: '' | 'rest_pause' | 'drop_set';
-  advancedMethodNotes: string;
-  restPauseNotes: string;
-  dropSetNotes: string;
-  sets: number;
-  reps: number;
-  workValue: number;
-  weightKg: number;
-  restSeconds: number;
-  videoUrl: string;
-  imageUrl: string;
-  mediaUrl: string;
-}): boolean {
+function hasExerciseDraftData(exercise: ExerciseDraft): boolean {
   return (
     exercise.name.trim().length > 0 ||
     exercise.notes.trim().length > 0 ||
@@ -297,16 +298,29 @@ function hasExerciseDraftData(exercise: {
     exercise.videoUrl.trim().length > 0 ||
     exercise.imageUrl.trim().length > 0 ||
     exercise.mediaUrl.trim().length > 0 ||
-    exercise.sets !== 3 ||
-    exercise.reps !== 10 ||
-    exercise.workValue !== 10 ||
-    exercise.weightKg > 0 ||
-    exercise.restSeconds !== 60
+    Number(exercise.sets || 0) !== 3 ||
+    Number(exercise.reps || 0) !== 10 ||
+    Number(exercise.workValue || 0) !== 10 ||
+    Number(exercise.weightKg || 0) > 0 ||
+    Number(exercise.restSeconds || 0) !== 60
   );
 }
 
 function selectNumericInputContents(event: FocusEvent<HTMLInputElement>) {
   event.currentTarget.select();
+}
+
+function normalizeNumericRawInput(raw: string): string {
+  if (!raw) return '';
+  if (raw === '0') return '0';
+  return raw.replace(/^0+(?=\d)/, '');
+}
+
+function parseExerciseNumericInput(raw: string): number | '' {
+  const normalized = normalizeNumericRawInput(raw);
+  if (!normalized) return '';
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : '';
 }
 
 function emptyOnboardingDraft(base?: { name?: string; email?: string }): OnboardingDraft {
@@ -565,7 +579,7 @@ export function CoachDashboardPage() {
   const [planTitle, setPlanTitle] = useState('');
   const [planWarmup, setPlanWarmup] = useState('');
   const [planNotes, setPlanNotes] = useState('');
-  const [exercises, setExercises] = useState([defaultExercise()]);
+  const [exercises, setExercises] = useState<ExerciseDraft[]>([defaultExercise()]);
   const [assigningClientIds, setAssigningClientIds] = useState<string[]>([]);
   const [isAssignmentModeModalOpen, setIsAssignmentModeModalOpen] = useState(false);
   const [assignmentTargetClientId, setAssignmentTargetClientId] = useState('');
@@ -826,22 +840,7 @@ export function CoachDashboardPage() {
 
   function updateExercise(
     index: number,
-    patch: Partial<{
-      name: string;
-      notes: string;
-      advancedMethod: '' | 'rest_pause' | 'drop_set';
-      advancedMethodNotes: string;
-      restPauseNotes: string;
-      dropSetNotes: string;
-      sets: number;
-      reps: number;
-      workValue: number;
-      weightKg: number;
-      restSeconds: number;
-      videoUrl: string;
-      imageUrl: string;
-      mediaUrl: string;
-    }>,
+    patch: Partial<ExerciseDraft>,
   ) {
     setExercises((prev) => prev.map((item, idx) => (idx === index ? {...item, ...patch} : item)));
   }
@@ -1742,7 +1741,7 @@ export function CoachDashboardPage() {
             {profileStep === 0 ? (
               <div className="modal-grid">
                 <label>Nome e cognome *<input value={onboardingDraft.fullName} onChange={(event) => updateOnboardingField('fullName', event.target.value)} /></label>
-                <label>Età *<input type="number" min={12} max={99} onFocus={selectNumericInputContents} value={onboardingDraft.age} onChange={(event) => updateOnboardingField('age', event.target.value)} /></label>
+                <label>Età *<input type="number" min={12} max={99} onFocus={selectNumericInputContents} value={onboardingDraft.age} onChange={(event) => updateOnboardingField('age', normalizeNumericRawInput(event.target.value))} /></label>
                 <label>Sesso *<input value={onboardingDraft.sex} onChange={(event) => updateOnboardingField('sex', event.target.value)} /></label>
                 <label>E-mail *<input type="email" value={onboardingDraft.email} onChange={(event) => updateOnboardingField('email', event.target.value)} /></label>
                 <label>Telefono *<input type="tel" value={onboardingDraft.phone} onChange={(event) => updateOnboardingField('phone', event.target.value)} /></label>
@@ -1752,8 +1751,8 @@ export function CoachDashboardPage() {
 
             {profileStep === 1 ? (
               <div className="modal-grid">
-                <label>Altezza (cm) *<input type="number" min={100} max={250} onFocus={selectNumericInputContents} value={onboardingDraft.heightCm} onChange={(event) => updateOnboardingField('heightCm', event.target.value)} /></label>
-                <label>Peso (kg) *<input type="number" min={30} max={250} onFocus={selectNumericInputContents} value={onboardingDraft.weightKg} onChange={(event) => updateOnboardingField('weightKg', event.target.value)} /></label>
+                <label>Altezza (cm) *<input type="number" min={100} max={250} onFocus={selectNumericInputContents} value={onboardingDraft.heightCm} onChange={(event) => updateOnboardingField('heightCm', normalizeNumericRawInput(event.target.value))} /></label>
+                <label>Peso (kg) *<input type="number" min={30} max={250} onFocus={selectNumericInputContents} value={onboardingDraft.weightKg} onChange={(event) => updateOnboardingField('weightKg', normalizeNumericRawInput(event.target.value))} /></label>
                 <label>Programmi precedenti *<input value={onboardingDraft.pastProgram} onChange={(event) => updateOnboardingField('pastProgram', event.target.value)} placeholder="Es. Si con coach online" /></label>
                 <label>Frequenza allenamenti *<input value={onboardingDraft.trainingFrequency} onChange={(event) => updateOnboardingField('trainingFrequency', event.target.value)} placeholder="Es. 3-4 a settimana" /></label>
                 <label>Durata allenamento *<input value={onboardingDraft.workoutDuration} onChange={(event) => updateOnboardingField('workoutDuration', event.target.value)} placeholder="Es. 45 minuti" /></label>
@@ -1772,7 +1771,7 @@ export function CoachDashboardPage() {
                 <label>Timeline risultati *<input value={onboardingDraft.expectedTimeline} onChange={(event) => updateOnboardingField('expectedTimeline', event.target.value)} /></label>
                 <label>Cosa lo ha bloccato<textarea value={onboardingDraft.whatBlockedSoFar} onChange={(event) => updateOnboardingField('whatBlockedSoFar', event.target.value)} /></label>
                 <label>Miglioramento nei prossimi 3 mesi<textarea value={onboardingDraft.oneThingToImprove} onChange={(event) => updateOnboardingField('oneThingToImprove', event.target.value)} /></label>
-                <label>Importanza obiettivo (1-10)<input type="number" min={1} max={10} onFocus={selectNumericInputContents} value={onboardingDraft.importanceScore} onChange={(event) => updateOnboardingField('importanceScore', event.target.value)} /></label>
+                <label>Importanza obiettivo (1-10)<input type="number" min={1} max={10} onFocus={selectNumericInputContents} value={onboardingDraft.importanceScore} onChange={(event) => updateOnboardingField('importanceScore', normalizeNumericRawInput(event.target.value))} /></label>
                 <label>Rischio se non cambia<textarea value={onboardingDraft.riskIfNoChange} onChange={(event) => updateOnboardingField('riskIfNoChange', event.target.value)} /></label>
                 <label>Note coach (opzionale)<textarea value={onboardingDraft.notes} onChange={(event) => updateOnboardingField('notes', event.target.value)} /></label>
               </div>
@@ -1877,7 +1876,7 @@ export function CoachDashboardPage() {
                           inputMode="numeric"
                           onFocus={selectNumericInputContents}
                           value={exercise.sets}
-                          onChange={(event) => updateExercise(index, {sets: Number(event.target.value)})}
+                          onChange={(event) => updateExercise(index, {sets: parseExerciseNumericInput(event.target.value)})}
                         />
                       </label>
                       <label>
@@ -1888,7 +1887,7 @@ export function CoachDashboardPage() {
                           inputMode="numeric"
                           onFocus={selectNumericInputContents}
                           value={exercise.reps}
-                          onChange={(event) => updateExercise(index, {reps: Number(event.target.value)})}
+                          onChange={(event) => updateExercise(index, {reps: parseExerciseNumericInput(event.target.value)})}
                         />
                       </label>
                     </>
@@ -1901,7 +1900,7 @@ export function CoachDashboardPage() {
                         inputMode="numeric"
                         onFocus={selectNumericInputContents}
                         value={exercise.workValue}
-                        onChange={(event) => updateExercise(index, {workValue: Number(event.target.value)})}
+                        onChange={(event) => updateExercise(index, {workValue: parseExerciseNumericInput(event.target.value)})}
                       />
                     </label>
                   )}
@@ -1913,7 +1912,7 @@ export function CoachDashboardPage() {
                       inputMode="decimal"
                       onFocus={selectNumericInputContents}
                       value={exercise.weightKg}
-                      onChange={(event) => updateExercise(index, {weightKg: Number(event.target.value)})}
+                      onChange={(event) => updateExercise(index, {weightKg: parseExerciseNumericInput(event.target.value)})}
                     />
                   </label>
                   <label>
@@ -1924,7 +1923,7 @@ export function CoachDashboardPage() {
                       inputMode="numeric"
                       onFocus={selectNumericInputContents}
                       value={exercise.restSeconds}
-                      onChange={(event) => updateExercise(index, {restSeconds: Number(event.target.value)})}
+                      onChange={(event) => updateExercise(index, {restSeconds: parseExerciseNumericInput(event.target.value)})}
                     />
                   </label>
                 </div>
@@ -2296,7 +2295,7 @@ export function CoachDashboardPage() {
                     step={1}
                     onFocus={selectNumericInputContents}
                     value={assignmentWeeksDraft}
-                    onChange={(event) => setAssignmentWeeksDraft(event.target.value)}
+                    onChange={(event) => setAssignmentWeeksDraft(normalizeNumericRawInput(event.target.value))}
                   />
                 </label>
                 {assignmentPreviewRange() ? (
