@@ -612,6 +612,24 @@ a.btn {
   color: #fff;
 }
 
+.plan-kind-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.exercise-fields-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.exercise-fields-inline label {
+  flex: 1 1 120px;
+}
+
+.exercise-fields-inline input {
+  min-height: 42px;
+}
+
 .modal-grid {
   display: grid;
   gap: 10px;

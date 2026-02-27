@@ -19,10 +19,15 @@ interface PlanDoc {
   trainerId: string;
   title: string;
   status: string;
+  kind?: 'series_reps' | 'circuit';
+  notes?: string;
   exercises?: Array<{
     name?: string;
     sets?: number;
     reps?: number;
+    workValue?: number;
+    weightKg?: number;
+    restSeconds?: number;
     weight?: string;
     mediaUrl?: string;
   }>;
@@ -74,21 +79,24 @@ function isVideoUrl(url: string): boolean {
   return /\.(mp4|webm|mov|m4v|ogg)(\?.*)?$/i.test(url);
 }
 
-function normalizeExercises(value: unknown): Array<{ name: string; sets: number; reps: number; weight: string; mediaUrl: string }> {
+function normalizeExercises(value: unknown): Array<{ name: string; sets: number; reps: number; workValue: number; weightKg: number; restSeconds: number; mediaUrl: string }> {
   if (!Array.isArray(value)) return [];
   return value
     .map((item) => {
       if (!item || typeof item !== 'object') return null;
       const raw = item as Record<string, unknown>;
+      const legacyWeight = Number((typeof raw.weight === 'string' ? raw.weight : '').replace(/[^\d.-]/g, ''));
       return {
         name: typeof raw.name === 'string' ? raw.name : '',
         sets: typeof raw.sets === 'number' ? raw.sets : Number(raw.sets ?? 0) || 0,
         reps: typeof raw.reps === 'number' ? raw.reps : Number(raw.reps ?? 0) || 0,
-        weight: typeof raw.weight === 'string' ? raw.weight : '',
+        workValue: typeof raw.workValue === 'number' ? raw.workValue : Number(raw.workValue ?? raw.reps ?? 0) || 0,
+        weightKg: typeof raw.weightKg === 'number' ? raw.weightKg : Number(raw.weightKg ?? legacyWeight ?? 0) || 0,
+        restSeconds: typeof raw.restSeconds === 'number' ? raw.restSeconds : Number(raw.restSeconds ?? 0) || 0,
         mediaUrl: typeof raw.mediaUrl === 'string' ? raw.mediaUrl : '',
       };
     })
-    .filter((item): item is { name: string; sets: number; reps: number; weight: string; mediaUrl: string } => Boolean(item));
+    .filter((item): item is { name: string; sets: number; reps: number; workValue: number; weightKg: number; restSeconds: number; mediaUrl: string } => Boolean(item));
 }
 
 function normalizeWhatsappPhone(raw: string): string {
@@ -292,14 +300,29 @@ export function ClientDashboardPage() {
                   <p className="hint">Programma attivo</p>
                   <h3>{topPlan.title}</h3>
                 </div>
+                <p className="hint">
+                  Tipo scheda: <strong>{topPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
+                </p>
+                {topPlan.kind === 'circuit' && (topPlan.notes ?? '').trim() ? (
+                  <div className="client-info-block">
+                    <p className="hint"><strong>Note coach:</strong> {topPlan.notes}</p>
+                  </div>
+                ) : null}
                 <div className="exercise-grid">
                   {topPlanExercises.map((exercise, index) => (
                     <article className="exercise-card" key={`plan-ex-${index}`}>
                       <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
                       <div className="exercise-meta">
-                        <span>{exercise.sets ?? '-'} serie</span>
-                        <span>{exercise.reps || '-'} reps</span>
-                        <span>{exercise.weight || 'Peso libero'}</span>
+                        {topPlan.kind === 'circuit' ? (
+                          <span>{exercise.workValue || '-'} reps/tempo</span>
+                        ) : (
+                          <>
+                            <span>{exercise.sets ?? '-'} serie</span>
+                            <span>{exercise.reps || '-'} reps</span>
+                          </>
+                        )}
+                        <span>{exercise.weightKg || 0} kg</span>
+                        <span>{exercise.restSeconds || 0} sec recupero</span>
                       </div>
                       {exercise.mediaUrl ? (
                         <button className="btn-link" type="button" onClick={() => setMediaPreview({ url: exercise.mediaUrl, label: exercise.name || `Esercizio ${index + 1}` })}>

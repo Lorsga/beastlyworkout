@@ -32,10 +32,15 @@ interface PlanDoc {
   clientId: string;
   title: string;
   status: string;
+  kind?: 'series_reps' | 'circuit';
+  notes?: string;
   exercises?: Array<{
     name?: string;
     sets?: number;
     reps?: number;
+    workValue?: number;
+    weightKg?: number;
+    restSeconds?: number;
     weight?: string;
     mediaUrl?: string;
   }>;
@@ -148,15 +153,18 @@ function normalizePlanExercises(value: unknown) {
     .map((item) => {
       if (!item || typeof item !== 'object') return null;
       const raw = item as Record<string, unknown>;
+      const legacyWeight = Number(asText(raw.weight).replace(/[^\d.-]/g, ''));
       return {
         name: asText(raw.name),
         sets: Number(raw.sets ?? 3) || 3,
         reps: Number(raw.reps ?? 10) || 10,
-        weight: asText(raw.weight),
+        workValue: Number(raw.workValue ?? raw.reps ?? 10) || 10,
+        weightKg: Number(raw.weightKg ?? legacyWeight ?? 0) || 0,
+        restSeconds: Number(raw.restSeconds ?? 60) || 60,
         mediaUrl: asText(raw.mediaUrl),
       };
     })
-    .filter((item): item is {name: string; sets: number; reps: number; weight: string; mediaUrl: string} => Boolean(item));
+    .filter((item): item is {name: string; sets: number; reps: number; workValue: number; weightKg: number; restSeconds: number; mediaUrl: string} => Boolean(item));
 }
 
 function onboardingValue(value: unknown): string {
@@ -190,7 +198,7 @@ function isImageMediaUrl(url: string): boolean {
 }
 
 function defaultExercise() {
-  return {name: '', sets: 3, reps: 10, weight: '', mediaUrl: ''};
+  return {name: '', sets: 3, reps: 10, workValue: 10, weightKg: 0, restSeconds: 60, mediaUrl: ''};
 }
 
 function emptyOnboardingDraft(base?: { name?: string; email?: string }): OnboardingDraft {
@@ -352,7 +360,9 @@ export function CoachDashboardPage() {
   const [activeTab, setActiveTab] = useState<CoachTabId>('clients');
 
   const [selectedClientId, setSelectedClientId] = useState('');
+  const [planKind, setPlanKind] = useState<'series_reps' | 'circuit'>('series_reps');
   const [planTitle, setPlanTitle] = useState('');
+  const [planNotes, setPlanNotes] = useState('');
   const [exercises, setExercises] = useState([defaultExercise()]);
   const isUploadingMedia = uploadingExerciseIndex !== null;
 
@@ -450,12 +460,16 @@ export function CoachDashboardPage() {
   useEffect(() => {
     if (!selectedClientId) return;
     if (!existingPlanForClient) {
+      setPlanKind('series_reps');
       setPlanTitle('');
+      setPlanNotes('');
       setExercises([defaultExercise()]);
       return;
     }
 
+    setPlanKind(existingPlanForClient.kind === 'circuit' ? 'circuit' : 'series_reps');
     setPlanTitle(existingPlanForClient.title ?? '');
+    setPlanNotes(asText(existingPlanForClient.notes));
     const nextExercises = normalizePlanExercises(existingPlanForClient.exercises)
       .filter((item) => item.name.trim().length > 0);
     setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
@@ -589,7 +603,10 @@ export function CoachDashboardPage() {
     updateExercise(index, defaultExercise());
   }
 
-  function updateExercise(index: number, patch: Partial<{name: string; sets: number; reps: number; weight: string; mediaUrl: string}>) {
+  function updateExercise(
+    index: number,
+    patch: Partial<{name: string; sets: number; reps: number; workValue: number; weightKg: number; restSeconds: number; mediaUrl: string}>,
+  ) {
     setExercises((prev) => prev.map((item, idx) => (idx === index ? {...item, ...patch} : item)));
   }
 
@@ -599,11 +616,15 @@ export function CoachDashboardPage() {
 
   function reloadModalDraftFromServer() {
     if (!existingPlanForClient) {
+      setPlanKind('series_reps');
       setPlanTitle('');
+      setPlanNotes('');
       setExercises([defaultExercise()]);
       return;
     }
+    setPlanKind(existingPlanForClient.kind === 'circuit' ? 'circuit' : 'series_reps');
     setPlanTitle(existingPlanForClient.title ?? '');
+    setPlanNotes(asText(existingPlanForClient.notes));
     const nextExercises = normalizePlanExercises(existingPlanForClient.exercises).filter((item) => item.name.trim().length > 0);
     setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
   }
@@ -728,7 +749,9 @@ export function CoachDashboardPage() {
         name: item.name.trim(),
         sets: Number(item.sets) || 0,
         reps: Number(item.reps) || 0,
-        weight: item.weight.trim(),
+        workValue: Number(item.workValue) || 0,
+        weightKg: Number(item.weightKg) || 0,
+        restSeconds: Number(item.restSeconds) || 0,
         mediaUrl: item.mediaUrl.trim(),
       }))
       .filter((item) => item.name.length > 0);
@@ -743,6 +766,8 @@ export function CoachDashboardPage() {
         () =>
           updatePlanAsCoach(existingPlanForClient.id, {
             title: normalizedTitle,
+            kind: planKind,
+            notes: planNotes.trim(),
             status: 'active',
             exercises: preparedExercises,
           }),
@@ -754,6 +779,8 @@ export function CoachDashboardPage() {
           createPlanAsCoach({
             clientId: selectedClientId,
             title: normalizedTitle,
+            kind: planKind,
+            notes: planNotes.trim(),
             status: 'active',
             exercises: preparedExercises,
           }),
@@ -1295,6 +1322,22 @@ export function CoachDashboardPage() {
           <article className="card modal-card">
             <h2>{existingPlanForClient ? 'Modifica scheda' : 'Compila la scheda'}</h2>
             <p className="hint">Aggiungi esercizi uno alla volta per completare il programma.</p>
+            <div className="step-tabs plan-kind-tabs">
+              <button
+                className={`step-tab ${planKind === 'series_reps' ? 'step-tab-active' : ''}`.trim()}
+                type="button"
+                onClick={() => setPlanKind('series_reps')}
+              >
+                Serie e reps
+              </button>
+              <button
+                className={`step-tab ${planKind === 'circuit' ? 'step-tab-active' : ''}`.trim()}
+                type="button"
+                onClick={() => setPlanKind('circuit')}
+              >
+                Circuito
+              </button>
+            </div>
             <label>
               Titolo scheda *
               <input
@@ -1304,6 +1347,16 @@ export function CoachDashboardPage() {
                 required
               />
             </label>
+            {planKind === 'circuit' ? (
+              <label>
+                Note
+                <textarea
+                  value={planNotes}
+                  onChange={(event) => setPlanNotes(event.target.value)}
+                  placeholder="Note utili per il cliente sul circuito"
+                />
+              </label>
+            ) : null}
             {exercises.map((exercise, index) => (
               <article className="card" key={`exercise-${index}`} style={{boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)'}}>
                 <div className="exercise-head">
@@ -1316,29 +1369,63 @@ export function CoachDashboardPage() {
                   Nome esercizio
                   <input value={exercise.name} onChange={(event) => updateExercise(index, {name: event.target.value})} placeholder="Es. Squat bilanciere" />
                 </label>
-                <label>
-                  Numero serie
-                  <input
-                    type="number"
-                    min={1}
-                    value={exercise.sets}
-                    onChange={(event) => updateExercise(index, {sets: Number(event.target.value)})}
-                  />
-                </label>
-                <label>
-                  Ripetizioni
-                  <input
-                    type="number"
-                    min={1}
-                    value={exercise.reps}
-                    onChange={(event) => updateExercise(index, {reps: Number(event.target.value)})}
-                    placeholder="10"
-                  />
-                </label>
-                <label>
-                  Peso
-                  <input value={exercise.weight} onChange={(event) => updateExercise(index, {weight: event.target.value})} placeholder="Es. 40kg o corpo libero" />
-                </label>
+                <div className="exercise-fields-inline">
+                  {planKind === 'series_reps' ? (
+                    <>
+                      <label>
+                        Serie
+                        <input
+                          type="number"
+                          min={0}
+                          inputMode="numeric"
+                          value={exercise.sets}
+                          onChange={(event) => updateExercise(index, {sets: Number(event.target.value)})}
+                        />
+                      </label>
+                      <label>
+                        Ripetizioni
+                        <input
+                          type="number"
+                          min={0}
+                          inputMode="numeric"
+                          value={exercise.reps}
+                          onChange={(event) => updateExercise(index, {reps: Number(event.target.value)})}
+                        />
+                      </label>
+                    </>
+                  ) : (
+                    <label>
+                      Reps/tempo di lavoro
+                      <input
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        value={exercise.workValue}
+                        onChange={(event) => updateExercise(index, {workValue: Number(event.target.value)})}
+                      />
+                    </label>
+                  )}
+                  <label>
+                    Peso (kg)
+                    <input
+                      type="number"
+                      min={0}
+                      inputMode="decimal"
+                      value={exercise.weightKg}
+                      onChange={(event) => updateExercise(index, {weightKg: Number(event.target.value)})}
+                    />
+                  </label>
+                  <label>
+                    Recupero (sec)
+                    <input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      value={exercise.restSeconds}
+                      onChange={(event) => updateExercise(index, {restSeconds: Number(event.target.value)})}
+                    />
+                  </label>
+                </div>
                 <label>
                   URL video (YouTube o link diretto)
                   <input
@@ -1396,14 +1483,29 @@ export function CoachDashboardPage() {
               <p className="hint">Titolo programma</p>
               <h3>{existingPlanForClient.title || 'Senza titolo'}</h3>
             </div>
+            <p className="hint">
+              Tipo scheda: <strong>{existingPlanForClient.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
+            </p>
+            {existingPlanForClient.kind === 'circuit' && asText(existingPlanForClient.notes).trim() ? (
+              <div className="client-info-block">
+                <p className="hint"><strong>Note coach:</strong> {asText(existingPlanForClient.notes)}</p>
+              </div>
+            ) : null}
             <div className="exercise-grid">
               {normalizePlanExercises(existingPlanForClient.exercises).map((exercise, index) => (
                 <article className="exercise-card" key={`preview-ex-${index}`}>
                   <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
                   <div className="exercise-meta">
-                    <span>{exercise.sets || '-'} serie</span>
-                    <span>{exercise.reps || '-'} reps</span>
-                    <span>{exercise.weight || 'Peso libero'}</span>
+                    {existingPlanForClient.kind === 'circuit' ? (
+                      <span>{exercise.workValue || '-'} reps/tempo</span>
+                    ) : (
+                      <>
+                        <span>{exercise.sets || '-'} serie</span>
+                        <span>{exercise.reps || '-'} reps</span>
+                      </>
+                    )}
+                    <span>{exercise.weightKg || 0} kg</span>
+                    <span>{exercise.restSeconds || 0} sec recupero</span>
                   </div>
                   {exercise.mediaUrl ? (
                     <a className="btn-link" href={exercise.mediaUrl} target="_blank" rel="noreferrer">

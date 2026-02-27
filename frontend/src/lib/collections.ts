@@ -31,6 +31,8 @@ export interface PlanInput {
   status: PlanStatus;
   title: string;
   description?: string;
+  kind?: 'series_reps' | 'circuit';
+  notes?: string;
   exercises: PlanExerciseInput[];
 }
 
@@ -38,7 +40,9 @@ export interface PlanExerciseInput {
   name: string;
   sets: number;
   reps: number;
-  weight: string;
+  workValue?: number;
+  weightKg?: number;
+  restSeconds?: number;
   videoUrl?: string;
   imageUrl?: string;
   mediaUrl?: string;
@@ -157,6 +161,8 @@ export async function createPlanAsCoach(input: PlanInput) {
     status: input.status,
     title: input.title,
     description: input.description ?? '',
+    kind: input.kind ?? 'series_reps',
+    notes: input.notes ?? '',
     exercises: input.exercises,
     clientNotes: '',
     lastViewedAt: null,
