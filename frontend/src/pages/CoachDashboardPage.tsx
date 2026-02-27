@@ -1347,7 +1347,18 @@ export function CoachDashboardPage() {
                   <div className="plan-carousel">
                     {coachPlanTemplates.map((plan) => (
                       <article className="card plan-card" key={plan.id} style={{ boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)' }}>
-                        <h3>{plan.title || 'Scheda senza titolo'}</h3>
+                        <div className="exercise-head">
+                          <h3>{plan.title || 'Scheda senza titolo'}</h3>
+                          <button
+                            className="icon-btn"
+                            type="button"
+                            aria-label="Duplica scheda"
+                            title="Duplica scheda"
+                            onClick={() => void duplicatePlan(plan.id)}
+                          >
+                            ⧉
+                          </button>
+                        </div>
                         <p className="hint">Tipo: {plan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</p>
                         <p className="hint">Esercizi: {normalizePlanExercises(plan.exercises).length}</p>
                         <button
@@ -1361,15 +1372,12 @@ export function CoachDashboardPage() {
                         >
                           Assegnata a: {Array.isArray(plan.assignedClientIds) ? plan.assignedClientIds.length : 0} clienti
                         </button>
-                        <div className="supervisor-actions">
+                        <div className="plan-card-actions">
                           <button className="btn btn-ghost" disabled={loading} onClick={() => openPlanPreview(plan.id)} type="button">
                             Visualizza
                           </button>
                           <button className="btn" disabled={loading} onClick={() => openEditPlanModal(plan.id)} type="button">
                             Modifica
-                          </button>
-                          <button className="btn btn-ghost" disabled={loading} onClick={() => void duplicatePlan(plan.id)} type="button">
-                            Duplica
                           </button>
                           <button className="btn btn-danger" disabled={loading} onClick={() => void deletePlan(plan.id)} type="button">
                             Elimina
