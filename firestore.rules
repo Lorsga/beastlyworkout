@@ -51,6 +51,12 @@ service cloud.firestore {
       );
     }
 
+    function isPlanAssignedToClient() {
+      return isSignedIn() &&
+        resource.data.assignedClientIds is list &&
+        request.auth.uid in resource.data.assignedClientIds;
+    }
+
     match /users/{userId} {
       allow read: if isOwner(userId) || isCoach();
       allow create: if isOwner(userId) && request.resource.data.uid == request.auth.uid;
@@ -82,17 +88,21 @@ service cloud.firestore {
     }
 
     match /plans/{planId} {
-      allow read: if isSignedIn() && canAccessPair(resource.data.trainerId, resource.data.clientId);
+      allow read: if isSignedIn() && (
+        canAccessPair(resource.data.trainerId, resource.data.clientId) ||
+        isPlanAssignedToClient()
+      );
 
       allow create: if isCoach() &&
         hasActiveCoachSubscription(request.auth.uid) &&
         request.resource.data.trainerId == request.auth.uid &&
-        request.resource.data.clientId is string &&
+        (!('clientId' in request.resource.data) || request.resource.data.clientId is string) &&
+        (!('assignedClientIds' in request.resource.data) || request.resource.data.assignedClientIds is list) &&
         request.resource.data.status in ['draft', 'active', 'archived'];
 
       allow update: if isAdmin() ||
         (isCoach() && hasActiveCoachSubscription(request.auth.uid) && request.auth.uid == resource.data.trainerId) ||
-        (isClient() && request.auth.uid == resource.data.clientId &&
+        (isClient() && (request.auth.uid == resource.data.clientId || isPlanAssignedToClient()) &&
           request.resource.data.diff(resource.data).changedKeys().hasOnly(['clientNotes', 'lastViewedAt'])
         );
 
