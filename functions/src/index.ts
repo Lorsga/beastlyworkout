@@ -130,6 +130,7 @@ function parseClientWeightOverridesFromPlanData(planData: Record<string, unknown
     if (!key.startsWith('clientWeightOverrides.')) continue;
     const [, clientId, exerciseIndex] = key.split('.');
     if (!clientId || exerciseIndex == null) continue;
+    if (output[clientId]?.[exerciseIndex] !== undefined) continue;
     const weight = typeof rawValue === 'number' ? rawValue : Number(rawValue);
     if (!Number.isFinite(weight) || weight < 0) continue;
     output[clientId] = output[clientId] ?? {};
@@ -689,10 +690,29 @@ export const updateMyPlanExerciseWeight = onCall(
       throw new HttpsError('permission-denied', 'Plan not currently assigned to this client.');
     }
 
-    await planRef.update({
-      [`clientWeightOverrides.${uid}.${exerciseIndex}`]: weightKg,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    const legacyFieldPath = new admin.firestore.FieldPath(`clientWeightOverrides.${uid}.${exerciseIndex}`);
+    const privateWeightsRef = db.collection('users').doc(uid).collection('private').doc('planWeights');
+    await Promise.all([
+      planRef.update(
+        `clientWeightOverrides.${uid}.${exerciseIndex}`,
+        weightKg,
+        legacyFieldPath,
+        admin.firestore.FieldValue.delete(),
+        'updatedAt',
+        admin.firestore.FieldValue.serverTimestamp(),
+      ),
+      privateWeightsRef.set(
+        {
+          weights: {
+            [planId]: {
+              [String(exerciseIndex)]: weightKg,
+            },
+          },
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      ),
+    ]);
 
     return {ok: true};
   },

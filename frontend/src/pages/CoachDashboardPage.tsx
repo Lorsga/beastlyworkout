@@ -457,6 +457,7 @@ function extractClientWeightOverridesFromPlan(plan: PlanDoc & { id: string }): R
     if (!key.startsWith('clientWeightOverrides.')) continue;
     const [, clientId, exerciseIndex] = key.split('.');
     if (!clientId || exerciseIndex == null) continue;
+    if (output[clientId]?.[exerciseIndex] !== undefined) continue;
     const weight = Number(rawWeight);
     if (!Number.isFinite(weight) || weight < 0) continue;
     output[clientId] = output[clientId] ?? {};

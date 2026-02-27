@@ -418,7 +418,11 @@ export function ClientDashboardPage() {
 
     setSavingWeightKey(draftKey);
     try {
-      await setMyPlanExerciseWeightOverride(planId, exerciseIndex, nextWeight);
+      try {
+        await setMyPlanExerciseWeightOverride(planId, exerciseIndex, nextWeight);
+      } catch {
+        // Best effort: la fonte autoritativa viene aggiornata dalla callable.
+      }
       setPersonalWeightOverrides((prev) => ({
         ...prev,
         [planId]: {
@@ -426,11 +430,7 @@ export function ClientDashboardPage() {
           [String(exerciseIndex)]: nextWeight,
         },
       }));
-      try {
-        await updateMyPlanExerciseWeight(planId, exerciseIndex, nextWeight);
-      } catch {
-        showError('Peso salvato per te, ma non ancora sincronizzato lato coach. Riprova tra poco.');
-      }
+      await updateMyPlanExerciseWeight(planId, exerciseIndex, nextWeight);
       setPlans((prev) =>
         prev.map((plan) => {
           if (plan.id !== planId) return plan;
