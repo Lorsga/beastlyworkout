@@ -147,6 +147,27 @@ export async function getUserPrivateDoc(uid: string, docId: string) {
   return getDoc(doc(db, 'users', uid, 'private', docId));
 }
 
+export async function getMyPlanWeightOverridesDoc() {
+  const uid = requireUid();
+  return getDoc(doc(db, 'users', uid, 'private', 'planWeights'));
+}
+
+export async function setMyPlanExerciseWeightOverride(planId: string, exerciseIndex: number, weightKg: number) {
+  const uid = requireUid();
+  await setDoc(
+    doc(db, 'users', uid, 'private', 'planWeights'),
+    {
+      weights: {
+        [planId]: {
+          [String(exerciseIndex)]: weightKg,
+        },
+      },
+      ...updateTimestamp(),
+    },
+    {merge: true},
+  );
+}
+
 export async function setClientOnboardingAsCoach(clientId: string, payload: Record<string, unknown>) {
   await setDoc(
     doc(db, 'users', clientId, 'private', 'onboarding'),

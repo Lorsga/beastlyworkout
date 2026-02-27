@@ -4,7 +4,9 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useToast } from '../components/ToastProvider';
 import {
   deleteMyProfile,
+  getMyPlanWeightOverridesDoc,
   getMyAssignedPlans,
+  setMyPlanExerciseWeightOverride,
   updateMyPlanExerciseWeight,
   getUserPrivateDoc,
   getUserProfile,
@@ -47,6 +49,10 @@ interface UserProfileDoc {
   assignedCoachId?: string;
   assignedCoachPhone?: string;
   assignedCoachName?: string;
+}
+
+interface PlanWeightOverridesDoc {
+  weights?: Record<string, Record<string, number>>;
 }
 
 interface OnboardingDoc {
@@ -181,6 +187,30 @@ function applyClientWeightOverridesToPlan(plan: PlanDoc & { id: string }, client
   };
 }
 
+function applyPersonalWeightOverridesToPlan(
+  plan: PlanDoc & { id: string },
+  personalOverrides: Record<string, Record<string, number>>,
+): PlanDoc & { id: string } {
+  const overrides = personalOverrides[plan.id];
+  if (!overrides || typeof overrides !== 'object') return plan;
+  if (!Array.isArray(plan.exercises) || plan.exercises.length === 0) return plan;
+
+  const nextExercises = plan.exercises.map((exercise, index) => {
+    if (!exercise || typeof exercise !== 'object') return exercise;
+    const override = overrides[String(index)];
+    if (!Number.isFinite(Number(override))) return exercise;
+    return {
+      ...exercise,
+      weightKg: Number(override),
+    };
+  });
+
+  return {
+    ...plan,
+    exercises: nextExercises,
+  };
+}
+
 export function ClientDashboardPage() {
   const { role, user } = useAuthState();
   const navigate = useNavigate();
@@ -196,6 +226,7 @@ export function ClientDashboardPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingProfile, setDeletingProfile] = useState(false);
   const [coachWhatsappNumber, setCoachWhatsappNumber] = useState('');
+  const [personalWeightOverrides, setPersonalWeightOverrides] = useState<Record<string, Record<string, number>>>({});
   const [exerciseWeightDrafts, setExerciseWeightDrafts] = useState<Record<string, string>>({});
   const [savingWeightKey, setSavingWeightKey] = useState('');
   const [editingWeightKey, setEditingWeightKey] = useState('');
@@ -234,6 +265,10 @@ export function ClientDashboardPage() {
       const profileSnap = authUid ? await getUserProfile(authUid) : null;
       const profile = (profileSnap?.data() as UserProfileDoc | undefined) ?? {};
       const onboardingSnap = authUid ? await getUserPrivateDoc(authUid, 'onboarding') : null;
+      const weightOverridesSnap = authUid ? await getMyPlanWeightOverridesDoc() : null;
+      const weightOverridesData = (weightOverridesSnap?.data() as PlanWeightOverridesDoc | undefined) ?? {};
+      const nextPersonalOverrides = weightOverridesData.weights ?? {};
+      setPersonalWeightOverrides(nextPersonalOverrides);
       setOnboarding((onboardingSnap?.data() as OnboardingDoc | undefined) ?? null);
       let nextCoachPhone = normalizeWhatsappPhone(profile.assignedCoachPhone ?? '');
       if (!nextCoachPhone && profile.assignedCoachId) {
@@ -272,11 +307,14 @@ export function ClientDashboardPage() {
         }
       }
 
-      const mergedPlans = Array.from(mergedMap.values()).map((plan) => applyClientWeightOverridesToPlan(plan, authUid)).sort((a, b) => {
-        const aTime = new Date(String((a as {updatedAt?: unknown}).updatedAt ?? '')).getTime() || 0;
-        const bTime = new Date(String((b as {updatedAt?: unknown}).updatedAt ?? '')).getTime() || 0;
-        return bTime - aTime;
-      });
+      const mergedPlans = Array.from(mergedMap.values())
+        .map((plan) => applyClientWeightOverridesToPlan(plan, authUid))
+        .map((plan) => applyPersonalWeightOverridesToPlan(plan, nextPersonalOverrides))
+        .sort((a, b) => {
+          const aTime = new Date(String((a as {updatedAt?: unknown}).updatedAt ?? '')).getTime() || 0;
+          const bTime = new Date(String((b as {updatedAt?: unknown}).updatedAt ?? '')).getTime() || 0;
+          return bTime - aTime;
+        });
       setPlans(mergedPlans);
       if (mergedPlans.length > 0) {
         setSelectedPlanId((prev) => (prev && mergedPlans.some((plan) => plan.id === prev) ? prev : mergedPlans[0].id));
@@ -350,7 +388,15 @@ export function ClientDashboardPage() {
 
     setSavingWeightKey(draftKey);
     try {
-      await updateMyPlanExerciseWeight(planId, exerciseIndex, nextWeight);
+      await setMyPlanExerciseWeightOverride(planId, exerciseIndex, nextWeight);
+      setPersonalWeightOverrides((prev) => ({
+        ...prev,
+        [planId]: {
+          ...(prev[planId] ?? {}),
+          [String(exerciseIndex)]: nextWeight,
+        },
+      }));
+      void updateMyPlanExerciseWeight(planId, exerciseIndex, nextWeight).catch(() => undefined);
       setPlans((prev) =>
         prev.map((plan) => {
           if (plan.id !== planId) return plan;
