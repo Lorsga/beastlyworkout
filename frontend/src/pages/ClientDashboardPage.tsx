@@ -158,6 +158,7 @@ export function ClientDashboardPage() {
   const [coachWhatsappNumber, setCoachWhatsappNumber] = useState('');
   const [exerciseWeightDrafts, setExerciseWeightDrafts] = useState<Record<string, string>>({});
   const [savingWeightKey, setSavingWeightKey] = useState('');
+  const [editingWeightKey, setEditingWeightKey] = useState('');
   const whatsappMessage = 'Ciao coach, avrei bisogno di un feedback sulla mia scheda.';
 
   useEffect(() => {
@@ -319,12 +320,22 @@ export function ClientDashboardPage() {
         }),
       );
       setExerciseWeightDrafts((prev) => ({ ...prev, [draftKey]: String(nextWeight) }));
+      setEditingWeightKey('');
       showSuccess('Peso aggiornato.');
     } catch (error) {
       showError(toMessage(error));
     } finally {
       setSavingWeightKey('');
     }
+  }
+
+  function openWeightEditor(planId: string, exerciseIndex: number, currentWeight: number) {
+    const draftKey = `${planId}:${exerciseIndex}`;
+    setExerciseWeightDrafts((prev) => ({
+      ...prev,
+      [draftKey]: prev[draftKey] ?? String(currentWeight || 0),
+    }));
+    setEditingWeightKey(draftKey);
   }
 
   if (!user) return <Navigate to="/auth" replace />;
@@ -443,31 +454,64 @@ export function ClientDashboardPage() {
                       {exercise.advancedMethod && exercise.advancedMethodNotes.trim() ? (
                         <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethodNotes}</p>
                       ) : null}
-                      <div className="exercise-weight-edit-row">
-                        <label>
-                          Peso (kg)
-                          <input
-                            type="number"
-                            min={0}
-                            inputMode="decimal"
-                            value={exerciseWeightDrafts[`${selectedPlan.id}:${index}`] ?? String(exercise.weightKg || 0)}
-                            onChange={(event) =>
-                              setExerciseWeightDrafts((prev) => ({
-                                ...prev,
-                                [`${selectedPlan.id}:${index}`]: event.target.value,
-                              }))
-                            }
-                          />
-                        </label>
-                        <button
-                          className="btn"
-                          type="button"
-                          disabled={savingWeightKey === `${selectedPlan.id}:${index}`}
-                          onClick={() => void saveExerciseWeight(selectedPlan.id, index, exercise.weightKg || 0)}
-                        >
-                          {savingWeightKey === `${selectedPlan.id}:${index}` ? 'Salvataggio...' : 'Salva peso'}
-                        </button>
-                      </div>
+                      {(() => {
+                        const weightKey = `${selectedPlan.id}:${index}`;
+                        const isEditingWeight = editingWeightKey === weightKey;
+                        const isSavingWeight = savingWeightKey === weightKey;
+                        return isEditingWeight ? (
+                          <div className="exercise-weight-edit-row">
+                            <label>
+                              Peso (kg)
+                              <input
+                                type="number"
+                                min={0}
+                                inputMode="decimal"
+                                value={exerciseWeightDrafts[weightKey] ?? String(exercise.weightKg || 0)}
+                                onChange={(event) =>
+                                  setExerciseWeightDrafts((prev) => ({
+                                    ...prev,
+                                    [weightKey]: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                            <div className="exercise-weight-actions">
+                              <button
+                                className="btn btn-ghost"
+                                type="button"
+                                disabled={isSavingWeight}
+                                onClick={() => setEditingWeightKey('')}
+                              >
+                                Annulla
+                              </button>
+                              <button
+                                className="btn"
+                                type="button"
+                                disabled={isSavingWeight}
+                                onClick={() => void saveExerciseWeight(selectedPlan.id, index, exercise.weightKg || 0)}
+                              >
+                                {isSavingWeight ? 'Salvataggio...' : 'Salva'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="exercise-weight-readonly">
+                            <div>
+                              <p className="hint"><strong>Peso (kg)</strong></p>
+                              <p className="exercise-weight-value">{exercise.weightKg || 0}</p>
+                            </div>
+                            <button
+                              className="icon-btn"
+                              type="button"
+                              aria-label="Modifica peso esercizio"
+                              title="Modifica peso"
+                              onClick={() => openWeightEditor(selectedPlan.id, index, exercise.weightKg || 0)}
+                            >
+                              ✎
+                            </button>
+                          </div>
+                        );
+                      })()}
                       {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
                       {exercise.mediaUrl ? (
                         <button className="btn-link" type="button" onClick={() => openMediaPreview(exercise.mediaUrl, exercise.name || `Esercizio ${index + 1}`)}>
