@@ -12,7 +12,7 @@ import {
   useAuthState,
 } from '../lib';
 import { AppShell } from '../components/AppShell';
-import { buildWhatsAppUrl, HAS_PT_WHATSAPP } from '../config/support';
+import { buildWhatsAppUrl } from '../config/support';
 import { mapDocs, toMessage } from '../utils/firestore';
 
 interface PlanDoc {
@@ -31,6 +31,9 @@ interface PlanDoc {
 interface UserProfileDoc {
   uid?: string;
   clientId?: string;
+  assignedCoachId?: string;
+  assignedCoachPhone?: string;
+  assignedCoachName?: string;
 }
 
 interface OnboardingDoc {
@@ -88,6 +91,16 @@ function normalizeExercises(value: unknown): Array<{ name: string; sets: number;
     .filter((item): item is { name: string; sets: number; reps: number; weight: string; mediaUrl: string } => Boolean(item));
 }
 
+function normalizeWhatsappPhone(raw: string): string {
+  const digits = raw.replace(/[^\d+]/g, '').replace(/\s+/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('+')) return digits.slice(1);
+  if (digits.startsWith('00')) return digits.slice(2);
+  if (digits.startsWith('39')) return digits;
+  if (digits.length >= 9) return `39${digits}`;
+  return digits;
+}
+
 export function ClientDashboardPage() {
   const { role, user } = useAuthState();
   const navigate = useNavigate();
@@ -100,6 +113,7 @@ export function ClientDashboardPage() {
   const [activeTab, setActiveTab] = useState<ClientTabId>('plan');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingProfile, setDeletingProfile] = useState(false);
+  const [coachWhatsappNumber, setCoachWhatsappNumber] = useState('');
   const whatsappMessage = 'Ciao coach, avrei bisogno di un feedback sulla mia scheda.';
 
   useEffect(() => {
@@ -131,6 +145,17 @@ export function ClientDashboardPage() {
       const profile = (profileSnap?.data() as UserProfileDoc | undefined) ?? {};
       const onboardingSnap = authUid ? await getUserPrivateDoc(authUid, 'onboarding') : null;
       setOnboarding((onboardingSnap?.data() as OnboardingDoc | undefined) ?? null);
+      let nextCoachPhone = normalizeWhatsappPhone(profile.assignedCoachPhone ?? '');
+      if (!nextCoachPhone && profile.assignedCoachId) {
+        try {
+          const coachProfileSnap = await getUserProfile(profile.assignedCoachId);
+          const coachProfile = coachProfileSnap.data() as { phone?: unknown } | undefined;
+          nextCoachPhone = normalizeWhatsappPhone(typeof coachProfile?.phone === 'string' ? coachProfile.phone : '');
+        } catch {
+          nextCoachPhone = '';
+        }
+      }
+      setCoachWhatsappNumber(nextCoachPhone);
 
       const candidateIds = Array.from(
         new Set([authUid, (profile.uid ?? '').trim(), (profile.clientId ?? '').trim()].filter((value) => value.length > 0)),
@@ -187,6 +212,8 @@ export function ClientDashboardPage() {
 
   const topPlan = plans[0];
   const topPlanExercises = normalizeExercises(topPlan?.exercises);
+  const hasCoachWhatsapp = coachWhatsappNumber.length > 6;
+  const coachWhatsappUrl = hasCoachWhatsapp ? buildWhatsAppUrl(whatsappMessage, coachWhatsappNumber) : '#';
   const profileRows = [
     { label: 'Nome e cognome', value: onboarding?.fullName },
     { label: 'E-mail', value: onboarding?.email ?? user?.email },
@@ -225,10 +252,10 @@ export function ClientDashboardPage() {
       headerAction={
         <div className="mobile-only">
           <a
-            className={`btn btn-whatsapp ${HAS_PT_WHATSAPP ? '' : 'btn-disabled'}`.trim()}
-            href={HAS_PT_WHATSAPP ? buildWhatsAppUrl(whatsappMessage) : '#'}
+            className={`btn btn-whatsapp ${hasCoachWhatsapp ? '' : 'btn-disabled'}`.trim()}
+            href={coachWhatsappUrl}
             onClick={(event) => {
-              if (!HAS_PT_WHATSAPP) event.preventDefault();
+              if (!hasCoachWhatsapp) event.preventDefault();
             }}
             target="_blank"
             rel="noreferrer"
@@ -244,17 +271,17 @@ export function ClientDashboardPage() {
             <h2>Parla con il tuo Personal Trainer</h2>
             <p className="hint">Per feedback sulla scheda o qualsiasi dubbio, scrivi direttamente su WhatsApp.</p>
             <a
-              className={`btn btn-whatsapp ${HAS_PT_WHATSAPP ? '' : 'btn-disabled'}`.trim()}
-              href={HAS_PT_WHATSAPP ? buildWhatsAppUrl(whatsappMessage) : '#'}
+              className={`btn btn-whatsapp ${hasCoachWhatsapp ? '' : 'btn-disabled'}`.trim()}
+              href={coachWhatsappUrl}
               onClick={(event) => {
-                if (!HAS_PT_WHATSAPP) event.preventDefault();
+                if (!hasCoachWhatsapp) event.preventDefault();
               }}
               target="_blank"
               rel="noreferrer"
             >
               Apri chat WhatsApp
             </a>
-            {!HAS_PT_WHATSAPP ? <p className="message">Numero WhatsApp PT non ancora configurato.</p> : null}
+            {!hasCoachWhatsapp ? <p className="message">Numero WhatsApp coach non ancora configurato.</p> : null}
           </article>
 
           <article className="card">
@@ -307,17 +334,17 @@ export function ClientDashboardPage() {
             <p className="hint">Anagrafica non ancora disponibile.</p>
           )}
           <a
-            className={`btn btn-whatsapp ${HAS_PT_WHATSAPP ? '' : 'btn-disabled'}`.trim()}
-            href={HAS_PT_WHATSAPP ? buildWhatsAppUrl(whatsappMessage) : '#'}
+            className={`btn btn-whatsapp ${hasCoachWhatsapp ? '' : 'btn-disabled'}`.trim()}
+            href={coachWhatsappUrl}
             onClick={(event) => {
-              if (!HAS_PT_WHATSAPP) event.preventDefault();
+              if (!hasCoachWhatsapp) event.preventDefault();
             }}
             target="_blank"
             rel="noreferrer"
           >
             Scrivi al tuo PT su WhatsApp
           </a>
-          {!HAS_PT_WHATSAPP ? <p className="message">Numero WhatsApp PT non ancora configurato.</p> : null}
+          {!hasCoachWhatsapp ? <p className="message">Numero WhatsApp coach non ancora configurato.</p> : null}
           <div className="divider" />
           <h3>Elimina profilo</h3>
           <p className="hint">

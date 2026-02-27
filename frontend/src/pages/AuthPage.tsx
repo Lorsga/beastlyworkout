@@ -8,6 +8,7 @@ import {
   completeGoogleRedirect,
   createUserProfile,
   ensureCoachAccess,
+  getUserProfile,
   getCurrentUserRole,
   loginWithGoogle,
   logoutCurrentUser,
@@ -33,6 +34,8 @@ export function AuthPage() {
   const [completingCoachAccess, setCompletingCoachAccess] = useState(false);
   const [isExitingCoachFlow, setIsExitingCoachFlow] = useState(false);
   const [coachGate, setCoachGate] = useState<{ mode: 'trial' | 'expired'; access: CoachAccessState } | null>(null);
+  const [coachPhoneGate, setCoachPhoneGate] = useState<{ access: CoachAccessState; phone: string } | null>(null);
+  const [savingCoachPhone, setSavingCoachPhone] = useState(false);
   const coachFlowRunId = useRef(0);
 
   const paymentWhatsappUrl = useMemo(
@@ -85,6 +88,16 @@ export function AuthPage() {
 
       const access = await ensureCoachAccess();
       if (isStale()) return;
+      const profileSnap = await getUserProfile(user.uid);
+      const profileData = profileSnap.data() as { phone?: unknown } | undefined;
+      const coachPhone = typeof profileData?.phone === 'string' ? profileData.phone.trim() : '';
+      if (!coachPhone) {
+        setCoachPhoneGate({ access, phone: '' });
+        setCompletingCoachAccess(false);
+        setMessage('');
+        return;
+      }
+
       if (access.isExpired) {
         await logoutCurrentUser();
         sessionStorage.removeItem(LOGIN_INTENT_KEY);
@@ -118,6 +131,49 @@ export function AuthPage() {
     }
   }
 
+  async function submitCoachPhone() {
+    if (!coachPhoneGate || !user) return;
+    const normalizedPhone = coachPhoneGate.phone.replace(/[^\d+]/g, '').trim();
+    if (normalizedPhone.length < 8) {
+      setMessage('Inserisci un numero WhatsApp valido.');
+      return;
+    }
+
+    setSavingCoachPhone(true);
+    setMessage('Salvo il tuo numero e completo la registrazione coach...');
+    try {
+      await createUserProfile({ phone: normalizedPhone });
+      const access = coachPhoneGate.access;
+      setCoachPhoneGate(null);
+
+      if (access.isExpired) {
+        await logoutCurrentUser();
+        sessionStorage.removeItem(LOGIN_INTENT_KEY);
+        setCoachGate({ mode: 'expired', access });
+        return;
+      }
+
+      if (access.requiresTrialAcceptance) {
+        setCoachGate({ mode: 'trial', access });
+        return;
+      }
+
+      const okRole = await waitCoachRole();
+      if (!okRole) {
+        setMessage('Accesso coach in sincronizzazione. Riprova tra qualche secondo.');
+        return;
+      }
+      sessionStorage.removeItem(LOGIN_INTENT_KEY);
+      navigate('/app/coach', { replace: true });
+    } catch (error) {
+      const nextMessage = toMessage(error);
+      setMessage(nextMessage);
+      showError(nextMessage);
+    } finally {
+      setSavingCoachPhone(false);
+    }
+  }
+
   useEffect(() => {
     async function syncNavigation() {
       if (!user) {
@@ -126,6 +182,7 @@ export function AuthPage() {
         return;
       }
       if (completingCoachAccess || isExitingCoachFlow) return;
+      if (coachPhoneGate) return;
 
       const intent = sessionStorage.getItem(LOGIN_INTENT_KEY);
       if (intent === 'coach') {
@@ -142,7 +199,7 @@ export function AuthPage() {
     }
 
     void syncNavigation();
-  }, [user, role, completingCoachAccess, isExitingCoachFlow]);
+  }, [user, role, completingCoachAccess, isExitingCoachFlow, coachPhoneGate]);
 
   useEffect(() => {
     if (!isExitingCoachFlow) return;
@@ -158,6 +215,7 @@ export function AuthPage() {
     setMessage('Uscita in corso...');
     sessionStorage.removeItem(LOGIN_INTENT_KEY);
     setCoachGate(null);
+    setCoachPhoneGate(null);
     try {
       await logoutCurrentUser();
     } catch (error) {
@@ -287,6 +345,36 @@ export function AuthPage() {
           >
             Torna all&apos;accesso
           </button>
+        </section>
+      </main>
+    );
+  }
+
+  if (coachPhoneGate) {
+    return (
+      <main className="page page-center">
+        <section className="card auth-card fullscreen-gate">
+          <p className="eyebrow">Registrazione Coach</p>
+          <h1>Inserisci numero WhatsApp</h1>
+          <p className="hero-sub">
+            Ultimo step obbligatorio: questo numero verrà condiviso ai clienti associati al tuo codice coach.
+          </p>
+          <label>
+            Numero di telefono / WhatsApp *
+            <input
+              type="tel"
+              placeholder="Es. 3405882404"
+              value={coachPhoneGate.phone}
+              onChange={(event) => setCoachPhoneGate((prev) => (prev ? { ...prev, phone: event.target.value } : prev))}
+            />
+          </label>
+          <button className="btn" type="button" disabled={savingCoachPhone} onClick={() => void submitCoachPhone()}>
+            {savingCoachPhone ? 'Salvataggio...' : 'Continua'}
+          </button>
+          <button className="btn btn-ghost" type="button" disabled={savingCoachPhone} onClick={() => void exitCoachTrialFlow()}>
+            Esci
+          </button>
+          {message ? <p className="message">{message}</p> : null}
         </section>
       </main>
     );

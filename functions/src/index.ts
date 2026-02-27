@@ -456,6 +456,8 @@ export const completeClientOnboarding = onCall(
     const coachUid = coachDoc.id;
     const coachRole = typeof coachData.role === 'string' ? coachData.role : '';
     const coachEmail = normalizeEmail(coachData.email);
+    const coachPhone = typeof coachData.phone === 'string' ? coachData.phone.trim() : '';
+    const coachName = typeof coachData.displayName === 'string' ? coachData.displayName.trim() : '';
     if (coachRole !== 'trainer' && coachRole !== 'admin') {
       throw new HttpsError('failed-precondition', 'Coach not active.');
     }
@@ -477,6 +479,8 @@ export const completeClientOnboarding = onCall(
         assignedCoachId: coachUid,
         assignedCoachCode: coachCode,
         assignedCoachEmail: coachEmail,
+        assignedCoachPhone: coachPhone,
+        assignedCoachName: coachName,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       {merge: true},
@@ -489,6 +493,8 @@ export const completeClientOnboarding = onCall(
         phone,
         coachCode,
         coachId: coachUid,
+        coachPhone,
+        coachName,
         compiledBy: 'client',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
