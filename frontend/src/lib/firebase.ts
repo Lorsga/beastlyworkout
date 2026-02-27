@@ -112,6 +112,10 @@ const updateMyPlanExerciseWeightFn = httpsCallable<
   { planId: string; exerciseIndex: number; weightKg: number },
   { ok: boolean }
 >(functions, 'updateMyPlanExerciseWeight');
+const syncMyPlanWeightOverridesFn = httpsCallable<
+  undefined,
+  { ok: boolean; synced: number }
+>(functions, 'syncMyPlanWeightOverrides');
 
 export async function bootstrapFirstAdmin() {
   const result = await bootstrapFirstAdminFn();
@@ -181,6 +185,11 @@ export async function getMyAssignedPlans() {
 
 export async function updateMyPlanExerciseWeight(planId: string, exerciseIndex: number, weightKg: number) {
   const result = await updateMyPlanExerciseWeightFn({ planId, exerciseIndex, weightKg });
+  return result.data;
+}
+
+export async function syncMyPlanWeightOverrides() {
+  const result = await syncMyPlanWeightOverridesFn();
   return result.data;
 }
 

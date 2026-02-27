@@ -686,6 +686,74 @@ export const updateMyPlanExerciseWeight = onCall(
   },
 );
 
+export const syncMyPlanWeightOverrides = onCall(
+  {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    const uid = request.auth.uid;
+    const privateSnap = await db.collection('users').doc(uid).collection('private').doc('planWeights').get();
+    const privateData = privateSnap.data() ?? {};
+    const rawWeights = privateData.weights;
+    if (!rawWeights || typeof rawWeights !== 'object' || Array.isArray(rawWeights)) {
+      return {ok: true, synced: 0};
+    }
+
+    const weightsByPlan = rawWeights as Record<string, unknown>;
+    let synced = 0;
+    const writeJobs: Array<Promise<unknown>> = [];
+
+    for (const [planId, rawExerciseMap] of Object.entries(weightsByPlan)) {
+      if (!planId || !rawExerciseMap || typeof rawExerciseMap !== 'object' || Array.isArray(rawExerciseMap)) continue;
+      const planRef = db.collection('plans').doc(planId);
+      const planSnap = await planRef.get();
+      if (!planSnap.exists) continue;
+
+      const planData = planSnap.data() ?? {};
+      const exercises = Array.isArray(planData.exercises) ? planData.exercises : [];
+      const assignedClientIds = Array.isArray(planData.assignedClientIds)
+        ? planData.assignedClientIds.filter((item: unknown): item is string => typeof item === 'string')
+        : [];
+      const assignmentDetails = parseAssignmentDetails(planData.assignmentDetails);
+      const clientAssignment = assignmentDetails[uid];
+      const assignmentMode = typeof clientAssignment?.mode === 'string' ? clientAssignment.mode : 'permanent';
+      const assignmentStartsAt = toMillis(clientAssignment?.startsAt);
+      const assignmentExpiresAt = toMillis(clientAssignment?.expiresAt);
+      const assignmentNotStarted = assignmentMode === 'timed' && assignmentStartsAt > Date.now();
+      const assignmentExpired = assignmentMode === 'timed' && assignmentExpiresAt > 0 && assignmentExpiresAt <= Date.now();
+      const isLegacyClientPlan = typeof planData.clientId === 'string' && planData.clientId === uid;
+      const isAssigned = assignedClientIds.includes(uid) || isLegacyClientPlan;
+      if (!isAssigned || assignmentNotStarted || assignmentExpired) continue;
+
+      const mapByExercise = rawExerciseMap as Record<string, unknown>;
+      const patch: Record<string, unknown> = {updatedAt: admin.firestore.FieldValue.serverTimestamp()};
+      let hasPatch = false;
+
+      for (const [rawIndex, rawWeight] of Object.entries(mapByExercise)) {
+        const exerciseIndex = Number(rawIndex);
+        const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight);
+        if (!Number.isInteger(exerciseIndex) || exerciseIndex < 0 || exerciseIndex >= exercises.length) continue;
+        if (!Number.isFinite(weight) || weight < 0) continue;
+        patch[`clientWeightOverrides.${uid}.${exerciseIndex}`] = weight;
+        synced += 1;
+        hasPatch = true;
+      }
+
+      if (hasPatch) {
+        writeJobs.push(planRef.set(patch, {merge: true}));
+      }
+    }
+
+    if (writeJobs.length > 0) {
+      await Promise.all(writeJobs);
+    }
+
+    return {ok: true, synced};
+  },
+);
+
 export const cleanupExpiredPlanAssignments = onSchedule(
   {region: 'us-central1', schedule: 'every 24 hours', timeZone: 'Europe/Rome'},
   async () => {

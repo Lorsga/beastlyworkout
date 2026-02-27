@@ -6,6 +6,7 @@ import {
   deleteMyProfile,
   getMyPlanWeightOverridesDoc,
   getMyAssignedPlans,
+  syncMyPlanWeightOverrides,
   setMyPlanExerciseWeightOverride,
   updateMyPlanExerciseWeight,
   getUserPrivateDoc,
@@ -265,6 +266,11 @@ export function ClientDashboardPage() {
       const profileSnap = authUid ? await getUserProfile(authUid) : null;
       const profile = (profileSnap?.data() as UserProfileDoc | undefined) ?? {};
       const onboardingSnap = authUid ? await getUserPrivateDoc(authUid, 'onboarding') : null;
+      try {
+        await syncMyPlanWeightOverrides();
+      } catch {
+        // Best effort sync for backward compatibility with existing private plan weights.
+      }
       const weightOverridesSnap = authUid ? await getMyPlanWeightOverridesDoc() : null;
       const weightOverridesData = (weightOverridesSnap?.data() as PlanWeightOverridesDoc | undefined) ?? {};
       const nextPersonalOverrides = weightOverridesData.weights ?? {};
