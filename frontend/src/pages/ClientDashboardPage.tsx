@@ -41,6 +41,8 @@ interface PlanDoc {
     restSeconds?: number;
     weight?: string;
     mediaUrl?: string;
+    videoUrl?: string;
+    imageUrl?: string;
   }>;
 }
 
@@ -106,6 +108,8 @@ function normalizeExercises(value: unknown): Array<{
   workValue: number;
   weightKg: number;
   restSeconds: number;
+  videoUrl: string;
+  imageUrl: string;
   mediaUrl: string;
 }> {
   if (!Array.isArray(value)) return [];
@@ -123,6 +127,11 @@ function normalizeExercises(value: unknown): Array<{
       const dropSetNotes = typeof raw.dropSetNotes === 'string'
         ? raw.dropSetNotes
         : (advancedMethod === 'drop_set' ? legacyAdvancedMethodNotes : '');
+      const rawMediaUrl = typeof raw.mediaUrl === 'string' ? raw.mediaUrl.trim() : '';
+      const rawVideoUrl = typeof raw.videoUrl === 'string' ? raw.videoUrl.trim() : '';
+      const rawImageUrl = typeof raw.imageUrl === 'string' ? raw.imageUrl.trim() : '';
+      const normalizedVideoUrl = rawVideoUrl || (toYouTubeEmbedUrl(rawMediaUrl) || isVideoUrl(rawMediaUrl) ? rawMediaUrl : '');
+      const normalizedImageUrl = rawImageUrl || (isImageUrl(rawMediaUrl) ? rawMediaUrl : '');
       return {
         name: typeof raw.name === 'string' ? raw.name : '',
         notes: typeof raw.notes === 'string' ? raw.notes : '',
@@ -135,7 +144,9 @@ function normalizeExercises(value: unknown): Array<{
         workValue: typeof raw.workValue === 'number' ? raw.workValue : Number(raw.workValue ?? raw.reps ?? 0) || 0,
         weightKg: typeof raw.weightKg === 'number' ? raw.weightKg : Number(raw.weightKg ?? legacyWeight ?? 0) || 0,
         restSeconds: typeof raw.restSeconds === 'number' ? raw.restSeconds : Number(raw.restSeconds ?? 0) || 0,
-        mediaUrl: typeof raw.mediaUrl === 'string' ? raw.mediaUrl : '',
+        videoUrl: normalizedVideoUrl,
+        imageUrl: normalizedImageUrl,
+        mediaUrl: rawMediaUrl || normalizedVideoUrl || normalizedImageUrl,
       };
     })
     .filter((item): item is {
@@ -150,6 +161,8 @@ function normalizeExercises(value: unknown): Array<{
       workValue: number;
       weightKg: number;
       restSeconds: number;
+      videoUrl: string;
+      imageUrl: string;
       mediaUrl: string;
     } => Boolean(item));
 }
@@ -633,10 +646,19 @@ export function ClientDashboardPage() {
                         );
                       })()}
                       {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
-                      {exercise.mediaUrl ? (
-                        <button className="btn-link" type="button" onClick={() => openMediaPreview(exercise.mediaUrl, exercise.name || `Esercizio ${index + 1}`)}>
-                          {toYouTubeEmbedUrl(exercise.mediaUrl) || isVideoUrl(exercise.mediaUrl) ? 'Apri video' : isImageUrl(exercise.mediaUrl) ? 'Apri immagine' : 'Apri link'}
-                        </button>
+                      {exercise.videoUrl || exercise.imageUrl ? (
+                        <>
+                          {exercise.videoUrl ? (
+                            <button className="btn-link" type="button" onClick={() => openMediaPreview(exercise.videoUrl, exercise.name || `Esercizio ${index + 1}`)}>
+                              Apri video
+                            </button>
+                          ) : null}
+                          {exercise.imageUrl ? (
+                            <button className="btn-link" type="button" onClick={() => openMediaPreview(exercise.imageUrl, exercise.name || `Esercizio ${index + 1}`)}>
+                              Apri immagine
+                            </button>
+                          ) : null}
+                        </>
                       ) : (
                         <p className="hint">Nessun media allegato</p>
                       )}

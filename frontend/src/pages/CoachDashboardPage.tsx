@@ -63,6 +63,8 @@ interface PlanDoc {
     restSeconds?: number;
     weight?: string;
     mediaUrl?: string;
+    videoUrl?: string;
+    imageUrl?: string;
   }>;
 }
 
@@ -180,6 +182,11 @@ function normalizePlanExercises(value: unknown) {
       const legacyAdvancedMethodNotes = asText(raw.advancedMethodNotes);
       const rawRestPauseNotes = asText(raw.restPauseNotes);
       const rawDropSetNotes = asText(raw.dropSetNotes);
+      const rawMediaUrl = asText(raw.mediaUrl).trim();
+      const rawVideoUrl = asText(raw.videoUrl).trim();
+      const rawImageUrl = asText(raw.imageUrl).trim();
+      const normalizedVideoUrl = rawVideoUrl || (isVideoMediaUrl(rawMediaUrl) ? rawMediaUrl : '');
+      const normalizedImageUrl = rawImageUrl || (isImageMediaUrl(rawMediaUrl) ? rawMediaUrl : '');
       return {
         name: asText(raw.name),
         notes: asText(raw.notes),
@@ -192,7 +199,9 @@ function normalizePlanExercises(value: unknown) {
         workValue: Number(raw.workValue ?? raw.reps ?? 10) || 10,
         weightKg: Number(raw.weightKg ?? legacyWeight ?? 0) || 0,
         restSeconds: Number(raw.restSeconds ?? 60) || 60,
-        mediaUrl: asText(raw.mediaUrl),
+        videoUrl: normalizedVideoUrl,
+        imageUrl: normalizedImageUrl,
+        mediaUrl: rawMediaUrl || normalizedVideoUrl || normalizedImageUrl,
       };
     })
     .filter((item): item is {
@@ -207,6 +216,8 @@ function normalizePlanExercises(value: unknown) {
       workValue: number;
       weightKg: number;
       restSeconds: number;
+      videoUrl: string;
+      imageUrl: string;
       mediaUrl: string;
     } => Boolean(item));
 }
@@ -254,6 +265,8 @@ function defaultExercise() {
     workValue: 10,
     weightKg: 0,
     restSeconds: 60,
+    videoUrl: '',
+    imageUrl: '',
     mediaUrl: '',
   };
 }
@@ -270,6 +283,8 @@ function hasExerciseDraftData(exercise: {
   workValue: number;
   weightKg: number;
   restSeconds: number;
+  videoUrl: string;
+  imageUrl: string;
   mediaUrl: string;
 }): boolean {
   return (
@@ -279,6 +294,8 @@ function hasExerciseDraftData(exercise: {
     exercise.advancedMethodNotes.trim().length > 0 ||
     exercise.restPauseNotes.trim().length > 0 ||
     exercise.dropSetNotes.trim().length > 0 ||
+    exercise.videoUrl.trim().length > 0 ||
+    exercise.imageUrl.trim().length > 0 ||
     exercise.mediaUrl.trim().length > 0 ||
     exercise.sets !== 3 ||
     exercise.reps !== 10 ||
@@ -817,6 +834,8 @@ export function CoachDashboardPage() {
       workValue: number;
       weightKg: number;
       restSeconds: number;
+      videoUrl: string;
+      imageUrl: string;
       mediaUrl: string;
     }>,
   ) {
@@ -1002,7 +1021,9 @@ export function CoachDashboardPage() {
         workValue: planKind === 'circuit' ? Number(item.workValue) || 0 : 0,
         weightKg: Number(item.weightKg) || 0,
         restSeconds: Number(item.restSeconds) || 0,
-        mediaUrl: item.mediaUrl.trim(),
+        videoUrl: item.videoUrl.trim(),
+        imageUrl: item.imageUrl.trim(),
+        mediaUrl: (item.videoUrl || item.imageUrl || item.mediaUrl).trim(),
       }))
       .filter((item) => item.name.length > 0);
 
@@ -1116,7 +1137,7 @@ export function CoachDashboardPage() {
     try {
       const mediaScopeId = selectedPlan?.id || user?.uid || 'coach-draft';
       const url = await uploadWorkoutMediaAsCoach(mediaScopeId, file);
-      updateExercise(index, { mediaUrl: url });
+      updateExercise(index, { imageUrl: url, mediaUrl: url });
       showSuccess('Media caricato con successo.');
     } catch (error) {
       console.error('Media upload failed:', error);
@@ -1152,6 +1173,8 @@ export function CoachDashboardPage() {
       workValue: exercise.workValue,
       weightKg: exercise.weightKg,
       restSeconds: exercise.restSeconds,
+      videoUrl: exercise.videoUrl,
+      imageUrl: exercise.imageUrl,
       mediaUrl: exercise.mediaUrl,
     }));
     const duplicated = await runAction(
@@ -1934,26 +1957,26 @@ export function CoachDashboardPage() {
                 <label>
                   URL video (YouTube o link diretto)
                   <input
-                    value={isVideoMediaUrl(exercise.mediaUrl) ? exercise.mediaUrl : ''}
-                    onChange={(event) => updateExercise(index, {mediaUrl: event.target.value})}
+                    value={exercise.videoUrl}
+                    onChange={(event) => updateExercise(index, {videoUrl: event.target.value, mediaUrl: event.target.value || exercise.imageUrl})}
                     placeholder="https://..."
                   />
                 </label>
                 <label>
-                  Oppure carica un&apos;immagine
+                  Carica un&apos;immagine (puoi tenerla insieme al video)
                   <input
                     type="file"
                     accept="image/*"
                     onChange={(event) => void onUploadMedia(index, event.target.files?.[0] ?? null)}
                     disabled={uploadingExerciseIndex === index}
                   />
-                  {isImageMediaUrl(exercise.mediaUrl) ? <img src={exercise.mediaUrl} alt={`Anteprima esercizio ${index + 1}`} className="exercise-upload-preview" /> : null}
+                  {isImageMediaUrl(exercise.imageUrl) ? <img src={exercise.imageUrl} alt={`Anteprima esercizio ${index + 1}`} className="exercise-upload-preview" /> : null}
                 </label>
-                {isImageMediaUrl(exercise.mediaUrl) ? (
+                {isImageMediaUrl(exercise.imageUrl) ? (
                   <p className="hint">
                     Immagine caricata.
                     {' '}
-                    <button className="btn-link" type="button" onClick={() => updateExercise(index, {mediaUrl: ''})}>
+                    <button className="btn-link" type="button" onClick={() => updateExercise(index, {imageUrl: '', mediaUrl: exercise.videoUrl})}>
                       Rimuovi
                     </button>
                   </p>
@@ -2098,9 +2121,9 @@ export function CoachDashboardPage() {
                     <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
                   ) : null}
                   {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
-                  {exercise.mediaUrl ? (
+                  {exercise.imageUrl || exercise.videoUrl ? (
                     <>
-                      {isImageMediaUrl(exercise.mediaUrl) ? (
+                      {isImageMediaUrl(exercise.imageUrl) ? (
                         <>
                           {isImageLoading ? (
                             <div className="media-loading" aria-live="polite">
@@ -2109,7 +2132,7 @@ export function CoachDashboardPage() {
                             </div>
                           ) : null}
                           <img
-                            src={exercise.mediaUrl}
+                            src={exercise.imageUrl}
                             alt={`Media esercizio ${index + 1}`}
                             className="exercise-upload-preview"
                             style={{display: isImageLoading ? 'none' : 'block'}}
@@ -2118,22 +2141,16 @@ export function CoachDashboardPage() {
                           />
                         </>
                       ) : null}
-                      {isVideoMediaUrl(exercise.mediaUrl) ? (
+                      {isVideoMediaUrl(exercise.videoUrl) ? (
                         <>
-                          <a className="btn-link screen-only" href={exercise.mediaUrl} target="_blank" rel="noreferrer">
+                          <a className="btn-link screen-only" href={exercise.videoUrl} target="_blank" rel="noreferrer">
                             Apri video
                           </a>
-                          <a className="hint print-only print-video-link" href={exercise.mediaUrl} target="_blank" rel="noreferrer">
-                            URL video: {exercise.mediaUrl}
+                          <a className="hint print-only print-video-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">
+                            URL video: {exercise.videoUrl}
                           </a>
                         </>
-                      ) : (
-                        isImageMediaUrl(exercise.mediaUrl) ? null : (
-                          <a className="btn-link" href={exercise.mediaUrl} target="_blank" rel="noreferrer">
-                            Apri link
-                          </a>
-                        )
-                      )}
+                      ) : null}
                     </>
                   ) : (
                     <p className="hint">Nessun media allegato</p>
