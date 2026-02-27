@@ -268,6 +268,10 @@ export async function getPlanByClientId(clientId?: string) {
   return getDoc(doc(db, 'plans', uid));
 }
 
+export async function getPlanById(planId: string) {
+  return getDoc(doc(db, 'plans', planId));
+}
+
 export async function updatePlanAsCoach(planId: string, patch: Record<string, unknown>) {
   await updateDoc(doc(db, 'plans', planId), {
     ...patch,

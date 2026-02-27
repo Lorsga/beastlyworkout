@@ -13,6 +13,7 @@ import {
   deletePlanAsCoach,
   acceptCoachTrial,
   getCoachAccessState,
+  getPlanById,
   getUserPrivateDoc,
   listAssignedClientsAsCoach,
   listPlansForRole,
@@ -469,6 +470,13 @@ function getPlanWeightFeedback(
   }
 
   return feedback;
+}
+
+function getPlanWeightFeedbackCount(
+  plan: PlanDoc & { id: string },
+  clientLabelById: Record<string, string>,
+): number {
+  return getPlanWeightFeedback(plan, clientLabelById).reduce((total, item) => total + item.lines.length, 0);
 }
 
 export function CoachDashboardPage() {
@@ -1032,10 +1040,19 @@ export function CoachDashboardPage() {
     setIsPlanModalOpen(true);
   }
 
-  function openPlanPreview(planId: string) {
+  async function openPlanPreview(planId: string) {
     const plan = coachPlanTemplates.find((item) => item.id === planId);
     if (!plan) return;
-    setSelectedPlanId(plan.id);
+    try {
+      const freshSnap = await getPlanById(planId);
+      if (freshSnap.exists()) {
+        const freshPlan = { id: freshSnap.id, ...(freshSnap.data() as PlanDoc) };
+        setPlans((prev) => prev.map((item) => (item.id === planId ? freshPlan : item)));
+      }
+    } catch {
+      // If fresh fetch fails, open preview with local cached data.
+    }
+    setSelectedPlanId(planId);
     setIsPlanPreviewOpen(true);
   }
 
@@ -1592,6 +1609,7 @@ export function CoachDashboardPage() {
                         <p className="hint">Tipo: {plan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</p>
                         <p className="hint">Esercizi: {normalizePlanExercises(plan.exercises).length}</p>
                         <p className="hint">Assegnata a: {Array.isArray(plan.assignedClientIds) ? plan.assignedClientIds.length : 0} clienti</p>
+                        <p className="hint">Modifiche peso clienti: {getPlanWeightFeedbackCount(plan, clientLabelById)}</p>
                         <div className="plan-card-actions">
                           <button className="btn btn-ghost" disabled={loading} onClick={() => openPlanPreview(plan.id)} type="button">
                             Visualizza
