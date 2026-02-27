@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import {onCall, HttpsError} from 'firebase-functions/v2/https';
 import {onDocumentCreated, onDocumentDeleted, onDocumentWritten} from 'firebase-functions/v2/firestore';
+import {onSchedule} from 'firebase-functions/v2/scheduler';
 
 admin.initializeApp();
 
@@ -94,6 +95,32 @@ function toMillis(value: unknown): number {
   if (value instanceof Date) return value.getTime();
   if (typeof value === 'number') return value;
   return 0;
+}
+
+function parseAssignmentDetails(
+  value: unknown,
+): Record<string, {mode?: unknown; startsAt?: unknown; expiresAt?: unknown; weeks?: unknown}> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value as Record<string, {mode?: unknown; startsAt?: unknown; expiresAt?: unknown; weeks?: unknown}>;
+}
+
+function parseClientWeightOverrides(value: unknown): Record<string, Record<string, number>> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const byClient = value as Record<string, unknown>;
+  const output: Record<string, Record<string, number>> = {};
+  for (const [clientId, clientValue] of Object.entries(byClient)) {
+    if (!clientValue || typeof clientValue !== 'object' || Array.isArray(clientValue)) continue;
+    const rawMap = clientValue as Record<string, unknown>;
+    const cleanMap: Record<string, number> = {};
+    for (const [exerciseIndex, weightValue] of Object.entries(rawMap)) {
+      const numeric = typeof weightValue === 'number' ? weightValue : Number(weightValue);
+      if (Number.isFinite(numeric) && numeric >= 0) {
+        cleanMap[exerciseIndex] = numeric;
+      }
+    }
+    output[clientId] = cleanMap;
+  }
+  return output;
 }
 
 async function getOrCreateCoachCode(uid: string, email: string, currentCoachCode: unknown): Promise<string> {
@@ -516,6 +543,197 @@ export const completeClientOnboarding = onCall(
   },
 );
 
+export const getMyAssignedPlans = onCall(
+  {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    const uid = request.auth.uid;
+    const [assignedSnap, legacySnap] = await Promise.all([
+      db.collection('plans').where('assignedClientIds', 'array-contains', uid).get(),
+      db.collection('plans').where('clientId', '==', uid).get(),
+    ]);
+
+    const merged = new Map<string, FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData>>();
+    assignedSnap.docs.forEach((docSnap) => merged.set(docSnap.id, docSnap));
+    legacySnap.docs.forEach((docSnap) => merged.set(docSnap.id, docSnap));
+
+    const now = Date.now();
+    const plans: Array<Record<string, unknown>> = [];
+    for (const [id, docSnap] of merged.entries()) {
+      const data = docSnap.data();
+      const assignedClientIds = Array.isArray(data.assignedClientIds)
+        ? data.assignedClientIds.filter((item: unknown): item is string => typeof item === 'string')
+        : [];
+      const assignmentDetails = parseAssignmentDetails(data.assignmentDetails);
+      const clientAssignment = assignmentDetails[uid];
+      const assignmentMode = typeof clientAssignment?.mode === 'string' ? clientAssignment.mode : 'permanent';
+      const assignmentStartsAt = toMillis(clientAssignment?.startsAt);
+      const assignmentExpiresAt = toMillis(clientAssignment?.expiresAt);
+      const assignmentNotStarted = assignmentMode === 'timed' && assignmentStartsAt > now;
+      const assignmentExpired = assignmentMode === 'timed' && assignmentExpiresAt > 0 && assignmentExpiresAt <= now;
+
+      if (assignmentExpired) {
+        await docSnap.ref.set(
+          {
+            assignedClientIds: admin.firestore.FieldValue.arrayRemove(uid),
+            [`assignmentDetails.${uid}`]: admin.firestore.FieldValue.delete(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          {merge: true},
+        );
+        continue;
+      }
+
+      const isLegacyClientPlan = typeof data.clientId === 'string' && data.clientId === uid;
+      const isAssigned = assignedClientIds.includes(uid) || isLegacyClientPlan;
+      if (!isAssigned) continue;
+      if (assignmentNotStarted) continue;
+      const baseExercises = Array.isArray(data.exercises) ? data.exercises : [];
+      const clientOverridesByUser = parseClientWeightOverrides(data.clientWeightOverrides);
+      const clientOverrides = clientOverridesByUser[uid] ?? {};
+      const exercises = baseExercises.map((exercise, index) => {
+        if (!exercise || typeof exercise !== 'object' || Array.isArray(exercise)) return exercise;
+        const override = clientOverrides[String(index)];
+        if (!Number.isFinite(override)) return exercise;
+        return {
+          ...exercise,
+          weightKg: override,
+        };
+      });
+
+      plans.push({
+        id,
+        trainerId: typeof data.trainerId === 'string' ? data.trainerId : '',
+        clientId: typeof data.clientId === 'string' ? data.clientId : '',
+        title: typeof data.title === 'string' ? data.title : '',
+        status: typeof data.status === 'string' ? data.status : 'active',
+        kind: data.kind === 'circuit' ? 'circuit' : 'series_reps',
+        notes: typeof data.notes === 'string' ? data.notes : '',
+        assignedClientIds,
+        exercises,
+        createdAt: data.createdAt instanceof admin.firestore.Timestamp ? data.createdAt.toDate().toISOString() : null,
+        updatedAt: data.updatedAt instanceof admin.firestore.Timestamp ? data.updatedAt.toDate().toISOString() : null,
+      });
+    }
+
+    return {ok: true, plans};
+  },
+);
+
+export const updateMyPlanExerciseWeight = onCall(
+  {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    const uid = request.auth.uid;
+    const payload = request.data as {planId?: unknown; exerciseIndex?: unknown; weightKg?: unknown};
+    const planId = typeof payload.planId === 'string' ? payload.planId.trim() : '';
+    const exerciseIndex = typeof payload.exerciseIndex === 'number' ? payload.exerciseIndex : Number(payload.exerciseIndex);
+    const weightKg = typeof payload.weightKg === 'number' ? payload.weightKg : Number(payload.weightKg);
+
+    if (!planId) {
+      throw new HttpsError('invalid-argument', 'planId is required.');
+    }
+    if (!Number.isInteger(exerciseIndex) || exerciseIndex < 0) {
+      throw new HttpsError('invalid-argument', 'exerciseIndex must be a non-negative integer.');
+    }
+    if (!Number.isFinite(weightKg) || weightKg < 0) {
+      throw new HttpsError('invalid-argument', 'weightKg must be a non-negative number.');
+    }
+
+    const planRef = db.collection('plans').doc(planId);
+    const planSnap = await planRef.get();
+    if (!planSnap.exists) {
+      throw new HttpsError('not-found', 'Plan not found.');
+    }
+    const data = planSnap.data() ?? {};
+    const exercises = Array.isArray(data.exercises) ? data.exercises : [];
+    if (exerciseIndex >= exercises.length) {
+      throw new HttpsError('invalid-argument', 'exerciseIndex out of bounds.');
+    }
+
+    const assignedClientIds = Array.isArray(data.assignedClientIds)
+      ? data.assignedClientIds.filter((item: unknown): item is string => typeof item === 'string')
+      : [];
+    const assignmentDetails = parseAssignmentDetails(data.assignmentDetails);
+    const clientAssignment = assignmentDetails[uid];
+    const assignmentMode = typeof clientAssignment?.mode === 'string' ? clientAssignment.mode : 'permanent';
+    const assignmentStartsAt = toMillis(clientAssignment?.startsAt);
+    const assignmentExpiresAt = toMillis(clientAssignment?.expiresAt);
+    const assignmentNotStarted = assignmentMode === 'timed' && assignmentStartsAt > Date.now();
+    const assignmentExpired = assignmentMode === 'timed' && assignmentExpiresAt > 0 && assignmentExpiresAt <= Date.now();
+    const isLegacyClientPlan = typeof data.clientId === 'string' && data.clientId === uid;
+    const isAssigned = assignedClientIds.includes(uid) || isLegacyClientPlan;
+
+    if (!isAssigned || assignmentNotStarted || assignmentExpired) {
+      throw new HttpsError('permission-denied', 'Plan not currently assigned to this client.');
+    }
+
+    await planRef.set(
+      {
+        [`clientWeightOverrides.${uid}.${exerciseIndex}`]: weightKg,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
+
+    return {ok: true};
+  },
+);
+
+export const cleanupExpiredPlanAssignments = onSchedule(
+  {region: 'us-central1', schedule: 'every 24 hours', timeZone: 'Europe/Rome'},
+  async () => {
+    const plansSnap = await db.collection('plans').get();
+    const now = Date.now();
+    let batch = db.batch();
+    let writes = 0;
+
+    for (const docSnap of plansSnap.docs) {
+      const data = docSnap.data();
+      const assignedClientIds = Array.isArray(data.assignedClientIds)
+        ? data.assignedClientIds.filter((item: unknown): item is string => typeof item === 'string')
+        : [];
+      const assignmentDetails = parseAssignmentDetails(data.assignmentDetails);
+      const expiredClientIds = Object.entries(assignmentDetails)
+        .filter(([clientId, detail]) => {
+          if (!assignedClientIds.includes(clientId)) return false;
+          const mode = typeof detail?.mode === 'string' ? detail.mode : 'permanent';
+          const expiresAt = toMillis(detail?.expiresAt);
+          return mode === 'timed' && expiresAt > 0 && expiresAt <= now;
+        })
+        .map(([clientId]) => clientId);
+
+      if (expiredClientIds.length === 0) continue;
+
+      const patch: Record<string, unknown> = {
+        assignedClientIds: assignedClientIds.filter((id) => !expiredClientIds.includes(id)),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      expiredClientIds.forEach((clientId) => {
+        patch[`assignmentDetails.${clientId}`] = admin.firestore.FieldValue.delete();
+      });
+      batch.set(docSnap.ref, patch, {merge: true});
+      writes += 1;
+
+      if (writes >= 400) {
+        await batch.commit();
+        batch = db.batch();
+        writes = 0;
+      }
+    }
+
+    if (writes > 0) {
+      await batch.commit();
+    }
+  },
+);
+
 function assertSupervisor(request: {auth?: {uid: string; token?: Record<string, unknown>}}): string {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');
@@ -588,6 +806,22 @@ async function deleteCoachOwnedData(coachUid: string): Promise<void> {
 async function deleteClientOwnedData(clientUid: string): Promise<void> {
   await deleteQueryDocs(db.collection('trainerClients').where('clientId', '==', clientUid));
   await db.collection('plans').doc(clientUid).delete().catch(() => undefined);
+  const assignedPlans = await db.collection('plans').where('assignedClientIds', 'array-contains', clientUid).get();
+  if (!assignedPlans.empty) {
+    const batch = db.batch();
+    assignedPlans.docs.forEach((docSnap) => {
+      batch.set(
+        docSnap.ref,
+        {
+          assignedClientIds: admin.firestore.FieldValue.arrayRemove(clientUid),
+          [`assignmentDetails.${clientUid}`]: admin.firestore.FieldValue.delete(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    });
+    await batch.commit();
+  }
   await deleteQueryDocs(db.collection('sessions').where('clientId', '==', clientUid));
   await deleteQueryDocs(db.collection('workoutLogs').where('clientId', '==', clientUid));
   await deleteQueryDocs(db.collection('metrics').where('clientId', '==', clientUid));

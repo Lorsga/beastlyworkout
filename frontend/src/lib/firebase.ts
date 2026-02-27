@@ -89,6 +89,29 @@ const disableCoachSubscriptionFn = httpsCallable<{ uid: string }, { ok: boolean;
 );
 const deleteMyProfileFn = httpsCallable<undefined, { ok: boolean }>(functions, 'deleteMyProfile');
 const updateMyCoachPhoneFn = httpsCallable<{ phone: string }, { ok: boolean; phone: string }>(functions, 'updateMyCoachPhone');
+const getMyAssignedPlansFn = httpsCallable<
+  undefined,
+  {
+    ok: boolean;
+    plans: Array<{
+      id: string;
+      trainerId: string;
+      clientId: string;
+      title: string;
+      status: string;
+      kind: 'series_reps' | 'circuit';
+      notes: string;
+      assignedClientIds: string[];
+      exercises: unknown[];
+      createdAt: string | null;
+      updatedAt: string | null;
+    }>;
+  }
+>(functions, 'getMyAssignedPlans');
+const updateMyPlanExerciseWeightFn = httpsCallable<
+  { planId: string; exerciseIndex: number; weightKg: number },
+  { ok: boolean }
+>(functions, 'updateMyPlanExerciseWeight');
 
 export async function bootstrapFirstAdmin() {
   const result = await bootstrapFirstAdminFn();
@@ -148,6 +171,16 @@ export async function deleteMyProfile() {
 
 export async function updateMyCoachPhone(phone: string) {
   const result = await updateMyCoachPhoneFn({ phone });
+  return result.data;
+}
+
+export async function getMyAssignedPlans() {
+  const result = await getMyAssignedPlansFn();
+  return result.data;
+}
+
+export async function updateMyPlanExerciseWeight(planId: string, exerciseIndex: number, weightKg: number) {
+  const result = await updateMyPlanExerciseWeightFn({ planId, exerciseIndex, weightKg });
   return result.data;
 }
 

@@ -4,7 +4,8 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useToast } from '../components/ToastProvider';
 import {
   deleteMyProfile,
-  getPlanByClientId,
+  getMyAssignedPlans,
+  updateMyPlanExerciseWeight,
   getUserPrivateDoc,
   getUserProfile,
   listPlansForRole,
@@ -21,8 +22,12 @@ interface PlanDoc {
   status: string;
   kind?: 'series_reps' | 'circuit';
   notes?: string;
+  warmup?: string;
   exercises?: Array<{
     name?: string;
+    notes?: string;
+    advancedMethod?: 'rest_pause' | 'drop_set' | '';
+    advancedMethodNotes?: string;
     sets?: number;
     reps?: number;
     workValue?: number;
@@ -79,15 +84,31 @@ function isVideoUrl(url: string): boolean {
   return /\.(mp4|webm|mov|m4v|ogg)(\?.*)?$/i.test(url);
 }
 
-function normalizeExercises(value: unknown): Array<{ name: string; sets: number; reps: number; workValue: number; weightKg: number; restSeconds: number; mediaUrl: string }> {
+function normalizeExercises(value: unknown): Array<{
+  name: string;
+  notes: string;
+  advancedMethod: '' | 'rest_pause' | 'drop_set';
+  advancedMethodNotes: string;
+  sets: number;
+  reps: number;
+  workValue: number;
+  weightKg: number;
+  restSeconds: number;
+  mediaUrl: string;
+}> {
   if (!Array.isArray(value)) return [];
   return value
     .map((item) => {
       if (!item || typeof item !== 'object') return null;
       const raw = item as Record<string, unknown>;
       const legacyWeight = Number((typeof raw.weight === 'string' ? raw.weight : '').replace(/[^\d.-]/g, ''));
+      const rawAdvancedMethod = typeof raw.advancedMethod === 'string' ? raw.advancedMethod.trim() : '';
+      const advancedMethod = rawAdvancedMethod === 'rest_pause' || rawAdvancedMethod === 'drop_set' ? rawAdvancedMethod : '';
       return {
         name: typeof raw.name === 'string' ? raw.name : '',
+        notes: typeof raw.notes === 'string' ? raw.notes : '',
+        advancedMethod,
+        advancedMethodNotes: typeof raw.advancedMethodNotes === 'string' ? raw.advancedMethodNotes : '',
         sets: typeof raw.sets === 'number' ? raw.sets : Number(raw.sets ?? 0) || 0,
         reps: typeof raw.reps === 'number' ? raw.reps : Number(raw.reps ?? 0) || 0,
         workValue: typeof raw.workValue === 'number' ? raw.workValue : Number(raw.workValue ?? raw.reps ?? 0) || 0,
@@ -96,7 +117,18 @@ function normalizeExercises(value: unknown): Array<{ name: string; sets: number;
         mediaUrl: typeof raw.mediaUrl === 'string' ? raw.mediaUrl : '',
       };
     })
-    .filter((item): item is { name: string; sets: number; reps: number; workValue: number; weightKg: number; restSeconds: number; mediaUrl: string } => Boolean(item));
+    .filter((item): item is {
+      name: string;
+      notes: string;
+      advancedMethod: '' | 'rest_pause' | 'drop_set';
+      advancedMethodNotes: string;
+      sets: number;
+      reps: number;
+      workValue: number;
+      weightKg: number;
+      restSeconds: number;
+      mediaUrl: string;
+    } => Boolean(item));
 }
 
 function normalizeWhatsappPhone(raw: string): string {
@@ -112,7 +144,7 @@ function normalizeWhatsappPhone(raw: string): string {
 export function ClientDashboardPage() {
   const { role, user } = useAuthState();
   const navigate = useNavigate();
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const [plans, setPlans] = useState<Array<PlanDoc & { id: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
@@ -124,6 +156,8 @@ export function ClientDashboardPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingProfile, setDeletingProfile] = useState(false);
   const [coachWhatsappNumber, setCoachWhatsappNumber] = useState('');
+  const [exerciseWeightDrafts, setExerciseWeightDrafts] = useState<Record<string, string>>({});
+  const [savingWeightKey, setSavingWeightKey] = useState('');
   const whatsappMessage = 'Ciao coach, avrei bisogno di un feedback sulla mia scheda.';
 
   useEffect(() => {
@@ -151,6 +185,11 @@ export function ClientDashboardPage() {
     setLoading(true);
     try {
       const authUid = user?.uid ?? '';
+      if (!authUid) {
+        setPlans([]);
+        setSelectedPlanId('');
+        return;
+      }
       const profileSnap = authUid ? await getUserProfile(authUid) : null;
       const profile = (profileSnap?.data() as UserProfileDoc | undefined) ?? {};
       const onboardingSnap = authUid ? await getUserPrivateDoc(authUid, 'onboarding') : null;
@@ -167,32 +206,35 @@ export function ClientDashboardPage() {
       }
       setCoachWhatsappNumber(nextCoachPhone);
 
-      const candidateIds = Array.from(
-        new Set([authUid, (profile.uid ?? '').trim(), (profile.clientId ?? '').trim()].filter((value) => value.length > 0)),
-      );
-
-      const planResults = await Promise.allSettled(
-        candidateIds.flatMap((candidateId) => [listPlansForRole('client', candidateId), getPlanByClientId(candidateId)]),
-      );
-
       const mergedMap = new Map<string, PlanDoc & { id: string }>();
-      for (const result of planResults) {
-        if (result.status !== 'fulfilled') continue;
-        const value = result.value;
-        if ('docs' in value) {
-          for (const plan of mapDocs<PlanDoc>(value.docs)) {
+      let callableFailed = false;
+      try {
+        const callableResult = await getMyAssignedPlans();
+        if (callableResult?.ok && Array.isArray(callableResult.plans)) {
+          for (const plan of callableResult.plans) {
+            mergedMap.set(plan.id, plan as PlanDoc & { id: string });
+          }
+        }
+      } catch {
+        callableFailed = true;
+      }
+
+      // Fallback minimale: usato solo se la callable non risponde.
+      if (callableFailed) {
+        try {
+          const fallbackSnap = await listPlansForRole('client', authUid);
+          for (const plan of mapDocs<PlanDoc>(fallbackSnap.docs)) {
             mergedMap.set(plan.id, plan);
           }
-        } else if (value.exists()) {
-          const plan = { id: value.id, ...(value.data() as PlanDoc) } as PlanDoc & { id: string };
-          mergedMap.set(plan.id, plan);
+        } catch (error) {
+          showError(`Errore caricamento schede: ${toMessage(error)}`);
         }
       }
 
       const mergedPlans = Array.from(mergedMap.values()).sort((a, b) => {
-        const aIsDirect = candidateIds.includes(a.id) ? 0 : 1;
-        const bIsDirect = candidateIds.includes(b.id) ? 0 : 1;
-        return aIsDirect - bIsDirect;
+        const aTime = new Date(String((a as {updatedAt?: unknown}).updatedAt ?? '')).getTime() || 0;
+        const bTime = new Date(String((b as {updatedAt?: unknown}).updatedAt ?? '')).getTime() || 0;
+        return bTime - aTime;
       });
       setPlans(mergedPlans);
       if (mergedPlans.length > 0) {
@@ -244,6 +286,46 @@ export function ClientDashboardPage() {
     { label: 'Peso', value: onboarding?.weightKg ? `${onboarding.weightKg} kg` : '' },
     { label: 'Obiettivo', value: onboarding?.objectivePrimary },
   ].filter((item) => (item.value ?? '').toString().trim().length > 0);
+
+  useEffect(() => {
+    const nextDrafts: Record<string, string> = {};
+    for (const plan of plans) {
+      const normalized = normalizeExercises(plan.exercises);
+      normalized.forEach((exercise, index) => {
+        nextDrafts[`${plan.id}:${index}`] = String(exercise.weightKg || 0);
+      });
+    }
+    setExerciseWeightDrafts(nextDrafts);
+  }, [plans]);
+
+  async function saveExerciseWeight(planId: string, exerciseIndex: number, fallbackWeight: number) {
+    const draftKey = `${planId}:${exerciseIndex}`;
+    const rawValue = (exerciseWeightDrafts[draftKey] ?? String(fallbackWeight)).trim();
+    const nextWeight = Number(rawValue);
+    if (!Number.isFinite(nextWeight) || nextWeight < 0) {
+      showError('Inserisci un peso valido (numero >= 0).');
+      return;
+    }
+
+    setSavingWeightKey(draftKey);
+    try {
+      await updateMyPlanExerciseWeight(planId, exerciseIndex, nextWeight);
+      setPlans((prev) =>
+        prev.map((plan) => {
+          if (plan.id !== planId) return plan;
+          const normalized = normalizeExercises(plan.exercises);
+          const updatedExercises = normalized.map((exercise, idx) => (idx === exerciseIndex ? { ...exercise, weightKg: nextWeight } : exercise));
+          return { ...plan, exercises: updatedExercises };
+        }),
+      );
+      setExerciseWeightDrafts((prev) => ({ ...prev, [draftKey]: String(nextWeight) }));
+      showSuccess('Peso aggiornato.');
+    } catch (error) {
+      showError(toMessage(error));
+    } finally {
+      setSavingWeightKey('');
+    }
+  }
 
   if (!user) return <Navigate to="/auth" replace />;
   if (checkingOnboarding) {
@@ -327,7 +409,12 @@ export function ClientDashboardPage() {
                 <p className="hint">
                   Tipo scheda: <strong>{selectedPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
                 </p>
-                {selectedPlan.kind === 'circuit' && (selectedPlan.notes ?? '').trim() ? (
+                {(selectedPlan.warmup ?? '').trim() ? (
+                  <div className="client-info-block">
+                    <p className="hint"><strong>Riscaldamento:</strong> {selectedPlan.warmup}</p>
+                  </div>
+                ) : null}
+                {(selectedPlan.notes ?? '').trim() ? (
                   <div className="client-info-block">
                     <p className="hint"><strong>Note coach:</strong> {selectedPlan.notes}</p>
                   </div>
@@ -348,6 +435,40 @@ export function ClientDashboardPage() {
                         <span>{exercise.weightKg || 0} kg</span>
                         <span>{exercise.restSeconds || 0} sec recupero</span>
                       </div>
+                      {exercise.advancedMethod ? (
+                        <p className="hint">
+                          <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
+                        </p>
+                      ) : null}
+                      {exercise.advancedMethod && exercise.advancedMethodNotes.trim() ? (
+                        <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethodNotes}</p>
+                      ) : null}
+                      <div className="exercise-weight-edit-row">
+                        <label>
+                          Peso (kg)
+                          <input
+                            type="number"
+                            min={0}
+                            inputMode="decimal"
+                            value={exerciseWeightDrafts[`${selectedPlan.id}:${index}`] ?? String(exercise.weightKg || 0)}
+                            onChange={(event) =>
+                              setExerciseWeightDrafts((prev) => ({
+                                ...prev,
+                                [`${selectedPlan.id}:${index}`]: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <button
+                          className="btn"
+                          type="button"
+                          disabled={savingWeightKey === `${selectedPlan.id}:${index}`}
+                          onClick={() => void saveExerciseWeight(selectedPlan.id, index, exercise.weightKg || 0)}
+                        >
+                          {savingWeightKey === `${selectedPlan.id}:${index}` ? 'Salvataggio...' : 'Salva peso'}
+                        </button>
+                      </div>
+                      {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
                       {exercise.mediaUrl ? (
                         <button className="btn-link" type="button" onClick={() => openMediaPreview(exercise.mediaUrl, exercise.name || `Esercizio ${index + 1}`)}>
                           {toYouTubeEmbedUrl(exercise.mediaUrl) || isVideoUrl(exercise.mediaUrl) ? 'Apri video' : isImageUrl(exercise.mediaUrl) ? 'Apri immagine' : 'Apri link'}
@@ -403,11 +524,27 @@ export function ClientDashboardPage() {
         </article>
       ) : null}
 
-      {loading ? <p className="message">Caricamento...</p> : null}
+      {loading ? (
+        <section className="modal-overlay" role="status" aria-live="polite" aria-label="Caricamento in corso">
+          <article className="card loading-overlay-card">
+            <span className="spinner" aria-hidden="true" />
+            <p className="hint">Caricamento scheda...</p>
+          </article>
+        </section>
+      ) : null}
 
       {mediaPreview ? (
-        <section className="modal-overlay" role="dialog" aria-modal="true">
-          <article className="card modal-card">
+        <section
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={(event) => {
+            if (event.currentTarget !== event.target) return;
+            setMediaPreview(null);
+            setMediaPreviewLoading(false);
+          }}
+        >
+          <article className="card modal-card" onClick={(event) => event.stopPropagation()}>
             <h2>{mediaPreview.label}</h2>
             {toYouTubeEmbedUrl(mediaPreview.url) ? (
               <iframe
@@ -455,8 +592,8 @@ export function ClientDashboardPage() {
       ) : null}
 
       {isDeleteModalOpen ? (
-        <section className="modal-overlay" role="dialog" aria-modal="true">
-          <article className="card modal-card">
+        <section className="modal-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && setIsDeleteModalOpen(false)}>
+          <article className="card modal-card" onClick={(event) => event.stopPropagation()}>
             <h2>Conferma eliminazione profilo</h2>
             <p className="hint">
               Eliminando il profilo perderai definitivamente account, anagrafica, scheda e dati collegati.

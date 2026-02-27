@@ -3,6 +3,7 @@ import {
   arrayRemove,
   addDoc,
   collection,
+  deleteField,
   deleteDoc,
   doc,
   getDoc,
@@ -13,6 +14,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  Timestamp,
   type DocumentData,
 } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, listAll, ref, uploadBytes, type StorageReference } from 'firebase/storage';
@@ -32,6 +34,7 @@ export interface PlanInput {
   clientId?: string;
   status: PlanStatus;
   title: string;
+  warmup?: string;
   description?: string;
   kind?: 'series_reps' | 'circuit';
   notes?: string;
@@ -162,6 +165,7 @@ export async function createPlanAsCoach(input: PlanInput) {
     clientId: input.clientId ?? '',
     status: input.status,
     title: input.title,
+    warmup: input.warmup ?? '',
     description: input.description ?? '',
     kind: input.kind ?? 'series_reps',
     notes: input.notes ?? '',
@@ -185,6 +189,47 @@ export async function listPlansForRole(role: AppRole, userId?: string) {
 export async function assignPlanToClientAsCoach(planId: string, clientId: string) {
   await updateDoc(doc(db, 'plans', planId), {
     assignedClientIds: arrayUnion(clientId),
+    [`assignmentDetails.${clientId}`]: {
+      mode: 'permanent',
+      weeks: null,
+      expiresAt: null,
+      assignedAt: serverTimestamp(),
+    },
+    ...updateTimestamp(),
+  });
+}
+
+export async function setPlanAssignmentDurationAsCoach(planId: string, clientId: string, weeks: number | null) {
+  return setPlanAssignmentDurationWithStartAsCoach(planId, clientId, weeks, null);
+}
+
+export async function setPlanAssignmentDurationWithStartAsCoach(
+  planId: string,
+  clientId: string,
+  weeks: number | null,
+  startDateIso: string | null,
+) {
+  const startsAtDate = startDateIso ? new Date(startDateIso) : new Date();
+  const safeStart = Number.isNaN(startsAtDate.getTime()) ? new Date() : startsAtDate;
+  const assignment = weeks && weeks > 0
+    ? {
+        mode: 'timed',
+        weeks,
+        startsAt: Timestamp.fromDate(safeStart),
+        expiresAt: Timestamp.fromDate(new Date(safeStart.getTime() + weeks * 7 * 24 * 60 * 60 * 1000)),
+        assignedAt: serverTimestamp(),
+      }
+    : {
+        mode: 'permanent',
+        weeks: null,
+        startsAt: null,
+        expiresAt: null,
+        assignedAt: serverTimestamp(),
+      };
+
+  await updateDoc(doc(db, 'plans', planId), {
+    assignedClientIds: arrayUnion(clientId),
+    [`assignmentDetails.${clientId}`]: assignment,
     ...updateTimestamp(),
   });
 }
@@ -192,6 +237,7 @@ export async function assignPlanToClientAsCoach(planId: string, clientId: string
 export async function removePlanAssignmentAsCoach(planId: string, clientId: string) {
   await updateDoc(doc(db, 'plans', planId), {
     assignedClientIds: arrayRemove(clientId),
+    [`assignmentDetails.${clientId}`]: deleteField(),
     ...updateTimestamp(),
   });
 }

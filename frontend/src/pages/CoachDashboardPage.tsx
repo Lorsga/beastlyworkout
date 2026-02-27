@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import Select, { type StylesConfig } from 'react-select';
+import Select, { type MultiValue, type StylesConfig } from 'react-select';
 import { useNavigate } from 'react-router-dom';
 
 import { useToast } from '../components/ToastProvider';
@@ -20,6 +20,7 @@ import {
   logoutCurrentUser,
   renewCoachSubscription,
   removePlanAssignmentAsCoach,
+  setPlanAssignmentDurationWithStartAsCoach,
   setClientOnboardingAsCoach,
   updateMyCoachPhone,
   uploadWorkoutMediaAsCoach,
@@ -36,9 +37,20 @@ interface PlanDoc {
   status: string;
   kind?: 'series_reps' | 'circuit';
   notes?: string;
+  warmup?: string;
   assignedClientIds?: string[];
+  assignmentDetails?: Record<string, {
+    mode?: 'permanent' | 'timed';
+    weeks?: number | null;
+    startsAt?: unknown;
+    expiresAt?: unknown;
+    assignedAt?: unknown;
+  }>;
   exercises?: Array<{
     name?: string;
+    notes?: string;
+    advancedMethod?: 'rest_pause' | 'drop_set' | '';
+    advancedMethodNotes?: string;
     sets?: number;
     reps?: number;
     workValue?: number;
@@ -146,8 +158,9 @@ function asText(value: unknown): string {
 }
 
 function getClientAuthUid(profile: UserProfileDoc & { id: string }): string {
+  const docId = asText(profile.id).trim();
   const uid = asText(profile.uid).trim();
-  return uid || profile.id;
+  return docId || uid;
 }
 
 function normalizePlanExercises(value: unknown) {
@@ -157,8 +170,13 @@ function normalizePlanExercises(value: unknown) {
       if (!item || typeof item !== 'object') return null;
       const raw = item as Record<string, unknown>;
       const legacyWeight = Number(asText(raw.weight).replace(/[^\d.-]/g, ''));
+      const rawAdvancedMethod = asText(raw.advancedMethod).trim();
+      const advancedMethod = rawAdvancedMethod === 'rest_pause' || rawAdvancedMethod === 'drop_set' ? rawAdvancedMethod : '';
       return {
         name: asText(raw.name),
+        notes: asText(raw.notes),
+        advancedMethod,
+        advancedMethodNotes: asText(raw.advancedMethodNotes),
         sets: Number(raw.sets ?? 3) || 3,
         reps: Number(raw.reps ?? 10) || 10,
         workValue: Number(raw.workValue ?? raw.reps ?? 10) || 10,
@@ -167,7 +185,7 @@ function normalizePlanExercises(value: unknown) {
         mediaUrl: asText(raw.mediaUrl),
       };
     })
-    .filter((item): item is {name: string; sets: number; reps: number; workValue: number; weightKg: number; restSeconds: number; mediaUrl: string} => Boolean(item));
+    .filter((item): item is {name: string; notes: string; advancedMethod: '' | 'rest_pause' | 'drop_set'; advancedMethodNotes: string; sets: number; reps: number; workValue: number; weightKg: number; restSeconds: number; mediaUrl: string} => Boolean(item));
 }
 
 function onboardingValue(value: unknown): string {
@@ -201,11 +219,25 @@ function isImageMediaUrl(url: string): boolean {
 }
 
 function defaultExercise() {
-  return {name: '', sets: 3, reps: 10, workValue: 10, weightKg: 0, restSeconds: 60, mediaUrl: ''};
+  return {
+    name: '',
+    notes: '',
+    advancedMethod: '' as '' | 'rest_pause' | 'drop_set',
+    advancedMethodNotes: '',
+    sets: 3,
+    reps: 10,
+    workValue: 10,
+    weightKg: 0,
+    restSeconds: 60,
+    mediaUrl: '',
+  };
 }
 
 function hasExerciseDraftData(exercise: {
   name: string;
+  notes: string;
+  advancedMethod: '' | 'rest_pause' | 'drop_set';
+  advancedMethodNotes: string;
   sets: number;
   reps: number;
   workValue: number;
@@ -215,6 +247,9 @@ function hasExerciseDraftData(exercise: {
 }): boolean {
   return (
     exercise.name.trim().length > 0 ||
+    exercise.notes.trim().length > 0 ||
+    exercise.advancedMethod.trim().length > 0 ||
+    exercise.advancedMethodNotes.trim().length > 0 ||
     exercise.mediaUrl.trim().length > 0 ||
     exercise.sets !== 3 ||
     exercise.reps !== 10 ||
@@ -307,6 +342,26 @@ function formatDate(value?: string | null): string {
   return date.toLocaleDateString('it-IT', {day: '2-digit', month: '2-digit', year: 'numeric'});
 }
 
+function toIsoDateString(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  }
+  if (typeof value === 'object' && value && 'toDate' in value && typeof (value as {toDate: () => Date}).toDate === 'function') {
+    const date = (value as {toDate: () => Date}).toDate();
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+  return null;
+}
+
+function toInputDate(value: Date): string {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+}
+
 function accessStatusLabel(status?: string): string {
   switch (status) {
   case 'trial_pending':
@@ -389,9 +444,15 @@ export function CoachDashboardPage() {
   const [isCreatingPlan, setIsCreatingPlan] = useState(false);
   const [planKind, setPlanKind] = useState<'series_reps' | 'circuit'>('series_reps');
   const [planTitle, setPlanTitle] = useState('');
+  const [planWarmup, setPlanWarmup] = useState('');
   const [planNotes, setPlanNotes] = useState('');
   const [exercises, setExercises] = useState([defaultExercise()]);
-  const [assigningClientId, setAssigningClientId] = useState('');
+  const [assigningClientIds, setAssigningClientIds] = useState<string[]>([]);
+  const [isAssignmentModeModalOpen, setIsAssignmentModeModalOpen] = useState(false);
+  const [assignmentTargetClientId, setAssignmentTargetClientId] = useState('');
+  const [assignmentModeDraft, setAssignmentModeDraft] = useState<'permanent' | 'timed'>('permanent');
+  const [assignmentWeeksDraft, setAssignmentWeeksDraft] = useState('4');
+  const [assignmentStartDateDraft, setAssignmentStartDateDraft] = useState(toInputDate(new Date()));
   const isUploadingMedia = uploadingExerciseIndex !== null;
 
   const selectedClientProfile = registeredClients.find((item) => getClientAuthUid(item) === selectedClientId) ?? null;
@@ -418,6 +479,10 @@ export function CoachDashboardPage() {
     value: getClientAuthUid(client),
     label: asText(client.displayName).trim() || asText(client.email) || client.id,
   }));
+  const unassignedClientOptions: ClientOption[] = selectedPlan
+    ? clientOptions.filter((option) => !(selectedPlan.assignedClientIds ?? []).includes(option.value))
+    : clientOptions;
+  const assigningClientOptions = clientOptions.filter((option) => assigningClientIds.includes(option.value));
 
   const selectedClientOption = clientOptions.find((option) => option.value === selectedClientId) ?? null;
   const profileProgress = Math.round(((profileStep + 1) / PROFILE_STEPS.length) * 100);
@@ -448,7 +513,7 @@ export function CoachDashboardPage() {
     }
   }, [isSupervisor, activeTab]);
 
-  const customStyles: StylesConfig<ClientOption, false> = useMemo(
+  const customStyles: StylesConfig<ClientOption, boolean> = useMemo(
     () => ({
       control: (base, state) => ({
         ...base,
@@ -641,7 +706,18 @@ export function CoachDashboardPage() {
 
   function updateExercise(
     index: number,
-    patch: Partial<{name: string; sets: number; reps: number; workValue: number; weightKg: number; restSeconds: number; mediaUrl: string}>,
+    patch: Partial<{
+      name: string;
+      notes: string;
+      advancedMethod: '' | 'rest_pause' | 'drop_set';
+      advancedMethodNotes: string;
+      sets: number;
+      reps: number;
+      workValue: number;
+      weightKg: number;
+      restSeconds: number;
+      mediaUrl: string;
+    }>,
   ) {
     setExercises((prev) => prev.map((item, idx) => (idx === index ? {...item, ...patch} : item)));
   }
@@ -654,12 +730,14 @@ export function CoachDashboardPage() {
     if (!selectedPlan) {
       setPlanKind('series_reps');
       setPlanTitle('');
+      setPlanWarmup('');
       setPlanNotes('');
       setExercises([defaultExercise()]);
       return;
     }
     setPlanKind(selectedPlan.kind === 'circuit' ? 'circuit' : 'series_reps');
     setPlanTitle(selectedPlan.title ?? '');
+    setPlanWarmup(asText((selectedPlan as {warmup?: unknown}).warmup));
     setPlanNotes(asText(selectedPlan.notes));
     const nextExercises = normalizePlanExercises(selectedPlan.exercises).filter((item) => item.name.trim().length > 0);
     setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
@@ -667,7 +745,7 @@ export function CoachDashboardPage() {
 
   function handlePlanKindChange(nextKind: 'series_reps' | 'circuit') {
     if (nextKind === planKind) return;
-    const hasDraftData = exercises.some((exercise) => hasExerciseDraftData(exercise)) || planNotes.trim().length > 0;
+    const hasDraftData = exercises.some((exercise) => hasExerciseDraftData(exercise)) || planNotes.trim().length > 0 || planWarmup.trim().length > 0;
     if (hasDraftData) {
       const confirmed = window.confirm(
         'Cambiando categoria di allenamento, i dati inseriti in questa scheda verranno cancellati. Vuoi continuare?',
@@ -675,6 +753,7 @@ export function CoachDashboardPage() {
       if (!confirmed) return;
       setExercises([defaultExercise()]);
       setPlanNotes('');
+      setPlanWarmup('');
     }
     setPlanKind(nextKind);
   }
@@ -811,6 +890,9 @@ export function CoachDashboardPage() {
     const preparedExercises = exercises
       .map((item) => ({
         name: item.name.trim(),
+        notes: item.notes.trim(),
+        advancedMethod: item.advancedMethod || '',
+        advancedMethodNotes: item.advancedMethod ? item.advancedMethodNotes.trim() : '',
         sets: planKind === 'series_reps' ? Number(item.sets) || 0 : 0,
         reps: planKind === 'series_reps' ? Number(item.reps) || 0 : 0,
         workValue: planKind === 'circuit' ? Number(item.workValue) || 0 : 0,
@@ -831,7 +913,8 @@ export function CoachDashboardPage() {
           updatePlanAsCoach(editingPlan.id, {
             title: normalizedTitle,
             kind: planKind,
-            notes: planKind === 'circuit' ? planNotes.trim() : '',
+            warmup: planWarmup.trim(),
+            notes: planNotes.trim(),
             status: 'active',
             exercises: preparedExercises,
           }),
@@ -844,7 +927,8 @@ export function CoachDashboardPage() {
           createPlanAsCoach({
             title: normalizedTitle,
             kind: planKind,
-            notes: planKind === 'circuit' ? planNotes.trim() : '',
+            warmup: planWarmup.trim(),
+            notes: planNotes.trim(),
             status: 'active',
             exercises: preparedExercises,
           }),
@@ -861,6 +945,7 @@ export function CoachDashboardPage() {
     setSelectedPlanId('');
     setPlanKind('series_reps');
     setPlanTitle('');
+    setPlanWarmup('');
     setPlanNotes('');
     setExercises([defaultExercise()]);
     setIsPlanModalOpen(true);
@@ -873,6 +958,7 @@ export function CoachDashboardPage() {
     setSelectedPlanId(plan.id);
     setPlanKind(plan.kind === 'circuit' ? 'circuit' : 'series_reps');
     setPlanTitle(plan.title ?? '');
+    setPlanWarmup(asText((plan as {warmup?: unknown}).warmup));
     setPlanNotes(asText(plan.notes));
     const nextExercises = normalizePlanExercises(plan.exercises).filter((item) => item.name.trim().length > 0);
     setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
@@ -928,6 +1014,9 @@ export function CoachDashboardPage() {
     if (!source) return;
     const sourceExercises = normalizePlanExercises(source.exercises).map((exercise) => ({
       name: exercise.name,
+      notes: exercise.notes,
+      advancedMethod: exercise.advancedMethod,
+      advancedMethodNotes: exercise.advancedMethodNotes,
       sets: exercise.sets,
       reps: exercise.reps,
       workValue: exercise.workValue,
@@ -954,16 +1043,15 @@ export function CoachDashboardPage() {
       showError('Seleziona prima una scheda.');
       return;
     }
-    if (!assigningClientId) {
-      showError('Seleziona un cliente da assegnare.');
+    if (assigningClientIds.length === 0) {
+      showError('Seleziona almeno un cliente da assegnare.');
       return;
     }
     await runAction(
-      () => assignPlanToClientAsCoach(selectedPlan.id, assigningClientId),
-      'Scheda assegnata al cliente.',
+      () => Promise.all(assigningClientIds.map((clientId) => assignPlanToClientAsCoach(selectedPlan.id, clientId))),
+      assigningClientIds.length === 1 ? 'Scheda assegnata al cliente.' : 'Scheda assegnata ai clienti selezionati.',
     );
-    setIsAssignModalOpen(false);
-    setAssigningClientId('');
+    setAssigningClientIds([]);
   }
 
   async function removeAssignedClient(clientId: string) {
@@ -972,6 +1060,78 @@ export function CoachDashboardPage() {
       () => removePlanAssignmentAsCoach(selectedPlan.id, clientId),
       'Assegnazione rimossa.',
     );
+  }
+
+  function assignmentStatus(plan: PlanDoc & { id: string }, clientId: string): { label: string; tone: 'success' | 'warning' | 'danger' } {
+    const detail = plan.assignmentDetails?.[clientId];
+    if (!detail || detail.mode !== 'timed') return { label: 'Permanente', tone: 'success' };
+    const startIso = toIsoDateString(detail.startsAt);
+    const iso = toIsoDateString(detail.expiresAt);
+    if (!iso) return { label: 'Permanente', tone: 'success' };
+    if (startIso) {
+      const startsAt = new Date(startIso).getTime();
+      if (!Number.isNaN(startsAt) && startsAt > Date.now()) {
+        return { label: `Inizia il ${formatDate(startIso)}`, tone: 'warning' };
+      }
+    }
+    const expiresAt = new Date(iso).getTime();
+    if (Number.isNaN(expiresAt)) return { label: 'Permanente', tone: 'success' };
+    const now = Date.now();
+    if (expiresAt <= now) return { label: 'Scaduta', tone: 'danger' };
+    const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+    const tone = expiresAt - now <= oneWeekMs ? 'warning' : 'success';
+    return { label: `Scade il ${formatDate(iso)}`, tone };
+  }
+
+  function openAssignmentModeModal(clientId: string) {
+    if (!selectedPlan) return;
+    const detail = selectedPlan.assignmentDetails?.[clientId];
+    const isTimed = detail?.mode === 'timed';
+    const weeks = typeof detail?.weeks === 'number' && detail.weeks > 0 ? detail.weeks : 4;
+    const startsAtIso = toIsoDateString(detail?.startsAt);
+    const startsAt = startsAtIso ? new Date(startsAtIso) : new Date();
+    setAssignmentTargetClientId(clientId);
+    setAssignmentModeDraft(isTimed ? 'timed' : 'permanent');
+    setAssignmentWeeksDraft(String(weeks));
+    setAssignmentStartDateDraft(toInputDate(startsAt));
+    setIsAssignmentModeModalOpen(true);
+  }
+
+  function assignmentPreviewRange(): { from: string; to: string } | null {
+    if (assignmentModeDraft !== 'timed') return null;
+    const weeks = Number(assignmentWeeksDraft);
+    if (!Number.isFinite(weeks) || weeks < 1) return null;
+    const start = new Date(assignmentStartDateDraft);
+    if (Number.isNaN(start.getTime())) return null;
+    const end = new Date(start.getTime() + weeks * 7 * 24 * 60 * 60 * 1000);
+    return {from: formatDate(start.toISOString()), to: formatDate(end.toISOString())};
+  }
+
+  async function saveAssignmentMode() {
+    if (!selectedPlan || !assignmentTargetClientId) return;
+    if (assignmentModeDraft === 'timed') {
+      const weeks = Number(assignmentWeeksDraft);
+      if (!Number.isFinite(weeks) || weeks < 1) {
+        showError('Inserisci un numero settimane valido.');
+        return;
+      }
+      const start = new Date(assignmentStartDateDraft);
+      if (Number.isNaN(start.getTime())) {
+        showError('Seleziona una data di inizio valida.');
+        return;
+      }
+      await runAction(
+        () => setPlanAssignmentDurationWithStartAsCoach(selectedPlan.id, assignmentTargetClientId, weeks, start.toISOString()),
+        'Durata assegnazione aggiornata.',
+      );
+    } else {
+      await runAction(
+        () => setPlanAssignmentDurationWithStartAsCoach(selectedPlan.id, assignmentTargetClientId, null, null),
+        'Assegnazione impostata come permanente.',
+      );
+    }
+    setIsAssignmentModeModalOpen(false);
+    setAssignmentTargetClientId('');
   }
 
   async function runSupervisorAction(uid: string, action: 'activate' | 'disable') {
@@ -1066,15 +1226,23 @@ export function CoachDashboardPage() {
   return (
     <AppShell
       role={role === 'trainer' ? 'trainer' : 'admin'}
-      subtitle="Flusso diviso per tab: clienti, schede e controllo accessi."
+      subtitle=""
       title="Area Coach"
       sections={coachSections}
       activeSection={activeTab}
       onSectionChange={(nextTab) => setActiveTab(nextTab as CoachTabId)}
     >
       {coachAccess?.requiresTrialAcceptance ? (
-        <section className="modal-overlay" role="dialog" aria-modal="true">
-          <article className="card modal-card fullscreen-gate">
+        <section
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={(event) => {
+            if (event.currentTarget !== event.target) return;
+            void logoutCurrentUser().finally(() => navigate('/auth', {replace: true}));
+          }}
+        >
+          <article className="card modal-card fullscreen-gate" onClick={(event) => event.stopPropagation()}>
             <p className="eyebrow">Accesso Coach</p>
             <h2>Prova gratuita 15 giorni</h2>
             <p className="hero-sub">
@@ -1244,7 +1412,7 @@ export function CoachDashboardPage() {
         {activeTab === 'clients' ? (
           <label>
             Clienti registrati
-            <Select
+            <Select<ClientOption, false>
               styles={customStyles}
               options={clientOptions}
               value={selectedClientOption}
@@ -1361,9 +1529,7 @@ export function CoachDashboardPage() {
                         </div>
                         <p className="hint">Tipo: {plan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</p>
                         <p className="hint">Esercizi: {normalizePlanExercises(plan.exercises).length}</p>
-                        <span className="status-chip status-chip-warning">
-                          Assegnata a: {Array.isArray(plan.assignedClientIds) ? plan.assignedClientIds.length : 0} clienti
-                        </span>
+                        <p className="hint">Assegnata a: {Array.isArray(plan.assignedClientIds) ? plan.assignedClientIds.length : 0} clienti</p>
                         <div className="plan-card-actions">
                           <button className="btn btn-ghost" disabled={loading} onClick={() => openPlanPreview(plan.id)} type="button">
                             Visualizza
@@ -1391,8 +1557,8 @@ export function CoachDashboardPage() {
       ) : null}
 
       {isProfileModalOpen ? (
-        <section className="modal-overlay" role="dialog" aria-modal="true">
-          <article className="card modal-card">
+        <section className="modal-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && closeProfileModalWithoutSaving()}>
+          <article className="card modal-card" onClick={(event) => event.stopPropagation()}>
             <h2>Anagrafica completa cliente</h2>
             <p className="hero-sub">Step {profileStep + 1} di {PROFILE_STEPS.length} · Completamento {profileProgress}%</p>
             <div className="onboarding-progress" aria-hidden="true">
@@ -1483,8 +1649,8 @@ export function CoachDashboardPage() {
       ) : null}
 
       {isPlanModalOpen ? (
-        <section className="modal-overlay" role="dialog" aria-modal="true">
-          <article className="card modal-card">
+        <section className="modal-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && closePlanModalWithoutSaving()}>
+          <article className="card modal-card" onClick={(event) => event.stopPropagation()}>
             <h2>{editingPlan ? 'Modifica scheda' : 'Compila la scheda'}</h2>
             <p className="hint">Aggiungi esercizi uno alla volta per completare il programma.</p>
             <div className="step-tabs plan-kind-tabs">
@@ -1512,16 +1678,22 @@ export function CoachDashboardPage() {
                 required
               />
             </label>
-            {planKind === 'circuit' ? (
-              <label>
-                Note
-                <textarea
-                  value={planNotes}
-                  onChange={(event) => setPlanNotes(event.target.value)}
-                  placeholder="Note utili per il cliente sul circuito"
-                />
-              </label>
-            ) : null}
+            <label>
+              Riscaldamento (opzionale)
+              <textarea
+                value={planWarmup}
+                onChange={(event) => setPlanWarmup(event.target.value)}
+                placeholder="Es. 8-10 min mobilità, attivazione scapole, squat a corpo libero..."
+              />
+            </label>
+            <label>
+              Note (opzionale)
+              <textarea
+                value={planNotes}
+                onChange={(event) => setPlanNotes(event.target.value)}
+                placeholder="Note utili per il cliente"
+              />
+            </label>
             {exercises.map((exercise, index) => (
               <article className="card" key={`exercise-${index}`} style={{boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)'}}>
                 <div className="exercise-head">
@@ -1533,6 +1705,14 @@ export function CoachDashboardPage() {
                 <label>
                   Nome esercizio
                   <input value={exercise.name} onChange={(event) => updateExercise(index, {name: event.target.value})} placeholder="Es. Squat bilanciere" />
+                </label>
+                <label>
+                  Note esercizio
+                  <textarea
+                    value={exercise.notes}
+                    onChange={(event) => updateExercise(index, {notes: event.target.value})}
+                    placeholder="Note utili per questo esercizio"
+                  />
                 </label>
                 <div className="exercise-fields-inline">
                   {planKind === 'series_reps' ? (
@@ -1591,6 +1771,39 @@ export function CoachDashboardPage() {
                     />
                   </label>
                 </div>
+                <div className="exercise-method-toggle">
+                  <p className="hint">Metodo opzionale</p>
+                  <div className="exercise-method-toggle-row">
+                    <button
+                      className={`btn btn-ghost ${exercise.advancedMethod === 'rest_pause' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                      type="button"
+                      onClick={() => updateExercise(index, exercise.advancedMethod === 'rest_pause'
+                        ? { advancedMethod: '', advancedMethodNotes: '' }
+                        : { advancedMethod: 'rest_pause', advancedMethodNotes: '' })}
+                    >
+                      Rest Pause
+                    </button>
+                    <button
+                      className={`btn btn-ghost ${exercise.advancedMethod === 'drop_set' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                      type="button"
+                      onClick={() => updateExercise(index, exercise.advancedMethod === 'drop_set'
+                        ? { advancedMethod: '', advancedMethodNotes: '' }
+                        : { advancedMethod: 'drop_set', advancedMethodNotes: '' })}
+                    >
+                      Drop set
+                    </button>
+                  </div>
+                </div>
+                {exercise.advancedMethod ? (
+                  <label>
+                    {exercise.advancedMethod === 'rest_pause' ? 'Note Rest Pause' : 'Note Drop set'}
+                    <textarea
+                      value={exercise.advancedMethodNotes}
+                      onChange={(event) => updateExercise(index, { advancedMethodNotes: event.target.value })}
+                      placeholder="Inserisci indicazioni per il cliente"
+                    />
+                  </label>
+                ) : null}
                 <label>
                   URL video (YouTube o link diretto)
                   <input
@@ -1640,17 +1853,28 @@ export function CoachDashboardPage() {
       ) : null}
 
       {isPlanPreviewOpen && previewPlan ? (
-        <section className="modal-overlay" role="dialog" aria-modal="true">
-          <article className="card modal-card print-sheet">
+        <section className="modal-overlay preview-modal-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && setIsPlanPreviewOpen(false)}>
+          <article className="card modal-card print-sheet preview-modal-card" onClick={(event) => event.stopPropagation()}>
             <div className="exercise-head">
-              <h2>Scheda</h2>
+              <div className="preview-head-main">
+                <button
+                  className="icon-btn mobile-only"
+                  type="button"
+                  aria-label="Chiudi scheda"
+                  title="Chiudi scheda"
+                  onClick={() => setIsPlanPreviewOpen(false)}
+                >
+                  ←
+                </button>
+                <h2>Scheda</h2>
+              </div>
               <div className="preview-head-actions screen-only">
                 <button
                   className="btn btn-ghost"
                   type="button"
                   disabled={registeredClients.length === 0}
                   onClick={() => {
-                    setAssigningClientId('');
+                    setAssigningClientIds([]);
                     setIsAssignModalOpen(true);
                   }}
                 >
@@ -1664,6 +1888,15 @@ export function CoachDashboardPage() {
                   onClick={printPlanPreview}
                 >
                   🖨
+                </button>
+                <button
+                  className="icon-btn desktop-only"
+                  type="button"
+                  aria-label="Chiudi scheda"
+                  title="Chiudi scheda"
+                  onClick={() => setIsPlanPreviewOpen(false)}
+                >
+                  ✕
                 </button>
               </div>
             </div>
@@ -1682,7 +1915,12 @@ export function CoachDashboardPage() {
             <p className="hint">
               Tipo scheda: <strong>{previewPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
             </p>
-            {previewPlan.kind === 'circuit' && asText(previewPlan.notes).trim() ? (
+            {asText((previewPlan as {warmup?: unknown}).warmup).trim() ? (
+              <div className="client-info-block">
+                <p className="hint"><strong>Riscaldamento:</strong> {asText((previewPlan as {warmup?: unknown}).warmup)}</p>
+              </div>
+            ) : null}
+            {asText(previewPlan.notes).trim() ? (
               <div className="client-info-block">
                 <p className="hint"><strong>Note coach:</strong> {asText(previewPlan.notes)}</p>
               </div>
@@ -1708,6 +1946,15 @@ export function CoachDashboardPage() {
                     <span>{exercise.weightKg || 0} kg</span>
                     <span>{exercise.restSeconds || 0} sec recupero</span>
                   </div>
+                  {exercise.advancedMethod ? (
+                    <p className="hint">
+                      <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
+                    </p>
+                  ) : null}
+                  {exercise.advancedMethod && exercise.advancedMethodNotes.trim() ? (
+                    <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethodNotes}</p>
+                  ) : null}
+                  {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
                   {exercise.mediaUrl ? (
                     <>
                       {isImageMediaUrl(exercise.mediaUrl) ? (
@@ -1754,55 +2001,149 @@ export function CoachDashboardPage() {
                 </article>
               ))}
             </div>
-            <button className="btn btn-ghost screen-only" type="button" onClick={() => setIsPlanPreviewOpen(false)}>
-              Chiudi
-            </button>
           </article>
         </section>
       ) : null}
 
       {isAssignModalOpen && selectedPlan ? (
-        <section className="modal-overlay" role="dialog" aria-modal="true">
-          <article className="card modal-card">
-            <h2>Gestisci assegnazioni</h2>
+        <section className="modal-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && setIsAssignModalOpen(false)}>
+          <article className="card modal-card" onClick={(event) => event.stopPropagation()}>
+            <div className="exercise-head">
+              <h2>Gestisci assegnazioni</h2>
+              <button
+                className="icon-btn"
+                type="button"
+                aria-label="Chiudi gestione assegnazioni"
+                title="Chiudi"
+                onClick={() => setIsAssignModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
             <p className="hint">Scheda: {selectedPlan.title || 'Scheda senza titolo'}</p>
             <label>
-              Cliente
-              <Select
+              Clienti
+              <Select<ClientOption, true>
                 styles={customStyles}
-                options={clientOptions}
-                value={clientOptions.find((opt) => opt.value === assigningClientId) ?? null}
-                onChange={(option) => setAssigningClientId(option?.value ?? '')}
-                placeholder={registeredClients.length === 0 ? 'Nessun cliente disponibile' : 'Cerca cliente per nome...'}
+                options={unassignedClientOptions}
+                value={assigningClientOptions}
+                onChange={(options: MultiValue<ClientOption>) => setAssigningClientIds(options.map((option) => option.value))}
+                placeholder={unassignedClientOptions.length === 0 ? 'Tutti i clienti sono già assegnati' : 'Cerca cliente per nome...'}
                 noOptionsMessage={() => 'Nessun risultato'}
                 isSearchable
+                isMulti
+                closeMenuOnSelect={false}
               />
             </label>
             <div className="action-row-split">
-              <button className="btn btn-primary" type="button" disabled={loading || !assigningClientId} onClick={() => void assignPlan()}>
+              <button className="btn btn-primary" type="button" disabled={loading || assigningClientIds.length === 0} onClick={() => void assignPlan()}>
                 Assegna
               </button>
             </div>
             <div className="client-info-block">
               <h3>Clienti assegnati</h3>
               {Array.isArray(selectedPlan.assignedClientIds) && selectedPlan.assignedClientIds.length > 0 ? (
-                <div className="stack">
-                  {selectedPlan.assignedClientIds.map((clientId) => (
-                    <div key={clientId} className="supervisor-row">
-                      <p className="hint"><strong>{clientLabelById[clientId] || clientId}</strong></p>
-                      <button className="btn btn-danger" type="button" disabled={loading} onClick={() => void removeAssignedClient(clientId)}>
-                        Rimuovi
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                <ul className="assigned-client-list">
+                  {selectedPlan.assignedClientIds.map((clientId) => {
+                    const status = assignmentStatus(selectedPlan, clientId);
+                    return (
+                      <li key={clientId} className="assigned-client-item">
+                      <div>
+                        <span className="assigned-client-name">{clientLabelById[clientId] || clientId}</span>
+                        <span className={`assignment-status assignment-status-${status.tone}`.trim()}>{status.label}</span>
+                      </div>
+                      <div className="assigned-client-actions">
+                        <button
+                          className="icon-btn assigned-client-time-btn"
+                          type="button"
+                          aria-label={`Imposta durata ${clientLabelById[clientId] || clientId}`}
+                          title="Imposta durata"
+                          disabled={loading}
+                          onClick={() => openAssignmentModeModal(clientId)}
+                        >
+                          ⏱
+                        </button>
+                        <button
+                          className="icon-btn icon-btn-danger assigned-client-remove-btn"
+                          type="button"
+                          aria-label={`Rimuovi ${clientLabelById[clientId] || clientId}`}
+                          title="Rimuovi cliente"
+                          disabled={loading}
+                          onClick={() => void removeAssignedClient(clientId)}
+                        >
+                          🗑
+                        </button>
+                      </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               ) : (
                 <p className="hint">Nessun cliente assegnato a questa scheda.</p>
               )}
             </div>
+          </article>
+        </section>
+      ) : null}
+
+      {isAssignmentModeModalOpen && selectedPlan ? (
+        <section className="modal-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && setIsAssignmentModeModalOpen(false)}>
+          <article className="card modal-card" onClick={(event) => event.stopPropagation()}>
+            <h2>Durata assegnazione</h2>
+            <p className="hint">
+              Cliente: <strong>{clientLabelById[assignmentTargetClientId] || assignmentTargetClientId}</strong>
+            </p>
+            <div className="step-tabs">
+              <button
+                className={`step-tab ${assignmentModeDraft === 'permanent' ? 'step-tab-active' : ''}`.trim()}
+                type="button"
+                onClick={() => setAssignmentModeDraft('permanent')}
+              >
+                Permanente
+              </button>
+              <button
+                className={`step-tab ${assignmentModeDraft === 'timed' ? 'step-tab-active' : ''}`.trim()}
+                type="button"
+                onClick={() => setAssignmentModeDraft('timed')}
+              >
+                A tempo
+              </button>
+            </div>
+            {assignmentModeDraft === 'timed' ? (
+              <>
+                <label>
+                  Data inizio
+                  <input
+                    type="date"
+                    value={assignmentStartDateDraft}
+                    onChange={(event) => setAssignmentStartDateDraft(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Settimane
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={assignmentWeeksDraft}
+                    onChange={(event) => setAssignmentWeeksDraft(event.target.value)}
+                  />
+                </label>
+                {assignmentPreviewRange() ? (
+                  <p className="hint">
+                    Disponibile dal <strong>{assignmentPreviewRange()!.from}</strong> al <strong>{assignmentPreviewRange()!.to}</strong>
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="hint">La scheda resterà sempre disponibile finché non rimuovi l&apos;assegnazione.</p>
+            )}
             <div className="action-row-split">
-              <button className="btn btn-ghost" type="button" onClick={() => setIsAssignModalOpen(false)}>
+              <button className="btn btn-ghost" type="button" onClick={() => setIsAssignmentModeModalOpen(false)}>
                 Chiudi
+              </button>
+              <button className="btn btn-primary" type="button" disabled={loading} onClick={() => void saveAssignmentMode()}>
+                Salva
               </button>
             </div>
           </article>
@@ -1810,8 +2151,8 @@ export function CoachDashboardPage() {
       ) : null}
 
       {isDeleteModalOpen && !coachAccess?.isSupervisor ? (
-        <section className="modal-overlay" role="dialog" aria-modal="true">
-          <article className="card modal-card">
+        <section className="modal-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && setIsDeleteModalOpen(false)}>
+          <article className="card modal-card" onClick={(event) => event.stopPropagation()}>
             <h2>Conferma eliminazione profilo coach</h2>
             <p className="hint">
               Eliminando il profilo perderai definitivamente dati, abbonamento e associazioni clienti legate al tuo account coach.

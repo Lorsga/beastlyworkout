@@ -22,7 +22,7 @@ export function AppShell({
 }: {
   role: AppRole;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   headerAction?: ReactNode;
   sections?: ShellSection[];
   activeSection?: string;
@@ -69,7 +69,7 @@ export function AppShell({
         <aside className="shell-sidebar desktop-only">
           <p className="eyebrow">{role === 'client' ? 'Area Cliente' : 'Area Coach'}</p>
           <h2>{title}</h2>
-          <p className="hint">{subtitle}</p>
+          {subtitle?.trim() ? <p className="hint">{subtitle}</p> : null}
           <nav className="shell-sidebar-nav">
             {sections.map((section) => renderSectionButton(section, 'desktop'))}
           </nav>
@@ -83,7 +83,7 @@ export function AppShell({
         <section className="hero hero-compact">
           <p className="eyebrow">{role === 'client' ? 'Area Cliente' : 'Area Coach'}</p>
           <h1>{title}</h1>
-          <p className="hero-sub">{subtitle}</p>
+          {subtitle?.trim() ? <p className="hero-sub">{subtitle}</p> : null}
           {headerAction}
           {!hasSections ? (
             <button className="btn btn-ghost" type="button" onClick={() => void logoutCurrentUser()}>
@@ -120,8 +120,8 @@ export function AppShell({
         </button>
       </nav>
       {showMoreMenu && mobileHiddenSections.length > 0 ? (
-        <section className="modal-overlay mobile-more-overlay" role="dialog" aria-modal="true">
-          <article className="card mobile-more-card">
+        <section className="modal-overlay mobile-more-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && setShowMoreMenu(false)}>
+          <article className="card mobile-more-card" onClick={(event) => event.stopPropagation()}>
             <h3>Altre sezioni</h3>
             <div className="mobile-more-list">
               {mobileHiddenSections.map((section) => (
