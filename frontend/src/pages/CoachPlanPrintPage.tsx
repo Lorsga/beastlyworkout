@@ -150,6 +150,7 @@ export function CoachPlanPrintPage() {
   const [clients, setClients] = useState<Array<UserProfileDoc & { id: string }>>([]);
   const [imagesReady, setImagesReady] = useState(true);
   const [pendingImages, setPendingImages] = useState(0);
+  const [openingPrintPreview, setOpeningPrintPreview] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -270,8 +271,11 @@ export function CoachPlanPrintPage() {
     : 'Nessuno';
 
   function handleFastPrint() {
+    setOpeningPrintPreview(true);
+    const returnUrl = window.location.href;
     const popup = window.open('', '_blank');
     if (!popup) {
+      setOpeningPrintPreview(false);
       window.print();
       return;
     }
@@ -350,6 +354,14 @@ export function CoachPlanPrintPage() {
     window.addEventListener('load', function () {
       setTimeout(function () { window.print(); }, 100);
     });
+    window.addEventListener('afterprint', function () {
+      setTimeout(function () {
+        try { window.close(); } catch (e) {}
+        if (!window.closed) {
+          window.location.replace(${JSON.stringify(returnUrl)});
+        }
+      }, 200);
+    });
   </script>
 </body>
 </html>`;
@@ -357,6 +369,7 @@ export function CoachPlanPrintPage() {
     popup.document.open();
     popup.document.write(html);
     popup.document.close();
+    setTimeout(() => setOpeningPrintPreview(false), 600);
   }
 
   return (
@@ -376,16 +389,17 @@ export function CoachPlanPrintPage() {
               aria-label="Stampa scheda"
               title={imagesReady ? 'Stampa scheda' : 'Attendi caricamento immagini'}
               onClick={() => {
-                if (!imagesReady) return;
+                if (!imagesReady || openingPrintPreview) return;
                 handleFastPrint();
               }}
-              disabled={!imagesReady}
+              disabled={!imagesReady || openingPrintPreview}
             >
-              {!imagesReady ? <span className="spinner" aria-hidden="true" /> : '🖨'}
+              {!imagesReady || openingPrintPreview ? <span className="spinner" aria-hidden="true" /> : '🖨'}
             </button>
           </div>
         </div>
         {!imagesReady ? <p className="hint screen-only">Carico immagini per la stampa... ({pendingImages} rimanenti)</p> : null}
+        {openingPrintPreview ? <p className="hint screen-only">Apro anteprima di stampa...</p> : null}
 
         <p className="hint">
           Clienti assegnati: <strong>{assignedNames}</strong>
