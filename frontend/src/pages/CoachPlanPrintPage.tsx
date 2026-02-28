@@ -40,6 +40,15 @@ function asText(value: unknown): string {
   return typeof value === 'string' ? value : value == null ? '' : String(value);
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 function isVideoMediaUrl(url: string): boolean {
   return url.includes('youtube.com') || url.includes('youtu.be') || /\.(mp4|webm|mov|m4v|ogg)(\?.*)?$/i.test(url);
 }
@@ -254,10 +263,101 @@ export function CoachPlanPrintPage() {
     );
   }
 
+  const currentPlan = plan;
   const feedback = getPlanWeightFeedback(plan, clientLabelById);
-  const assignedNames = Array.isArray(plan.assignedClientIds) && plan.assignedClientIds.length > 0
-    ? plan.assignedClientIds.map((id) => clientLabelById[id] || id).join(', ')
+  const assignedNames = Array.isArray(currentPlan.assignedClientIds) && currentPlan.assignedClientIds.length > 0
+    ? currentPlan.assignedClientIds.map((id) => clientLabelById[id] || id).join(', ')
     : 'Nessuno';
+
+  function handleFastPrint() {
+    const popup = window.open('', '_blank');
+    if (!popup) {
+      window.print();
+      return;
+    }
+
+    const feedbackHtml = feedback.length > 0
+      ? `
+      <section class="block">
+        <h3>Feedback peso cliente</h3>
+        ${feedback
+          .map(
+            (item) => `
+          <div class="sub">
+            <p><strong>${escapeHtml(item.clientLabel)}</strong></p>
+            <ul>
+              ${item.lines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
+            </ul>
+          </div>`,
+          )
+          .join('')}
+      </section>`
+      : '';
+
+    const exercisesHtml = exercises
+      .map(
+        (exercise, index) => `
+      <article class="exercise">
+        <h4>${escapeHtml(exercise.name || `Esercizio ${index + 1}`)}</h4>
+        <p class="meta">${
+          currentPlan.kind === 'circuit'
+            ? `${exercise.workValue || '-'} reps/tempo`
+            : `${exercise.sets || '-'} serie · ${exercise.reps || '-'} reps`
+        } · ${exercise.weightKg || 0} kg · ${exercise.restSeconds || 0} sec recupero</p>
+        ${exercise.advancedMethod ? `<p><strong>Metodo:</strong> ${exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}</p>` : ''}
+        ${
+          exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim()
+            ? `<p><strong>Note metodo:</strong> ${escapeHtml(exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes)}</p>`
+            : ''
+        }
+        ${exercise.notes.trim() ? `<p><strong>Note:</strong> ${escapeHtml(exercise.notes)}</p>` : ''}
+        ${exercise.imageUrl ? `<img src="${escapeHtml(exercise.imageUrl)}" alt="Media esercizio ${index + 1}" />` : ''}
+        ${exercise.videoUrl ? `<p><a href="${escapeHtml(exercise.videoUrl)}" target="_blank" rel="noreferrer">URL video: ${escapeHtml(exercise.videoUrl)}</a></p>` : ''}
+      </article>`,
+      )
+      .join('');
+
+    const html = `<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${escapeHtml(currentPlan.title || 'Scheda')}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 16px; color: #111; }
+    h1, h2, h3, h4 { margin: 0 0 8px; }
+    .block { border: 1px solid #e5e5e5; border-radius: 12px; padding: 12px; margin: 10px 0; }
+    .sub { border-top: 1px solid #eee; margin-top: 8px; padding-top: 8px; }
+    .exercise { border: 1px solid #e5e5e5; border-radius: 12px; padding: 12px; margin: 10px 0; break-inside: avoid; }
+    .meta { color: #444; margin: 4px 0 8px; }
+    img { display: block; width: 100%; max-height: 260px; object-fit: cover; border-radius: 10px; margin-top: 8px; }
+    a { color: #b31217; }
+    @media print { body { margin: 10mm; } }
+  </style>
+</head>
+<body>
+  <h1>Scheda</h1>
+  <p><strong>Clienti assegnati:</strong> ${escapeHtml(assignedNames)}</p>
+  <div class="block">
+    <p><strong>Titolo programma:</strong> ${escapeHtml(currentPlan.title || 'Senza titolo')}</p>
+    <p><strong>Tipo scheda:</strong> ${escapeHtml(currentPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps')}</p>
+    ${asText(currentPlan.warmup).trim() ? `<p><strong>Riscaldamento:</strong> ${escapeHtml(asText(currentPlan.warmup))}</p>` : ''}
+    ${asText(currentPlan.notes).trim() ? `<p><strong>Note coach:</strong> ${escapeHtml(asText(currentPlan.notes))}</p>` : ''}
+  </div>
+  ${feedbackHtml}
+  ${exercisesHtml}
+  <script>
+    window.addEventListener('load', function () {
+      setTimeout(function () { window.print(); }, 100);
+    });
+  </script>
+</body>
+</html>`;
+
+    popup.document.open();
+    popup.document.write(html);
+    popup.document.close();
+  }
 
   return (
     <main className="page page-top">
@@ -277,7 +377,7 @@ export function CoachPlanPrintPage() {
               title={imagesReady ? 'Stampa scheda' : 'Attendi caricamento immagini'}
               onClick={() => {
                 if (!imagesReady) return;
-                window.print();
+                handleFastPrint();
               }}
               disabled={!imagesReady}
             >
@@ -292,19 +392,19 @@ export function CoachPlanPrintPage() {
         </p>
         <div className="plan-head">
           <p className="hint">Titolo programma</p>
-          <h3>{plan.title || 'Senza titolo'}</h3>
+          <h3>{currentPlan.title || 'Senza titolo'}</h3>
         </div>
         <p className="hint">
-          Tipo scheda: <strong>{plan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
+          Tipo scheda: <strong>{currentPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
         </p>
-        {asText(plan.warmup).trim() ? (
+        {asText(currentPlan.warmup).trim() ? (
           <div className="client-info-block">
-            <p className="hint"><strong>Riscaldamento:</strong> {asText(plan.warmup)}</p>
+            <p className="hint"><strong>Riscaldamento:</strong> {asText(currentPlan.warmup)}</p>
           </div>
         ) : null}
-        {asText(plan.notes).trim() ? (
+        {asText(currentPlan.notes).trim() ? (
           <div className="client-info-block">
-            <p className="hint"><strong>Note coach:</strong> {asText(plan.notes)}</p>
+            <p className="hint"><strong>Note coach:</strong> {asText(currentPlan.notes)}</p>
           </div>
         ) : null}
         {feedback.length > 0 ? (
@@ -328,7 +428,7 @@ export function CoachPlanPrintPage() {
             <article className="exercise-card" key={`print-ex-${index}`}>
               <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
               <div className="exercise-meta">
-                {plan.kind === 'circuit' ? (
+                {currentPlan.kind === 'circuit' ? (
                   <span>{exercise.workValue || '-'} reps/tempo</span>
                 ) : (
                   <>
