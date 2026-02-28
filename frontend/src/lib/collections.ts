@@ -83,6 +83,98 @@ function requireUid(): string {
   return uid;
 }
 
+const IMAGE_UPLOAD_MAX_SIDE = 1920;
+const IMAGE_UPLOAD_TARGET_BYTES = 700 * 1024;
+const IMAGE_UPLOAD_START_QUALITY = 0.88;
+const IMAGE_UPLOAD_MIN_QUALITY = 0.62;
+const IMAGE_UPLOAD_QUALITY_STEP = 0.06;
+
+function outputMimeForImage(fileType: string): 'image/webp' | 'image/jpeg' {
+  if (fileType === 'image/png' || fileType === 'image/webp') return 'image/webp';
+  return 'image/jpeg';
+}
+
+function extensionFromMime(mime: string): string {
+  if (mime === 'image/webp') return 'webp';
+  if (mime === 'image/jpeg') return 'jpg';
+  return 'bin';
+}
+
+async function loadImageBitmapOrElement(file: File): Promise<{ width: number; height: number; draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void; cleanup: () => void }> {
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(file);
+    return {
+      width: bitmap.width,
+      height: bitmap.height,
+      draw: (ctx, w, h) => ctx.drawImage(bitmap, 0, 0, w, h),
+      cleanup: () => bitmap.close(),
+    };
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('image-load-failed'));
+    img.src = objectUrl;
+  });
+
+  return {
+    width: image.naturalWidth || image.width,
+    height: image.naturalHeight || image.height,
+    draw: (ctx, w, h) => ctx.drawImage(image, 0, 0, w, h),
+    cleanup: () => URL.revokeObjectURL(objectUrl),
+  };
+}
+
+async function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type, quality);
+  });
+}
+
+async function optimizeImageForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) return file;
+  if (file.type === 'image/gif' || file.type === 'image/svg+xml') return file;
+  if (file.size <= 450 * 1024) return file;
+
+  const image = await loadImageBitmapOrElement(file);
+  try {
+    const scale = Math.min(1, IMAGE_UPLOAD_MAX_SIDE / Math.max(image.width, image.height));
+    const outWidth = Math.max(1, Math.round(image.width * scale));
+    const outHeight = Math.max(1, Math.round(image.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = outWidth;
+    canvas.height = outHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    image.draw(ctx, outWidth, outHeight);
+
+    const mime = outputMimeForImage(file.type);
+    let quality = IMAGE_UPLOAD_START_QUALITY;
+    let candidate = await canvasToBlob(canvas, mime, quality);
+    if (!candidate) return file;
+
+    while (candidate.size > IMAGE_UPLOAD_TARGET_BYTES && quality > IMAGE_UPLOAD_MIN_QUALITY) {
+      quality = Math.max(IMAGE_UPLOAD_MIN_QUALITY, quality - IMAGE_UPLOAD_QUALITY_STEP);
+      const next = await canvasToBlob(canvas, mime, quality);
+      if (!next) break;
+      candidate = next;
+    }
+
+    if (candidate.size >= file.size) return file;
+
+    const dot = file.name.lastIndexOf('.');
+    const baseName = dot > 0 ? file.name.slice(0, dot) : file.name;
+    const extension = extensionFromMime(mime);
+    return new File([candidate], `${baseName}.${extension}`, { type: mime, lastModified: Date.now() });
+  } catch {
+    return file;
+  } finally {
+    image.cleanup();
+  }
+}
+
 export async function createUserProfile(profile: Record<string, unknown> = {}) {
   const uid = requireUid();
   const userRef = doc(db, 'users', uid);
@@ -296,10 +388,11 @@ export async function deletePlanAsCoach(planId: string) {
 
 export async function uploadWorkoutMediaAsCoach(clientId: string, file: File): Promise<string> {
   const trainerId = requireUid();
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const uploadFile = await optimizeImageForUpload(file);
+  const safeName = uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const fileName = `${Date.now()}-${safeName}`;
   const mediaRef = workoutMediaRef(trainerId, clientId, fileName);
-  await uploadBytes(mediaRef, file, { contentType: file.type || 'application/octet-stream' });
+  await uploadBytes(mediaRef, uploadFile, { contentType: uploadFile.type || 'application/octet-stream' });
   return getDownloadURL(mediaRef);
 }
 
