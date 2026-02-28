@@ -139,6 +139,8 @@ export function CoachPlanPrintPage() {
   const [error, setError] = useState('');
   const [plan, setPlan] = useState<(PlanDoc & { id: string }) | null>(null);
   const [clients, setClients] = useState<Array<UserProfileDoc & { id: string }>>([]);
+  const [imagesReady, setImagesReady] = useState(true);
+  const [pendingImages, setPendingImages] = useState(0);
 
   useEffect(() => {
     async function load() {
@@ -178,6 +180,52 @@ export function CoachPlanPrintPage() {
     [clients],
   );
 
+  const exercises = useMemo(() => normalizePlanExercises(plan?.exercises), [plan?.exercises]);
+  const imageUrls = useMemo(
+    () => exercises.map((exercise) => exercise.imageUrl).filter((url): url is string => Boolean(url)),
+    [exercises],
+  );
+
+  useEffect(() => {
+    if (imageUrls.length === 0) {
+      setImagesReady(true);
+      setPendingImages(0);
+      return;
+    }
+
+    let cancelled = false;
+    setImagesReady(false);
+    setPendingImages(imageUrls.length);
+
+    let resolved = 0;
+    const onResolved = () => {
+      resolved += 1;
+      if (cancelled) return;
+      const remaining = Math.max(imageUrls.length - resolved, 0);
+      setPendingImages(remaining);
+      if (remaining === 0) setImagesReady(true);
+    };
+
+    const cleanups = imageUrls.map((url) => {
+      const image = new Image();
+      const done = () => {
+        image.onload = null;
+        image.onerror = null;
+        onResolved();
+      };
+      image.onload = done;
+      image.onerror = done;
+      image.src = url;
+      const timeoutId = window.setTimeout(done, 9000);
+      return () => window.clearTimeout(timeoutId);
+    });
+
+    return () => {
+      cancelled = true;
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, [imageUrls]);
+
   if (!user) return <Navigate to="/auth" replace />;
   if (role === 'client') return <Navigate to="/app/client" replace />;
 
@@ -206,7 +254,6 @@ export function CoachPlanPrintPage() {
     );
   }
 
-  const exercises = normalizePlanExercises(plan.exercises);
   const feedback = getPlanWeightFeedback(plan, clientLabelById);
   const assignedNames = Array.isArray(plan.assignedClientIds) && plan.assignedClientIds.length > 0
     ? plan.assignedClientIds.map((id) => clientLabelById[id] || id).join(', ')
@@ -223,11 +270,22 @@ export function CoachPlanPrintPage() {
             <h2>Scheda</h2>
           </div>
           <div className="preview-head-actions">
-            <button className="icon-btn" type="button" aria-label="Stampa scheda" title="Stampa scheda" onClick={() => window.print()}>
-              🖨
+            <button
+              className="icon-btn btn-inline-loading"
+              type="button"
+              aria-label="Stampa scheda"
+              title={imagesReady ? 'Stampa scheda' : 'Attendi caricamento immagini'}
+              onClick={() => {
+                if (!imagesReady) return;
+                window.print();
+              }}
+              disabled={!imagesReady}
+            >
+              {!imagesReady ? <span className="spinner" aria-hidden="true" /> : '🖨'}
             </button>
           </div>
         </div>
+        {!imagesReady ? <p className="hint screen-only">Carico immagini per la stampa... ({pendingImages} rimanenti)</p> : null}
 
         <p className="hint">
           Clienti assegnati: <strong>{assignedNames}</strong>
