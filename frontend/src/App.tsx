@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthPage } from './pages/AuthPage';
 import { ClientDashboardPage } from './pages/ClientDashboardPage';
 import { CoachDashboardPage } from './pages/CoachDashboardPage';
+import { CoachPlanPrintPage } from './pages/CoachPlanPrintPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { useAuthState } from './lib';
 
@@ -94,6 +95,14 @@ export function App() {
           element={
             <ProtectedRoleRoute allow={['admin', 'trainer']}>
               <CoachDashboardPage />
+            </ProtectedRoleRoute>
+          }
+        />
+        <Route
+          path="/app/coach/plan/:planId/preview"
+          element={
+            <ProtectedRoleRoute allow={['admin', 'trainer']}>
+              <CoachPlanPrintPage />
             </ProtectedRoleRoute>
           }
         />

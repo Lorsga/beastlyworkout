@@ -1685,17 +1685,12 @@ export function CoachDashboardPage() {
                         <p className="hint">Modifiche peso clienti: {getPlanWeightFeedbackCount(plan, clientLabelById)}</p>
                         <div className="plan-card-actions">
                           <button
-                            className="btn btn-ghost btn-inline-loading"
-                            disabled={loading || previewLoadingPlanId.length > 0}
-                            onClick={() => openPlanPreview(plan.id)}
+                            className="btn btn-ghost"
+                            disabled={loading}
+                            onClick={() => navigate(`/app/coach/plan/${plan.id}/preview`)}
                             type="button"
                           >
-                            {previewLoadingPlanId === plan.id ? (
-                              <>
-                                <span className="spinner" aria-hidden="true" />
-                                Caricamento...
-                              </>
-                            ) : 'Visualizza'}
+                            Visualizza
                           </button>
                           <button className="btn" disabled={loading} onClick={() => openEditPlanModal(plan.id)} type="button">
                             Modifica
