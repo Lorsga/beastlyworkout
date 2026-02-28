@@ -2019,7 +2019,7 @@ export function CoachDashboardPage() {
       ) : null}
 
       {isPlanPreviewOpen && previewPlan ? (
-        <section className="modal-overlay preview-modal-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && setIsPlanPreviewOpen(false)}>
+        <section id="plan-print-modal" className="modal-overlay preview-modal-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && setIsPlanPreviewOpen(false)}>
           <article className="card modal-card print-sheet preview-modal-card" onClick={(event) => event.stopPropagation()}>
             <div className="exercise-head">
               <div className="preview-head-main">

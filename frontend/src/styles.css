@@ -1141,23 +1141,33 @@ a.btn {
     background: #fff;
   }
 
-  body.print-plan-only * {
-    visibility: hidden !important;
+  body.print-plan-only #root > * {
+    display: none !important;
   }
 
-  body.print-plan-only .print-sheet,
-  body.print-plan-only .print-sheet * {
+  body.print-plan-only #plan-print-modal {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  body.print-plan-only #plan-print-modal .print-sheet {
+    display: block !important;
     visibility: visible !important;
-  }
-
-  body.print-plan-only .print-sheet {
-    position: absolute;
-    inset: 0 auto auto 0;
-    width: 100%;
-    margin: 0;
-    border: 0;
-    box-shadow: none;
-    background: #fff;
+    position: static !important;
+    width: 100% !important;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
   }
 
   .shell-sidebar,
