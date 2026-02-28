@@ -1141,22 +1141,26 @@ a.btn {
     background: #fff;
   }
 
-  body.print-plan-only #root > * {
-    display: none !important;
+  body.print-plan-only #root * {
+    visibility: hidden !important;
+  }
+
+  body.print-plan-only #plan-print-modal,
+  body.print-plan-only #plan-print-modal * {
+    visibility: visible !important;
   }
 
   body.print-plan-only #plan-print-modal {
-    display: block !important;
-    position: static !important;
-    inset: auto !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 9999 !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
+    overflow: visible !important;
   }
 
   body.print-plan-only #plan-print-modal .print-sheet {
-    display: block !important;
-    visibility: visible !important;
     position: static !important;
     width: 100% !important;
     margin: 0 !important;

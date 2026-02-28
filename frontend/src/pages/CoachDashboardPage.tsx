@@ -570,7 +570,6 @@ export function CoachDashboardPage() {
   const [supervisorSearch, setSupervisorSearch] = useState('');
   const [supervisorActionUid, setSupervisorActionUid] = useState('');
   const [previewLoadingPlanId, setPreviewLoadingPlanId] = useState('');
-  const [isPreparingPrint, setIsPreparingPrint] = useState(false);
   const [activeTab, setActiveTab] = useState<CoachTabId>('clients');
 
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -883,24 +882,20 @@ export function CoachDashboardPage() {
   }
 
   function printPlanPreview() {
-    if (isPreparingPrint) return;
-    setIsPreparingPrint(true);
     const body = document.body;
     let restored = false;
     const restore = () => {
       if (restored) return;
       restored = true;
       body.classList.remove('print-plan-only');
-      setIsPreparingPrint(false);
     };
 
     body.classList.add('print-plan-only');
     window.addEventListener('afterprint', restore, { once: true });
-    window.addEventListener('focus', () => window.setTimeout(restore, 150), { once: true });
-    window.requestAnimationFrame(() => {
+    window.setTimeout(() => {
       window.print();
-      window.setTimeout(restore, 30000);
-    });
+    }, 80);
+    window.setTimeout(restore, 12000);
   }
 
   function openProfileModal() {
@@ -2047,14 +2042,13 @@ export function CoachDashboardPage() {
                   Assegna
                 </button>
                 <button
-                  className="icon-btn btn-inline-loading"
+                  className="icon-btn"
                   type="button"
                   aria-label="Stampa scheda"
                   title="Stampa scheda"
                   onClick={() => void printPlanPreview()}
-                  disabled={isPreparingPrint}
                 >
-                  {isPreparingPrint ? <span className="spinner" aria-hidden="true" /> : '🖨'}
+                  🖨
                 </button>
                 <button
                   className="icon-btn desktop-only"
@@ -2067,14 +2061,6 @@ export function CoachDashboardPage() {
                 </button>
               </div>
             </div>
-            {isPreparingPrint ? (
-              <div className="preview-print-overlay screen-only" role="status" aria-live="polite">
-                <article className="card loading-overlay-card">
-                  <span className="spinner" aria-hidden="true" />
-                  <p>Preparazione stampa in corso...</p>
-                </article>
-              </div>
-            ) : null}
             <p className="hint">
               Clienti assegnati:{' '}
               <strong>
