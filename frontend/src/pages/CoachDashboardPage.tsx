@@ -882,34 +882,9 @@ export function CoachDashboardPage() {
     setPlanKind(nextKind);
   }
 
-  async function waitForPreviewImages(timeoutMs = 5000): Promise<void> {
-    const images = Array.from(document.querySelectorAll<HTMLImageElement>('.preview-modal-card img.exercise-upload-preview'));
-    const pendingImages = images.filter((image) => !image.complete);
-    if (pendingImages.length === 0) return;
-
-    const waitAll = Promise.allSettled(
-      pendingImages.map(
-        (image) =>
-          new Promise<void>((resolve) => {
-            const done = () => {
-              image.removeEventListener('load', done);
-              image.removeEventListener('error', done);
-              resolve();
-            };
-            image.addEventListener('load', done, { once: true });
-            image.addEventListener('error', done, { once: true });
-          }),
-      ),
-    );
-    const timeout = new Promise<void>((resolve) => window.setTimeout(resolve, timeoutMs));
-    await Promise.race([waitAll, timeout]);
-  }
-
-  async function printPlanPreview() {
+  function printPlanPreview() {
     if (isPreparingPrint) return;
     setIsPreparingPrint(true);
-    await waitForPreviewImages();
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 120));
     const body = document.body;
     let restored = false;
     const restore = () => {
@@ -918,10 +893,14 @@ export function CoachDashboardPage() {
       body.classList.remove('print-plan-only');
       setIsPreparingPrint(false);
     };
+
     body.classList.add('print-plan-only');
     window.addEventListener('afterprint', restore, { once: true });
-    window.print();
-    window.setTimeout(restore, 2500);
+    window.addEventListener('focus', () => window.setTimeout(restore, 150), { once: true });
+    window.requestAnimationFrame(() => {
+      window.print();
+      window.setTimeout(restore, 30000);
+    });
   }
 
   function openProfileModal() {
