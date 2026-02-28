@@ -272,13 +272,6 @@ export function CoachPlanPrintPage() {
 
   function handleFastPrint() {
     setOpeningPrintPreview(true);
-    const returnUrl = window.location.href;
-    const popup = window.open('', '_blank');
-    if (!popup) {
-      setOpeningPrintPreview(false);
-      window.print();
-      return;
-    }
 
     const feedbackHtml = feedback.length > 0
       ? `
@@ -350,26 +343,75 @@ export function CoachPlanPrintPage() {
   </div>
   ${feedbackHtml}
   ${exercisesHtml}
-  <script>
-    window.addEventListener('load', function () {
-      setTimeout(function () { window.print(); }, 100);
-    });
-    window.addEventListener('afterprint', function () {
-      setTimeout(function () {
-        try { window.close(); } catch (e) {}
-        if (!window.closed) {
-          window.location.replace(${JSON.stringify(returnUrl)});
-        }
-      }, 200);
-    });
-  </script>
 </body>
 </html>`;
 
-    popup.document.open();
-    popup.document.write(html);
-    popup.document.close();
-    setTimeout(() => setOpeningPrintPreview(false), 600);
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '1px';
+    iframe.style.height = '1px';
+    iframe.style.border = '0';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
+    document.body.appendChild(iframe);
+
+    const printWindow = iframe.contentWindow;
+    const printDocument = printWindow?.document;
+    if (!printWindow || !printDocument) {
+      iframe.remove();
+      setOpeningPrintPreview(false);
+      window.print();
+      return;
+    }
+
+    printDocument.open();
+    printDocument.write(html);
+    printDocument.close();
+
+    const cleanup = () => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      setOpeningPrintPreview(false);
+    };
+
+    const waitForIframeImages = async (): Promise<void> => {
+      const images = Array.from(printDocument.images ?? []);
+      const pending = images.filter((img) => !img.complete);
+      if (pending.length === 0) return;
+      await Promise.race([
+        Promise.allSettled(
+          pending.map(
+            (img) =>
+              new Promise<void>((resolve) => {
+                const done = () => {
+                  img.removeEventListener('load', done);
+                  img.removeEventListener('error', done);
+                  resolve();
+                };
+                img.addEventListener('load', done, { once: true });
+                img.addEventListener('error', done, { once: true });
+              }),
+          ),
+        ),
+        new Promise<void>((resolve) => window.setTimeout(resolve, 7000)),
+      ]);
+    };
+
+    void (async () => {
+      await waitForIframeImages();
+      printWindow.onafterprint = cleanup;
+      setTimeout(() => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+        } catch {
+          cleanup();
+        }
+        setTimeout(cleanup, 15000);
+      }, 80);
+    })();
   }
 
   return (
