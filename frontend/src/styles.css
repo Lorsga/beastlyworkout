@@ -935,6 +935,16 @@ a.btn {
   position: relative;
 }
 
+@media (max-width: 879px) {
+  .preview-modal-overlay {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+  }
+
+  .preview-modal-card {
+    min-height: calc(100vh - (env(safe-area-inset-top, 0px) + 8px));
+  }
+}
+
 .preview-print-overlay {
   position: absolute;
   inset: 0;
