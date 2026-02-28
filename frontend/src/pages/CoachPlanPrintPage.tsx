@@ -255,7 +255,7 @@ export function CoachPlanPrintPage() {
         <section className="card print-sheet" style={{ width: 'min(900px, 100%)' }}>
           <h1>Impossibile aprire la scheda</h1>
           <p className="hero-sub">{error || 'Qualcosa non ha funzionato.'}</p>
-          <button className="btn btn-ghost screen-only" type="button" onClick={() => navigate('/app/coach')}>
+          <button className="btn btn-ghost screen-only" type="button" onClick={() => navigate('/app/coach#plans')}>
             Torna all&apos;area coach
           </button>
         </section>
@@ -364,7 +364,7 @@ export function CoachPlanPrintPage() {
       <section className="card print-sheet" style={{ width: 'min(900px, 100%)' }}>
         <div className="exercise-head screen-only">
           <div className="preview-head-main">
-            <button className="icon-btn" type="button" aria-label="Indietro" title="Indietro" onClick={() => navigate('/app/coach')}>
+            <button className="icon-btn" type="button" aria-label="Indietro" title="Indietro" onClick={() => navigate('/app/coach#plans')}>
               ←
             </button>
             <h2>Scheda</h2>

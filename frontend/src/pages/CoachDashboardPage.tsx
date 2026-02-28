@@ -647,6 +647,20 @@ export function CoachDashboardPage() {
     }
   }, [isSupervisor, activeTab]);
 
+  useEffect(() => {
+    const hash = window.location.hash.replace(/^#/, '');
+    if (hash === 'code' || hash === 'clients' || hash === 'plans' || hash === 'overview' || hash === 'supervisor') {
+      setActiveTab(hash as CoachTabId);
+    }
+  }, []);
+
+  useEffect(() => {
+    const nextHash = `#${activeTab}`;
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${nextHash}`);
+    }
+  }, [activeTab]);
+
   const customStyles: StylesConfig<ClientOption, boolean> = useMemo(
     () => ({
       control: (base, state) => ({
