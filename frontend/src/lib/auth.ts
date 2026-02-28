@@ -87,6 +87,11 @@ export async function loginWithGoogle() {
     return { redirected: false, user: credentials.user };
   } catch (error) {
     if (isRedirectFallbackError(error)) {
+      if (isRedirectLikelyBrokenEnvironment()) {
+        const nextError = new Error('Google redirect non supportato in questo browser.') as Error & { code?: string };
+        nextError.code = 'auth/redirect-unavailable';
+        throw nextError;
+      }
       await signInWithRedirect(auth, googleProvider);
       return { redirected: true, user: null };
     }
@@ -105,6 +110,11 @@ export async function completeGoogleRedirect() {
       await signOut(auth);
       return null;
     }
+    if (code.includes('missing-initial-state')) {
+      // Stato redirect perso (tipico su iOS/PWA/in-app browser): evita loop errore.
+      await signOut(auth).catch(() => undefined);
+      return null;
+    }
     throw error;
   }
 }
@@ -117,4 +127,15 @@ function isRedirectFallbackError(error: unknown): boolean {
   if (!(typeof error === 'object' && error && 'code' in error)) return false;
   const code = String((error as { code: unknown }).code);
   return code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment';
+}
+
+function isRedirectLikelyBrokenEnvironment(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const isIOS = /iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!isIOS) return false;
+  const nav = navigator as Navigator & { standalone?: boolean };
+  const isStandalone = window.matchMedia?.('(display-mode: standalone)').matches || nav.standalone === true;
+  const isInAppBrowser = /(FBAN|FBAV|Instagram|Line|Twitter|MicroMessenger|wv)/i.test(ua);
+  return isStandalone || isInAppBrowser;
 }

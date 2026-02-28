@@ -10,6 +10,12 @@ export function mapDocs<T>(docs: QueryDocumentSnapshot[]): Array<T & { id: strin
 export function toMessage(error: unknown): string {
   if (typeof error === 'object' && error && 'code' in error) {
     const code = String((error as { code: unknown }).code);
+    if (code.includes('redirect-unavailable')) {
+      return 'Su iPhone apri il link in Safari (non dentro app esterne) e riprova con Google.';
+    }
+    if (code.includes('missing-initial-state')) {
+      return 'Sessione Google non valida su questo browser. Apri il sito in Safari e riprova.';
+    }
     if (code.includes('permission-denied')) return 'Non hai i permessi per questa azione.';
     if (code.includes('unauthenticated')) return 'La sessione è scaduta. Accedi di nuovo.';
     if (code.includes('invalid-argument')) return 'Alcuni dati non sono corretti. Controlla e riprova.';
