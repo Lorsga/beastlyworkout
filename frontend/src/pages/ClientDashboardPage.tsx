@@ -586,13 +586,21 @@ export function ClientDashboardPage() {
                 <p className="hint">
                   Tipo scheda: <strong>{selectedPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
                 </p>
-                {(selectedPlan.warmup ?? '').trim() ? (
+                {(selectedPlan.warmup ?? '').trim() || getPlanWarmupVideoUrl(selectedPlan) || getPlanWarmupImageUrl(selectedPlan) ? (
                   <div className="client-info-block">
-                    <p className="hint"><strong>Riscaldamento:</strong> {selectedPlan.warmup}</p>
-                  </div>
-                ) : null}
-                {getPlanWarmupVideoUrl(selectedPlan) || getPlanWarmupImageUrl(selectedPlan) ? (
-                  <div className="client-info-block">
+                    <p className="hint"><strong>Riscaldamento</strong></p>
+                    {(selectedPlan.warmup ?? '').trim() ? (
+                      <p className="hint">{selectedPlan.warmup}</p>
+                    ) : (
+                      <p className="hint">Indicazioni non presenti.</p>
+                    )}
+                    {getPlanWarmupImageUrl(selectedPlan) ? (
+                      <img
+                        src={getPlanWarmupImageUrl(selectedPlan)}
+                        alt="Immagine riscaldamento"
+                        className="exercise-upload-preview"
+                      />
+                    ) : null}
                     {getPlanWarmupVideoUrl(selectedPlan) ? (
                       <button className="btn-link" type="button" onClick={() => openMediaPreview(getPlanWarmupVideoUrl(selectedPlan), 'Riscaldamento')}>
                         Apri video riscaldamento
