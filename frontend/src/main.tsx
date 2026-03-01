@@ -6,6 +6,15 @@ import { App } from './App';
 import { ToastProvider } from './components/ToastProvider';
 import './styles.css';
 
+function hideBootSplash() {
+  const splash = document.getElementById('boot-splash');
+  if (!splash) return;
+  splash.classList.add('boot-splash-hide');
+  window.setTimeout(() => {
+    splash.remove();
+  }, 320);
+}
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     void navigator.serviceWorker.register('/sw.js');
@@ -21,3 +30,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </ToastProvider>
   </React.StrictMode>,
 );
+
+window.requestAnimationFrame(() => {
+  window.requestAnimationFrame(hideBootSplash);
+});
+window.setTimeout(hideBootSplash, 2800);
