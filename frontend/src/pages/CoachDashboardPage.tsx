@@ -40,6 +40,9 @@ interface PlanDoc {
   kind?: 'series_reps' | 'circuit';
   notes?: string;
   warmup?: string;
+  warmupVideoUrl?: string;
+  warmupImageUrl?: string;
+  warmupMediaUrl?: string;
   assignedClientIds?: string[];
   assignmentDetails?: Record<string, {
     mode?: 'permanent' | 'timed';
@@ -266,6 +269,22 @@ function isVideoMediaUrl(url: string): boolean {
 
 function isImageMediaUrl(url: string): boolean {
   return /\.(jpg|jpeg|png|gif|webp|avif|svg)(\?.*)?$/i.test(url);
+}
+
+function getPlanWarmupVideoUrl(plan: PlanDoc | null | undefined): string {
+  if (!plan) return '';
+  const explicit = asText((plan as {warmupVideoUrl?: unknown}).warmupVideoUrl).trim();
+  if (explicit) return explicit;
+  const legacy = asText((plan as {warmupMediaUrl?: unknown}).warmupMediaUrl).trim();
+  return isVideoMediaUrl(legacy) ? legacy : '';
+}
+
+function getPlanWarmupImageUrl(plan: PlanDoc | null | undefined): string {
+  if (!plan) return '';
+  const explicit = asText((plan as {warmupImageUrl?: unknown}).warmupImageUrl).trim();
+  if (explicit) return explicit;
+  const legacy = asText((plan as {warmupMediaUrl?: unknown}).warmupMediaUrl).trim();
+  return isImageMediaUrl(legacy) ? legacy : '';
 }
 
 function defaultExercise() {
@@ -564,6 +583,7 @@ export function CoachDashboardPage() {
   const [profileStep, setProfileStep] = useState(0);
   const [onboardingDraft, setOnboardingDraft] = useState<OnboardingDraft>(emptyOnboardingDraft());
   const [uploadingExerciseIndex, setUploadingExerciseIndex] = useState<number | null>(null);
+  const [uploadingWarmupMedia, setUploadingWarmupMedia] = useState(false);
   const [coachAccess, setCoachAccess] = useState<CoachAccessState | null>(null);
   const [loadingCoachAccess, setLoadingCoachAccess] = useState(false);
   const [supervisorCoaches, setSupervisorCoaches] = useState<SupervisorCoachItem[]>([]);
@@ -578,6 +598,8 @@ export function CoachDashboardPage() {
   const [planKind, setPlanKind] = useState<'series_reps' | 'circuit'>('series_reps');
   const [planTitle, setPlanTitle] = useState('');
   const [planWarmup, setPlanWarmup] = useState('');
+  const [planWarmupVideoUrl, setPlanWarmupVideoUrl] = useState('');
+  const [planWarmupImageUrl, setPlanWarmupImageUrl] = useState('');
   const [planNotes, setPlanNotes] = useState('');
   const [exercises, setExercises] = useState<ExerciseDraft[]>([defaultExercise()]);
   const [assigningClientIds, setAssigningClientIds] = useState<string[]>([]);
@@ -586,7 +608,7 @@ export function CoachDashboardPage() {
   const [assignmentModeDraft, setAssignmentModeDraft] = useState<'permanent' | 'timed'>('permanent');
   const [assignmentWeeksDraft, setAssignmentWeeksDraft] = useState('4');
   const [assignmentStartDateDraft, setAssignmentStartDateDraft] = useState(toInputDate(new Date()));
-  const isUploadingMedia = uploadingExerciseIndex !== null;
+  const isUploadingMedia = uploadingExerciseIndex !== null || uploadingWarmupMedia;
 
   const selectedClientProfile = registeredClients.find((item) => getClientAuthUid(item) === selectedClientId) ?? null;
   const coachPlanTemplates = [...plans].sort((a, b) => {
@@ -868,6 +890,8 @@ export function CoachDashboardPage() {
       setPlanKind('series_reps');
       setPlanTitle('');
       setPlanWarmup('');
+      setPlanWarmupVideoUrl('');
+      setPlanWarmupImageUrl('');
       setPlanNotes('');
       setExercises([defaultExercise()]);
       return;
@@ -875,6 +899,8 @@ export function CoachDashboardPage() {
     setPlanKind(selectedPlan.kind === 'circuit' ? 'circuit' : 'series_reps');
     setPlanTitle(selectedPlan.title ?? '');
     setPlanWarmup(asText((selectedPlan as {warmup?: unknown}).warmup));
+    setPlanWarmupVideoUrl(getPlanWarmupVideoUrl(selectedPlan));
+    setPlanWarmupImageUrl(getPlanWarmupImageUrl(selectedPlan));
     setPlanNotes(asText(selectedPlan.notes));
     const nextExercises = normalizePlanExercises(selectedPlan.exercises).filter((item) => item.name.trim().length > 0);
     setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
@@ -882,7 +908,11 @@ export function CoachDashboardPage() {
 
   function handlePlanKindChange(nextKind: 'series_reps' | 'circuit') {
     if (nextKind === planKind) return;
-    const hasDraftData = exercises.some((exercise) => hasExerciseDraftData(exercise)) || planNotes.trim().length > 0 || planWarmup.trim().length > 0;
+    const hasDraftData = exercises.some((exercise) => hasExerciseDraftData(exercise))
+      || planNotes.trim().length > 0
+      || planWarmup.trim().length > 0
+      || planWarmupVideoUrl.trim().length > 0
+      || planWarmupImageUrl.trim().length > 0;
     if (hasDraftData) {
       const confirmed = window.confirm(
         'Cambiando categoria di allenamento, i dati inseriti in questa scheda verranno cancellati. Vuoi continuare?',
@@ -891,6 +921,8 @@ export function CoachDashboardPage() {
       setExercises([defaultExercise()]);
       setPlanNotes('');
       setPlanWarmup('');
+      setPlanWarmupVideoUrl('');
+      setPlanWarmupImageUrl('');
     }
     setPlanKind(nextKind);
   }
@@ -1059,6 +1091,9 @@ export function CoachDashboardPage() {
             title: normalizedTitle,
             kind: planKind,
             warmup: planWarmup.trim(),
+            warmupVideoUrl: planWarmupVideoUrl.trim(),
+            warmupImageUrl: planWarmupImageUrl.trim(),
+            warmupMediaUrl: (planWarmupVideoUrl || planWarmupImageUrl).trim(),
             notes: planNotes.trim(),
             status: 'active',
             exercises: preparedExercises,
@@ -1073,6 +1108,9 @@ export function CoachDashboardPage() {
             title: normalizedTitle,
             kind: planKind,
             warmup: planWarmup.trim(),
+            warmupVideoUrl: planWarmupVideoUrl.trim(),
+            warmupImageUrl: planWarmupImageUrl.trim(),
+            warmupMediaUrl: (planWarmupVideoUrl || planWarmupImageUrl).trim(),
             notes: planNotes.trim(),
             status: 'active',
             exercises: preparedExercises,
@@ -1091,6 +1129,8 @@ export function CoachDashboardPage() {
     setPlanKind('series_reps');
     setPlanTitle('');
     setPlanWarmup('');
+    setPlanWarmupVideoUrl('');
+    setPlanWarmupImageUrl('');
     setPlanNotes('');
     setExercises([defaultExercise()]);
     setIsPlanModalOpen(true);
@@ -1104,6 +1144,8 @@ export function CoachDashboardPage() {
     setPlanKind(plan.kind === 'circuit' ? 'circuit' : 'series_reps');
     setPlanTitle(plan.title ?? '');
     setPlanWarmup(asText((plan as {warmup?: unknown}).warmup));
+    setPlanWarmupVideoUrl(getPlanWarmupVideoUrl(plan));
+    setPlanWarmupImageUrl(getPlanWarmupImageUrl(plan));
     setPlanNotes(asText(plan.notes));
     const nextExercises = normalizePlanExercises(plan.exercises).filter((item) => item.name.trim().length > 0);
     setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
@@ -1167,6 +1209,26 @@ export function CoachDashboardPage() {
     }
   }
 
+  async function onUploadWarmupMedia(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showError('Puoi caricare solo immagini. Per i video usa il campo URL.');
+      return;
+    }
+    setUploadingWarmupMedia(true);
+    try {
+      const mediaScopeId = selectedPlan?.id || user?.uid || 'coach-draft';
+      const url = await uploadWorkoutMediaAsCoach(mediaScopeId, file);
+      setPlanWarmupImageUrl(url);
+      showSuccess('Immagine riscaldamento caricata.');
+    } catch (error) {
+      console.error('Warmup media upload failed:', error);
+      showError(toMessage(error));
+    } finally {
+      setUploadingWarmupMedia(false);
+    }
+  }
+
   async function deletePlan(planId: string) {
     const target = coachPlanTemplates.find((plan) => plan.id === planId);
     if (!target) return;
@@ -1202,6 +1264,10 @@ export function CoachDashboardPage() {
         createPlanAsCoach({
           title: `${source.title || 'Scheda'} (Copia)`,
           kind: source.kind === 'circuit' ? 'circuit' : 'series_reps',
+          warmup: asText(source.warmup),
+          warmupVideoUrl: getPlanWarmupVideoUrl(source),
+          warmupImageUrl: getPlanWarmupImageUrl(source),
+          warmupMediaUrl: (getPlanWarmupVideoUrl(source) || getPlanWarmupImageUrl(source)).trim(),
           notes: asText(source.notes),
           status: source.status === 'archived' ? 'draft' : 'active',
           exercises: sourceExercises,
@@ -1850,6 +1916,34 @@ export function CoachDashboardPage() {
               />
             </label>
             <label>
+              URL video riscaldamento (opzionale)
+              <input
+                value={planWarmupVideoUrl}
+                onChange={(event) => setPlanWarmupVideoUrl(event.target.value)}
+                placeholder="https://..."
+              />
+            </label>
+            <label>
+              Immagine riscaldamento (opzionale)
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => void onUploadWarmupMedia(event.target.files?.[0] ?? null)}
+                disabled={uploadingWarmupMedia}
+              />
+              {isImageMediaUrl(planWarmupImageUrl) ? <img src={planWarmupImageUrl} alt="Anteprima riscaldamento" className="exercise-upload-preview" /> : null}
+            </label>
+            {isImageMediaUrl(planWarmupImageUrl) ? (
+              <p className="hint">
+                Immagine riscaldamento caricata.
+                {' '}
+                <button className="btn-link" type="button" onClick={() => setPlanWarmupImageUrl('')}>
+                  Rimuovi
+                </button>
+              </p>
+            ) : null}
+            {uploadingWarmupMedia ? <p className="hint">Caricamento immagine riscaldamento in corso...</p> : null}
+            <label>
               Note (opzionale)
               <textarea
                 value={planNotes}
@@ -2088,6 +2182,42 @@ export function CoachDashboardPage() {
             {asText((previewPlan as {warmup?: unknown}).warmup).trim() ? (
               <div className="client-info-block">
                 <p className="hint"><strong>Riscaldamento:</strong> {asText((previewPlan as {warmup?: unknown}).warmup)}</p>
+              </div>
+            ) : null}
+            {getPlanWarmupImageUrl(previewPlan) ? (
+              <div className="client-info-block">
+                {(() => {
+                  const warmupImageKey = `${previewPlan.id}-warmup`;
+                  const isWarmupImageLoading = previewImageLoading[warmupImageKey] !== false;
+                  return (
+                    <>
+                      {isWarmupImageLoading ? (
+                        <div className="media-loading" aria-live="polite">
+                          <span className="spinner" aria-hidden="true" />
+                          <span>Caricamento immagine riscaldamento...</span>
+                        </div>
+                      ) : null}
+                      <img
+                        src={getPlanWarmupImageUrl(previewPlan)}
+                        alt="Media riscaldamento"
+                        className="exercise-upload-preview"
+                        style={{display: isWarmupImageLoading ? 'none' : 'block'}}
+                        onLoad={() => setPreviewImageLoading((prev) => ({...prev, [warmupImageKey]: false}))}
+                        onError={() => setPreviewImageLoading((prev) => ({...prev, [warmupImageKey]: false}))}
+                      />
+                    </>
+                  );
+                })()}
+              </div>
+            ) : null}
+            {getPlanWarmupVideoUrl(previewPlan) ? (
+              <div className="client-info-block">
+                <a className="btn-link screen-only" href={getPlanWarmupVideoUrl(previewPlan)} target="_blank" rel="noreferrer">
+                  Apri video riscaldamento
+                </a>
+                <a className="hint print-only print-video-link" href={getPlanWarmupVideoUrl(previewPlan)} target="_blank" rel="noreferrer">
+                  URL video riscaldamento: {getPlanWarmupVideoUrl(previewPlan)}
+                </a>
               </div>
             ) : null}
             {asText(previewPlan.notes).trim() ? (

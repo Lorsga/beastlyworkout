@@ -26,6 +26,9 @@ interface PlanDoc {
   kind?: 'series_reps' | 'circuit';
   notes?: string;
   warmup?: string;
+  warmupVideoUrl?: string;
+  warmupImageUrl?: string;
+  warmupMediaUrl?: string;
   clientWeightOverrides?: Record<string, Record<string, number>>;
   exercises?: Array<{
     name?: string;
@@ -94,6 +97,22 @@ function isImageUrl(url: string): boolean {
 
 function isVideoUrl(url: string): boolean {
   return /\.(mp4|webm|mov|m4v|ogg)(\?.*)?$/i.test(url);
+}
+
+function getPlanWarmupVideoUrl(plan: PlanDoc | null | undefined): string {
+  if (!plan) return '';
+  const explicit = typeof plan.warmupVideoUrl === 'string' ? plan.warmupVideoUrl.trim() : '';
+  if (explicit) return explicit;
+  const legacy = typeof plan.warmupMediaUrl === 'string' ? plan.warmupMediaUrl.trim() : '';
+  return toYouTubeEmbedUrl(legacy) || isVideoUrl(legacy) ? legacy : '';
+}
+
+function getPlanWarmupImageUrl(plan: PlanDoc | null | undefined): string {
+  if (!plan) return '';
+  const explicit = typeof plan.warmupImageUrl === 'string' ? plan.warmupImageUrl.trim() : '';
+  if (explicit) return explicit;
+  const legacy = typeof plan.warmupMediaUrl === 'string' ? plan.warmupMediaUrl.trim() : '';
+  return isImageUrl(legacy) ? legacy : '';
 }
 
 function normalizeExercises(value: unknown): Array<{
@@ -570,6 +589,20 @@ export function ClientDashboardPage() {
                 {(selectedPlan.warmup ?? '').trim() ? (
                   <div className="client-info-block">
                     <p className="hint"><strong>Riscaldamento:</strong> {selectedPlan.warmup}</p>
+                  </div>
+                ) : null}
+                {getPlanWarmupVideoUrl(selectedPlan) || getPlanWarmupImageUrl(selectedPlan) ? (
+                  <div className="client-info-block">
+                    {getPlanWarmupVideoUrl(selectedPlan) ? (
+                      <button className="btn-link" type="button" onClick={() => openMediaPreview(getPlanWarmupVideoUrl(selectedPlan), 'Riscaldamento')}>
+                        Apri video riscaldamento
+                      </button>
+                    ) : null}
+                    {getPlanWarmupImageUrl(selectedPlan) ? (
+                      <button className="btn-link" type="button" onClick={() => openMediaPreview(getPlanWarmupImageUrl(selectedPlan), 'Riscaldamento')}>
+                        Apri immagine riscaldamento
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
                 {(selectedPlan.notes ?? '').trim() ? (

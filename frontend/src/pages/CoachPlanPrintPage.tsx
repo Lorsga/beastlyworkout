@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import Select, { type MultiValue, type StylesConfig } from 'react-select';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 
-import { getPlanById, listAssignedClientsAsCoach, syncPlanWeightOverridesForCoach, useAuthState } from '../lib';
+import { useToast } from '../components/ToastProvider';
+import { assignPlanToClientAsCoach, getPlanById, listAssignedClientsAsCoach, removePlanAssignmentAsCoach, syncPlanWeightOverridesForCoach, useAuthState } from '../lib';
 import { toMessage } from '../utils/firestore';
 
 interface PlanDoc {
@@ -9,6 +11,9 @@ interface PlanDoc {
   kind?: 'series_reps' | 'circuit';
   notes?: string;
   warmup?: string;
+  warmupVideoUrl?: string;
+  warmupImageUrl?: string;
+  warmupMediaUrl?: string;
   assignedClientIds?: string[];
   clientWeightOverrides?: Record<string, Record<string, number>>;
   exercises?: Array<{
@@ -36,6 +41,8 @@ interface UserProfileDoc {
   email?: string;
 }
 
+type ClientOption = { value: string; label: string };
+
 function asText(value: unknown): string {
   return typeof value === 'string' ? value : value == null ? '' : String(value);
 }
@@ -55,6 +62,22 @@ function isVideoMediaUrl(url: string): boolean {
 
 function isImageMediaUrl(url: string): boolean {
   return /\.(jpg|jpeg|png|gif|webp|avif|svg)(\?.*)?$/i.test(url);
+}
+
+function getPlanWarmupVideoUrl(plan: PlanDoc | null | undefined): string {
+  if (!plan) return '';
+  const explicit = asText((plan as {warmupVideoUrl?: unknown}).warmupVideoUrl).trim();
+  if (explicit) return explicit;
+  const legacy = asText((plan as {warmupMediaUrl?: unknown}).warmupMediaUrl).trim();
+  return isVideoMediaUrl(legacy) ? legacy : '';
+}
+
+function getPlanWarmupImageUrl(plan: PlanDoc | null | undefined): string {
+  if (!plan) return '';
+  const explicit = asText((plan as {warmupImageUrl?: unknown}).warmupImageUrl).trim();
+  if (explicit) return explicit;
+  const legacy = asText((plan as {warmupMediaUrl?: unknown}).warmupMediaUrl).trim();
+  return isImageMediaUrl(legacy) ? legacy : '';
 }
 
 function normalizePlanExercises(value: unknown) {
@@ -143,6 +166,7 @@ function getPlanWeightFeedback(
 export function CoachPlanPrintPage() {
   const { user, role } = useAuthState();
   const navigate = useNavigate();
+  const { showError, showSuccess } = useToast();
   const { planId = '' } = useParams<{ planId: string }>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -151,6 +175,9 @@ export function CoachPlanPrintPage() {
   const [imagesReady, setImagesReady] = useState(true);
   const [pendingImages, setPendingImages] = useState(0);
   const [openingPrintPreview, setOpeningPrintPreview] = useState(false);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [assigningClientIds, setAssigningClientIds] = useState<string[]>([]);
+  const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -189,11 +216,42 @@ export function CoachPlanPrintPage() {
       }, {}),
     [clients],
   );
+  const customStyles: StylesConfig<ClientOption, true> = useMemo(
+    () => ({
+      control: (base, state) => ({
+        ...base,
+        minHeight: 48,
+        borderRadius: 12,
+        borderColor: state.isFocused ? '#ff6a00' : 'rgba(18,18,18,0.16)',
+        boxShadow: state.isFocused ? '0 0 0 2px rgba(255,106,0,0.20)' : 'none',
+        backgroundColor: '#fff',
+        '&:hover': { borderColor: '#ff6a00' },
+      }),
+      menu: (base) => ({
+        ...base,
+        borderRadius: 12,
+        overflow: 'hidden',
+        zIndex: 50,
+      }),
+      option: (base, state) => ({
+        ...base,
+        backgroundColor: state.isSelected ? '#ff6a00' : state.isFocused ? 'rgba(255,106,0,0.10)' : '#fff',
+        color: state.isSelected ? '#fff' : '#121212',
+        cursor: 'pointer',
+      }),
+    }),
+    [],
+  );
 
   const exercises = useMemo(() => normalizePlanExercises(plan?.exercises), [plan?.exercises]);
   const imageUrls = useMemo(
-    () => exercises.map((exercise) => exercise.imageUrl).filter((url): url is string => Boolean(url)),
-    [exercises],
+    () => {
+      const urls = exercises.map((exercise) => exercise.imageUrl).filter((url): url is string => Boolean(url));
+      const warmupImage = getPlanWarmupImageUrl(plan);
+      if (warmupImage) urls.push(warmupImage);
+      return urls;
+    },
+    [exercises, plan],
   );
 
   useEffect(() => {
@@ -269,6 +327,60 @@ export function CoachPlanPrintPage() {
   const assignedNames = Array.isArray(currentPlan.assignedClientIds) && currentPlan.assignedClientIds.length > 0
     ? currentPlan.assignedClientIds.map((id) => clientLabelById[id] || id).join(', ')
     : 'Nessuno';
+  const clientOptions: ClientOption[] = clients.map((client) => ({
+    value: asText(client.uid).trim() || client.id,
+    label: asText(client.displayName).trim() || asText(client.email).trim() || client.id,
+  }));
+  const unassignedClientOptions: ClientOption[] = clientOptions.filter(
+    (option) => !Array.isArray(currentPlan.assignedClientIds) || !currentPlan.assignedClientIds.includes(option.value),
+  );
+  const assigningClientOptions = clientOptions.filter((option) => assigningClientIds.includes(option.value));
+  const assignedClients = clients.filter((client) => {
+    const uid = asText(client.uid).trim() || client.id;
+    return Array.isArray(currentPlan.assignedClientIds) && currentPlan.assignedClientIds.includes(uid);
+  });
+
+  async function assignSelectedClients() {
+    if (!planId) return;
+    if (assigningClientIds.length === 0) {
+      showError('Seleziona almeno un cliente da assegnare.');
+      return;
+    }
+
+    setAssigning(true);
+    try {
+      await Promise.all(assigningClientIds.map((clientId) => assignPlanToClientAsCoach(planId, clientId)));
+      const fresh = await getPlanById(planId);
+      if (fresh.exists()) {
+        setPlan({ id: fresh.id, ...(fresh.data() as PlanDoc) });
+      }
+      setAssigningClientIds([]);
+      setIsAssignModalOpen(false);
+      showSuccess(assigningClientIds.length === 1 ? 'Scheda assegnata al cliente.' : 'Scheda assegnata ai clienti selezionati.');
+    } catch (nextError) {
+      showError(toMessage(nextError));
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  async function removeAssignedClient(clientId: string) {
+    if (!planId || assigning) return;
+    setAssigning(true);
+    try {
+      await removePlanAssignmentAsCoach(planId, clientId);
+      const fresh = await getPlanById(planId);
+      if (fresh.exists()) {
+        setPlan({ id: fresh.id, ...(fresh.data() as PlanDoc) });
+      }
+      setAssigningClientIds((prev) => prev.filter((item) => item !== clientId));
+      showSuccess('Assegnazione rimossa.');
+    } catch (nextError) {
+      showError(toMessage(nextError));
+    } finally {
+      setAssigning(false);
+    }
+  }
 
   function handleFastPrint() {
     setOpeningPrintPreview(true);
@@ -313,6 +425,8 @@ export function CoachPlanPrintPage() {
       </article>`,
       )
       .join('');
+    const warmupImageUrl = getPlanWarmupImageUrl(currentPlan);
+    const warmupVideoUrl = getPlanWarmupVideoUrl(currentPlan);
 
     const html = `<!doctype html>
 <html lang="it">
@@ -339,6 +453,8 @@ export function CoachPlanPrintPage() {
     <p><strong>Titolo programma:</strong> ${escapeHtml(currentPlan.title || 'Senza titolo')}</p>
     <p><strong>Tipo scheda:</strong> ${escapeHtml(currentPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps')}</p>
     ${asText(currentPlan.warmup).trim() ? `<p><strong>Riscaldamento:</strong> ${escapeHtml(asText(currentPlan.warmup))}</p>` : ''}
+    ${warmupImageUrl ? `<img src="${escapeHtml(warmupImageUrl)}" alt="Media riscaldamento" />` : ''}
+    ${warmupVideoUrl ? `<p><a href="${escapeHtml(warmupVideoUrl)}" target="_blank" rel="noreferrer">URL video riscaldamento: ${escapeHtml(warmupVideoUrl)}</a></p>` : ''}
     ${asText(currentPlan.notes).trim() ? `<p><strong>Note coach:</strong> ${escapeHtml(asText(currentPlan.notes))}</p>` : ''}
   </div>
   ${feedbackHtml}
@@ -426,6 +542,17 @@ export function CoachPlanPrintPage() {
           </div>
           <div className="preview-head-actions">
             <button
+              className="btn btn-ghost"
+              type="button"
+              disabled={assigning}
+              onClick={() => {
+                setAssigningClientIds([]);
+                setIsAssignModalOpen(true);
+              }}
+            >
+              Assegna
+            </button>
+            <button
               className="icon-btn btn-inline-loading"
               type="button"
               aria-label="Stampa scheda"
@@ -456,6 +583,21 @@ export function CoachPlanPrintPage() {
         {asText(currentPlan.warmup).trim() ? (
           <div className="client-info-block">
             <p className="hint"><strong>Riscaldamento:</strong> {asText(currentPlan.warmup)}</p>
+          </div>
+        ) : null}
+        {getPlanWarmupImageUrl(currentPlan) ? (
+          <div className="client-info-block">
+            <img src={getPlanWarmupImageUrl(currentPlan)} alt="Media riscaldamento" className="exercise-upload-preview" />
+          </div>
+        ) : null}
+        {getPlanWarmupVideoUrl(currentPlan) ? (
+          <div className="client-info-block">
+            <a className="btn-link screen-only" href={getPlanWarmupVideoUrl(currentPlan)} target="_blank" rel="noreferrer">
+              Apri video riscaldamento
+            </a>
+            <a className="hint print-video-link print-only" href={getPlanWarmupVideoUrl(currentPlan)} target="_blank" rel="noreferrer">
+              URL video riscaldamento: {getPlanWarmupVideoUrl(currentPlan)}
+            </a>
           </div>
         ) : null}
         {asText(currentPlan.notes).trim() ? (
@@ -510,6 +652,86 @@ export function CoachPlanPrintPage() {
           ))}
         </div>
       </section>
+      {isAssignModalOpen ? (
+        <section
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={(event) => {
+            if (event.currentTarget === event.target && !assigning) setIsAssignModalOpen(false);
+          }}
+        >
+          <article className="card modal-card" onClick={(event) => event.stopPropagation()}>
+            <div className="exercise-head">
+              <h2>Assegna scheda</h2>
+              <button
+                className="icon-btn"
+                type="button"
+                aria-label="Chiudi assegnazione"
+                title="Chiudi"
+                disabled={assigning}
+                onClick={() => setIsAssignModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <label>
+              Clienti
+              <Select<ClientOption, true>
+                styles={customStyles}
+                options={unassignedClientOptions}
+                value={assigningClientOptions}
+                onChange={(options: MultiValue<ClientOption>) => setAssigningClientIds(options.map((option) => option.value))}
+                placeholder={unassignedClientOptions.length === 0 ? 'Tutti i clienti sono già assegnati' : 'Cerca cliente per nome...'}
+                noOptionsMessage={() => 'Nessun risultato'}
+                isSearchable
+                isMulti
+                closeMenuOnSelect={false}
+                isDisabled={assigning}
+              />
+            </label>
+            <div className="client-info-block">
+              <h3>Clienti assegnati</h3>
+              {assignedClients.length === 0 ? (
+                <p className="hint">Nessun cliente assegnato.</p>
+              ) : (
+                assignedClients.map((client) => {
+                  const uid = asText(client.uid).trim() || client.id;
+                  const label = asText(client.displayName).trim() || asText(client.email).trim() || uid;
+                  return (
+                    <div key={`assigned-${uid}`} className="assigned-client-item">
+                      <span className="assigned-client-name">{label}</span>
+                      <button
+                        className="icon-btn icon-btn-danger assigned-client-remove-btn"
+                        type="button"
+                        aria-label={`Rimuovi ${label}`}
+                        title="Rimuovi cliente"
+                        disabled={assigning}
+                        onClick={() => void removeAssignedClient(uid)}
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <div className="action-row-split">
+              <button className="btn btn-ghost" type="button" disabled={assigning} onClick={() => setIsAssignModalOpen(false)}>
+                Annulla
+              </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={assigning || assigningClientIds.length === 0}
+                onClick={() => void assignSelectedClients()}
+              >
+                {assigning ? 'Assegno...' : 'Assegna'}
+              </button>
+            </div>
+          </article>
+        </section>
+      ) : null}
     </main>
   );
 }

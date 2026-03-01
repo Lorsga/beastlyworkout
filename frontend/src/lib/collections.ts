@@ -35,6 +35,9 @@ export interface PlanInput {
   status: PlanStatus;
   title: string;
   warmup?: string;
+  warmupVideoUrl?: string;
+  warmupImageUrl?: string;
+  warmupMediaUrl?: string;
   description?: string;
   kind?: 'series_reps' | 'circuit';
   notes?: string;
@@ -88,6 +91,7 @@ const IMAGE_UPLOAD_TARGET_BYTES = 700 * 1024;
 const IMAGE_UPLOAD_START_QUALITY = 0.88;
 const IMAGE_UPLOAD_MIN_QUALITY = 0.62;
 const IMAGE_UPLOAD_QUALITY_STEP = 0.06;
+const STORAGE_IMAGE_CACHE_CONTROL = 'public,max-age=604800,stale-while-revalidate=86400,immutable';
 
 function outputMimeForImage(fileType: string): 'image/webp' | 'image/jpeg' {
   if (fileType === 'image/png' || fileType === 'image/webp') return 'image/webp';
@@ -279,6 +283,9 @@ export async function createPlanAsCoach(input: PlanInput) {
     status: input.status,
     title: input.title,
     warmup: input.warmup ?? '',
+    warmupVideoUrl: input.warmupVideoUrl ?? '',
+    warmupImageUrl: input.warmupImageUrl ?? '',
+    warmupMediaUrl: input.warmupMediaUrl ?? '',
     description: input.description ?? '',
     kind: input.kind ?? 'series_reps',
     notes: input.notes ?? '',
@@ -378,8 +385,13 @@ export async function deletePlanAsCoach(planId: string) {
   if (planSnap.exists()) {
     const data = planSnap.data() as {
       exercises?: Array<{ imageUrl?: unknown; mediaUrl?: unknown }>;
+      warmupImageUrl?: unknown;
+      warmupMediaUrl?: unknown;
     };
-    const mediaUrls = collectPlanStorageUrls(data.exercises);
+    const mediaUrls = collectPlanStorageUrls(data.exercises, {
+      warmupImageUrl: data.warmupImageUrl,
+      warmupMediaUrl: data.warmupMediaUrl,
+    });
     await Promise.allSettled(mediaUrls.map((url) => deleteStorageUrl(url)));
   }
 
@@ -392,7 +404,10 @@ export async function uploadWorkoutMediaAsCoach(clientId: string, file: File): P
   const safeName = uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const fileName = `${Date.now()}-${safeName}`;
   const mediaRef = workoutMediaRef(trainerId, clientId, fileName);
-  await uploadBytes(mediaRef, uploadFile, { contentType: uploadFile.type || 'application/octet-stream' });
+  await uploadBytes(mediaRef, uploadFile, {
+    contentType: uploadFile.type || 'application/octet-stream',
+    cacheControl: STORAGE_IMAGE_CACHE_CONTROL,
+  });
   return getDownloadURL(mediaRef);
 }
 
@@ -506,16 +521,22 @@ export function toData<T = DocumentData>(snapshot: { data: () => T }): T {
   return snapshot.data();
 }
 
-function collectPlanStorageUrls(exercises: unknown): string[] {
-  if (!Array.isArray(exercises)) return [];
+function collectPlanStorageUrls(
+  exercises: unknown,
+  warmupMedia?: { warmupImageUrl?: unknown; warmupMediaUrl?: unknown },
+): string[] {
   const urls = new Set<string>();
-  for (const item of exercises) {
-    if (!item || typeof item !== 'object') continue;
-    const imageUrl = (item as { imageUrl?: unknown }).imageUrl;
-    const mediaUrl = (item as { mediaUrl?: unknown }).mediaUrl;
-    if (isStorageUrl(imageUrl)) urls.add(imageUrl);
-    if (isStorageUrl(mediaUrl)) urls.add(mediaUrl);
+  if (Array.isArray(exercises)) {
+    for (const item of exercises) {
+      if (!item || typeof item !== 'object') continue;
+      const imageUrl = (item as { imageUrl?: unknown }).imageUrl;
+      const mediaUrl = (item as { mediaUrl?: unknown }).mediaUrl;
+      if (isStorageUrl(imageUrl)) urls.add(imageUrl);
+      if (isStorageUrl(mediaUrl)) urls.add(mediaUrl);
+    }
   }
+  if (isStorageUrl(warmupMedia?.warmupImageUrl)) urls.add(warmupMedia.warmupImageUrl);
+  if (isStorageUrl(warmupMedia?.warmupMediaUrl)) urls.add(warmupMedia.warmupMediaUrl);
   return [...urls];
 }
 
