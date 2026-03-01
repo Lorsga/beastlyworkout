@@ -100,6 +100,10 @@ const getMyAssignedPlansFn = httpsCallable<
       title: string;
       status: string;
       kind: 'series_reps' | 'circuit';
+      warmup: string;
+      warmupVideoUrl: string;
+      warmupImageUrl: string;
+      warmupMediaUrl: string;
       notes: string;
       assignedClientIds: string[];
       exercises: unknown[];
