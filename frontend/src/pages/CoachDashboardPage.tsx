@@ -2165,45 +2165,51 @@ export function CoachDashboardPage() {
             <p className="hint">
               Tipo scheda: <strong>{previewPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
             </p>
-            {asText((previewPlan as {warmup?: unknown}).warmup).trim() ? (
+            {asText((previewPlan as {warmup?: unknown}).warmup).trim() || getPlanWarmupImageUrl(previewPlan) || getPlanWarmupVideoUrl(previewPlan) ? (
               <div className="client-info-block">
-                <p className="hint"><strong>Riscaldamento:</strong> {asText((previewPlan as {warmup?: unknown}).warmup)}</p>
-              </div>
-            ) : null}
-            {getPlanWarmupImageUrl(previewPlan) ? (
-              <div className="client-info-block">
-                {(() => {
-                  const warmupImageKey = `${previewPlan.id}-warmup`;
-                  const isWarmupImageLoading = previewImageLoading[warmupImageKey] !== false;
-                  return (
-                    <>
-                      {isWarmupImageLoading ? (
-                        <div className="media-loading" aria-live="polite">
-                          <span className="spinner" aria-hidden="true" />
-                          <span>Caricamento immagine riscaldamento...</span>
-                        </div>
-                      ) : null}
-                      <img
-                        src={getPlanWarmupImageUrl(previewPlan)}
-                        alt="Media riscaldamento"
-                        className="exercise-upload-preview"
-                        style={{display: isWarmupImageLoading ? 'none' : 'block'}}
-                        onLoad={() => setPreviewImageLoading((prev) => ({...prev, [warmupImageKey]: false}))}
-                        onError={() => setPreviewImageLoading((prev) => ({...prev, [warmupImageKey]: false}))}
-                      />
-                    </>
-                  );
-                })()}
-              </div>
-            ) : null}
-            {getPlanWarmupVideoUrl(previewPlan) ? (
-              <div className="client-info-block">
-                <a className="btn-link screen-only" href={getPlanWarmupVideoUrl(previewPlan)} target="_blank" rel="noreferrer">
-                  Apri video riscaldamento
-                </a>
-                <a className="hint print-only print-video-link" href={getPlanWarmupVideoUrl(previewPlan)} target="_blank" rel="noreferrer">
-                  URL video riscaldamento: {getPlanWarmupVideoUrl(previewPlan)}
-                </a>
+                <div className={getPlanWarmupImageUrl(previewPlan) ? 'warmup-media-layout' : ''}>
+                  {getPlanWarmupImageUrl(previewPlan) ? (
+                    <div className="warmup-media-visual">
+                      {(() => {
+                        const warmupImageKey = `${previewPlan.id}-warmup`;
+                        const isWarmupImageLoading = previewImageLoading[warmupImageKey] !== false;
+                        return (
+                          <>
+                            {isWarmupImageLoading ? (
+                              <div className="media-loading" aria-live="polite">
+                                <span className="spinner" aria-hidden="true" />
+                                <span>Caricamento immagine riscaldamento...</span>
+                              </div>
+                            ) : null}
+                            <img
+                              src={getPlanWarmupImageUrl(previewPlan)}
+                              alt="Media riscaldamento"
+                              className="exercise-upload-preview"
+                              style={{display: isWarmupImageLoading ? 'none' : 'block'}}
+                              onLoad={() => setPreviewImageLoading((prev) => ({...prev, [warmupImageKey]: false}))}
+                              onError={() => setPreviewImageLoading((prev) => ({...prev, [warmupImageKey]: false}))}
+                            />
+                          </>
+                        );
+                      })()}
+                    </div>
+                  ) : null}
+                  <div className="warmup-media-content">
+                    {asText((previewPlan as {warmup?: unknown}).warmup).trim() ? (
+                      <p className="hint"><strong>Riscaldamento:</strong> {asText((previewPlan as {warmup?: unknown}).warmup)}</p>
+                    ) : null}
+                    {getPlanWarmupVideoUrl(previewPlan) ? (
+                      <>
+                        <a className="btn-link screen-only" href={getPlanWarmupVideoUrl(previewPlan)} target="_blank" rel="noreferrer">
+                          Apri video riscaldamento
+                        </a>
+                        <a className="hint print-only print-video-link" href={getPlanWarmupVideoUrl(previewPlan)} target="_blank" rel="noreferrer">
+                          URL video riscaldamento: {getPlanWarmupVideoUrl(previewPlan)}
+                        </a>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             ) : null}
             {asText(previewPlan.notes).trim() ? (

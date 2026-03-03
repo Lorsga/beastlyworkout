@@ -471,6 +471,25 @@ a.btn {
   gap: 8px;
 }
 
+.warmup-media-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.warmup-media-visual {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+.warmup-media-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
 .exercise-name {
   font-weight: 700;
   font-size: 18px;
@@ -1281,6 +1300,22 @@ a.btn {
   }
 
   .coach-exercise-media-content {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+  }
+
+  .warmup-media-layout {
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .warmup-media-visual {
+    flex: 0 0 180px !important;
+    width: 180px !important;
+  }
+
+  .warmup-media-content {
     flex: 1 1 auto !important;
     min-width: 0 !important;
   }

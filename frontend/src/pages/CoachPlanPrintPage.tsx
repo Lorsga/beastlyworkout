@@ -431,6 +431,18 @@ export function CoachPlanPrintPage() {
       .join('');
     const warmupImageUrl = getPlanWarmupImageUrl(currentPlan);
     const warmupVideoUrl = getPlanWarmupVideoUrl(currentPlan);
+    const warmupText = asText(currentPlan.warmup).trim();
+    const warmupBlockHtml = warmupText || warmupImageUrl || warmupVideoUrl
+      ? `<div class="block">
+    <div class="${warmupImageUrl ? 'warmup-row' : ''}">
+      ${warmupImageUrl ? `<div class="warmup-media"><img src="${escapeHtml(warmupImageUrl)}" alt="Media riscaldamento" /></div>` : ''}
+      <div class="warmup-content">
+        ${warmupText ? `<p><strong>Riscaldamento:</strong> ${escapeHtml(warmupText)}</p>` : ''}
+        ${warmupVideoUrl ? `<p><a href="${escapeHtml(warmupVideoUrl)}" target="_blank" rel="noreferrer">URL video riscaldamento: ${escapeHtml(warmupVideoUrl)}</a></p>` : ''}
+      </div>
+    </div>
+  </div>`
+      : '';
 
     const html = `<!doctype html>
 <html lang="it">
@@ -447,11 +459,15 @@ export function CoachPlanPrintPage() {
     .exercise-row { display: flex; gap: 12px; align-items: flex-start; }
     .exercise-media { flex: 0 0 180px; width: 180px; }
     .exercise-content { flex: 1 1 auto; min-width: 0; }
+    .warmup-row { display: flex; gap: 12px; align-items: flex-start; }
+    .warmup-media { flex: 0 0 180px; width: 180px; }
+    .warmup-content { flex: 1 1 auto; min-width: 0; }
     .meta { color: #444; margin: 4px 0 8px; }
     img { display: block; width: 100%; max-height: 260px; object-fit: cover; border-radius: 10px; margin-top: 8px; }
     .exercise-media img { margin-top: 0; }
+    .warmup-media img { margin-top: 0; }
     a { color: #b31217; }
-    @media print { body { margin: 10mm; } .exercise-row { display: flex; } }
+    @media print { body { margin: 10mm; } .exercise-row { display: flex; } .warmup-row { display: flex; } }
   </style>
 </head>
 <body>
@@ -460,11 +476,9 @@ export function CoachPlanPrintPage() {
   <div class="block">
     <p><strong>Titolo programma:</strong> ${escapeHtml(currentPlan.title || 'Senza titolo')}</p>
     <p><strong>Tipo scheda:</strong> ${escapeHtml(currentPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps')}</p>
-    ${asText(currentPlan.warmup).trim() ? `<p><strong>Riscaldamento:</strong> ${escapeHtml(asText(currentPlan.warmup))}</p>` : ''}
-    ${warmupImageUrl ? `<img src="${escapeHtml(warmupImageUrl)}" alt="Media riscaldamento" />` : ''}
-    ${warmupVideoUrl ? `<p><a href="${escapeHtml(warmupVideoUrl)}" target="_blank" rel="noreferrer">URL video riscaldamento: ${escapeHtml(warmupVideoUrl)}</a></p>` : ''}
     ${asText(currentPlan.notes).trim() ? `<p><strong>Note coach:</strong> ${escapeHtml(asText(currentPlan.notes))}</p>` : ''}
   </div>
+  ${warmupBlockHtml}
   ${feedbackHtml}
   ${exercisesHtml}
 </body>
@@ -588,24 +602,30 @@ export function CoachPlanPrintPage() {
         <p className="hint">
           Tipo scheda: <strong>{currentPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
         </p>
-        {asText(currentPlan.warmup).trim() ? (
+        {asText(currentPlan.warmup).trim() || getPlanWarmupImageUrl(currentPlan) || getPlanWarmupVideoUrl(currentPlan) ? (
           <div className="client-info-block">
-            <p className="hint"><strong>Riscaldamento:</strong> {asText(currentPlan.warmup)}</p>
-          </div>
-        ) : null}
-        {getPlanWarmupImageUrl(currentPlan) ? (
-          <div className="client-info-block">
-            <img src={getPlanWarmupImageUrl(currentPlan)} alt="Media riscaldamento" className="exercise-upload-preview" />
-          </div>
-        ) : null}
-        {getPlanWarmupVideoUrl(currentPlan) ? (
-          <div className="client-info-block">
-            <a className="btn-link screen-only" href={getPlanWarmupVideoUrl(currentPlan)} target="_blank" rel="noreferrer">
-              Apri video riscaldamento
-            </a>
-            <a className="hint print-video-link print-only" href={getPlanWarmupVideoUrl(currentPlan)} target="_blank" rel="noreferrer">
-              URL video riscaldamento: {getPlanWarmupVideoUrl(currentPlan)}
-            </a>
+            <div className={getPlanWarmupImageUrl(currentPlan) ? 'warmup-media-layout' : ''}>
+              {getPlanWarmupImageUrl(currentPlan) ? (
+                <div className="warmup-media-visual">
+                  <img src={getPlanWarmupImageUrl(currentPlan)} alt="Media riscaldamento" className="exercise-upload-preview" />
+                </div>
+              ) : null}
+              <div className="warmup-media-content">
+                {asText(currentPlan.warmup).trim() ? (
+                  <p className="hint"><strong>Riscaldamento:</strong> {asText(currentPlan.warmup)}</p>
+                ) : null}
+                {getPlanWarmupVideoUrl(currentPlan) ? (
+                  <>
+                    <a className="btn-link screen-only" href={getPlanWarmupVideoUrl(currentPlan)} target="_blank" rel="noreferrer">
+                      Apri video riscaldamento
+                    </a>
+                    <a className="hint print-video-link print-only" href={getPlanWarmupVideoUrl(currentPlan)} target="_blank" rel="noreferrer">
+                      URL video riscaldamento: {getPlanWarmupVideoUrl(currentPlan)}
+                    </a>
+                  </>
+                ) : null}
+              </div>
+            </div>
           </div>
         ) : null}
         {asText(currentPlan.notes).trim() ? (
