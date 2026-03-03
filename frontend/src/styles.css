@@ -450,13 +450,14 @@ a.btn {
 
 .coach-exercise-media-layout {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: stretch;
   gap: 12px;
 }
 
 .coach-exercise-media-visual {
-  flex: 0 0 180px;
-  width: 180px;
+  flex: 0 0 auto;
+  width: 100%;
 }
 
 .coach-exercise-media-visual .exercise-upload-preview {
@@ -1186,11 +1187,6 @@ a.btn {
 
   .coach-exercise-media-layout {
     flex-direction: column;
-  }
-
-  .coach-exercise-media-visual {
-    flex-basis: auto;
-    width: 100%;
   }
 }
 

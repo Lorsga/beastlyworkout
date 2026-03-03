@@ -407,21 +407,25 @@ export function CoachPlanPrintPage() {
       .map(
         (exercise, index) => `
       <article class="exercise">
-        <h4>${escapeHtml(exercise.name || `Esercizio ${index + 1}`)}</h4>
-        <p class="meta">${
+        <div class="${exercise.imageUrl ? 'exercise-row' : ''}">
+          ${exercise.imageUrl ? `<div class="exercise-media"><img src="${escapeHtml(exercise.imageUrl)}" alt="Media esercizio ${index + 1}" /></div>` : ''}
+          <div class="exercise-content">
+            <h4>${escapeHtml(exercise.name || `Esercizio ${index + 1}`)}</h4>
+            <p class="meta">${
           currentPlan.kind === 'circuit'
             ? `${exercise.workValue || '-'} reps/tempo`
             : `${exercise.sets || '-'} serie · ${exercise.reps || '-'} reps`
         } · ${exercise.weightKg || 0} kg · ${exercise.restSeconds || 0} sec recupero</p>
-        ${exercise.advancedMethod ? `<p><strong>Metodo:</strong> ${exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}</p>` : ''}
-        ${
+            ${exercise.advancedMethod ? `<p><strong>Metodo:</strong> ${exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}</p>` : ''}
+            ${
           exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim()
             ? `<p><strong>Note metodo:</strong> ${escapeHtml(exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes)}</p>`
             : ''
         }
-        ${exercise.notes.trim() ? `<p><strong>Note:</strong> ${escapeHtml(exercise.notes)}</p>` : ''}
-        ${exercise.imageUrl ? `<img src="${escapeHtml(exercise.imageUrl)}" alt="Media esercizio ${index + 1}" />` : ''}
-        ${exercise.videoUrl ? `<p><a href="${escapeHtml(exercise.videoUrl)}" target="_blank" rel="noreferrer">URL video: ${escapeHtml(exercise.videoUrl)}</a></p>` : ''}
+            ${exercise.notes.trim() ? `<p><strong>Note:</strong> ${escapeHtml(exercise.notes)}</p>` : ''}
+            ${exercise.videoUrl ? `<p><a href="${escapeHtml(exercise.videoUrl)}" target="_blank" rel="noreferrer">URL video: ${escapeHtml(exercise.videoUrl)}</a></p>` : ''}
+          </div>
+        </div>
       </article>`,
       )
       .join('');
@@ -440,10 +444,14 @@ export function CoachPlanPrintPage() {
     .block { border: 1px solid #e5e5e5; border-radius: 12px; padding: 12px; margin: 10px 0; }
     .sub { border-top: 1px solid #eee; margin-top: 8px; padding-top: 8px; }
     .exercise { border: 1px solid #e5e5e5; border-radius: 12px; padding: 12px; margin: 10px 0; break-inside: avoid; }
+    .exercise-row { display: flex; gap: 12px; align-items: flex-start; }
+    .exercise-media { flex: 0 0 180px; width: 180px; }
+    .exercise-content { flex: 1 1 auto; min-width: 0; }
     .meta { color: #444; margin: 4px 0 8px; }
     img { display: block; width: 100%; max-height: 260px; object-fit: cover; border-radius: 10px; margin-top: 8px; }
+    .exercise-media img { margin-top: 0; }
     a { color: #b31217; }
-    @media print { body { margin: 10mm; } }
+    @media print { body { margin: 10mm; } .exercise-row { display: flex; } }
   </style>
 </head>
 <body>
