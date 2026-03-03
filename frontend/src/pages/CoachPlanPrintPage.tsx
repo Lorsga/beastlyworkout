@@ -624,30 +624,38 @@ export function CoachPlanPrintPage() {
         <div className="exercise-grid">
           {exercises.map((exercise, index) => (
             <article className="exercise-card" key={`print-ex-${index}`}>
-              <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
-              <div className="exercise-meta">
-                {currentPlan.kind === 'circuit' ? (
-                  <span>{exercise.workValue || '-'} reps/tempo</span>
-                ) : (
-                  <>
-                    <span>{exercise.sets || '-'} serie</span>
-                    <span>{exercise.reps || '-'} reps</span>
-                  </>
-                )}
-                <span>{exercise.weightKg || 0} kg</span>
-                <span>{exercise.restSeconds || 0} sec recupero</span>
+              <div className={exercise.imageUrl ? 'coach-exercise-media-layout' : ''}>
+                {exercise.imageUrl ? (
+                  <div className="coach-exercise-media-visual">
+                    <img src={exercise.imageUrl} alt={`Media esercizio ${index + 1}`} className="exercise-upload-preview" />
+                  </div>
+                ) : null}
+                <div className={exercise.imageUrl ? 'coach-exercise-media-content' : ''}>
+                  <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
+                  <div className="exercise-meta">
+                    {currentPlan.kind === 'circuit' ? (
+                      <span>{exercise.workValue || '-'} reps/tempo</span>
+                    ) : (
+                      <>
+                        <span>{exercise.sets || '-'} serie</span>
+                        <span>{exercise.reps || '-'} reps</span>
+                      </>
+                    )}
+                    <span>{exercise.weightKg || 0} kg</span>
+                    <span>{exercise.restSeconds || 0} sec recupero</span>
+                  </div>
+                  {exercise.advancedMethod ? (
+                    <p className="hint">
+                      <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
+                    </p>
+                  ) : null}
+                  {exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim() ? (
+                    <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
+                  ) : null}
+                  {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
+                  {exercise.videoUrl ? <a className="hint print-video-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">URL video: {exercise.videoUrl}</a> : null}
+                </div>
               </div>
-              {exercise.advancedMethod ? (
-                <p className="hint">
-                  <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
-                </p>
-              ) : null}
-              {exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim() ? (
-                <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
-              ) : null}
-              {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
-              {exercise.imageUrl ? <img src={exercise.imageUrl} alt={`Media esercizio ${index + 1}`} className="exercise-upload-preview" /> : null}
-              {exercise.videoUrl ? <a className="hint print-video-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">URL video: {exercise.videoUrl}</a> : null}
             </article>
           ))}
         </div>

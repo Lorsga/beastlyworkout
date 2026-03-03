@@ -978,14 +978,6 @@ export function CoachDashboardPage() {
     if (!onboardingDraft.sex.trim()) return 'Inserisci sesso.';
     if (!onboardingDraft.heightCm.trim()) return 'Inserisci altezza.';
     if (!onboardingDraft.weightKg.trim()) return 'Inserisci peso.';
-    if (!onboardingDraft.pastProgram.trim()) return 'Compila esperienza allenamento.';
-    if (!onboardingDraft.trainingFrequency.trim()) return 'Compila frequenza allenamento.';
-    if (!onboardingDraft.workoutDuration.trim()) return 'Compila durata allenamento.';
-    if (!onboardingDraft.workoutLocation.trim()) return 'Compila luogo allenamento.';
-    if (!onboardingDraft.equipment.trim()) return 'Compila attrezzatura.';
-    if (!onboardingDraft.objectivePrimary.trim()) return 'Compila obiettivo principale.';
-    if (!onboardingDraft.objectiveReason.trim()) return 'Compila motivo obiettivo.';
-    if (!onboardingDraft.expectedTimeline.trim()) return 'Compila timeline risultati.';
     return null;
   }
 
@@ -1720,12 +1712,9 @@ export function CoachDashboardPage() {
                 <h3>Obiettivi</h3>
                 <p className="hint"><strong>Obiettivo principale:</strong> {onboardingValue(selectedClientOnboarding?.objectivePrimary || selectedClientOnboarding?.goal)}</p>
                 <p className="hint"><strong>Perché:</strong> {onboardingValue(selectedClientOnboarding?.objectiveReason)}</p>
-                <p className="hint"><strong>Timeline risultati:</strong> {onboardingValue(selectedClientOnboarding?.expectedTimeline)}</p>
-                <p className="hint"><strong>Cosa lo ha bloccato:</strong> {onboardingValue(selectedClientOnboarding?.whatBlockedSoFar)}</p>
-                <p className="hint"><strong>Miglioramento desiderato (3 mesi):</strong> {onboardingValue(selectedClientOnboarding?.oneThingToImprove)}</p>
+                <p className="hint"><strong>Cosa ti ha bloccato nel raggiungere l'obiettivo:</strong> {onboardingValue(selectedClientOnboarding?.whatBlockedSoFar)}</p>
+                <p className="hint"><strong>Obiettivo nei prossimi 3 mesi:</strong> {onboardingValue(selectedClientOnboarding?.oneThingToImprove)}</p>
                 <p className="hint"><strong>Importanza obiettivo:</strong> {onboardingValue(selectedClientOnboarding?.importanceScore)} / 10</p>
-                <p className="hint"><strong>Rischio se non cambia:</strong> {onboardingValue(selectedClientOnboarding?.riskIfNoChange)}</p>
-                <p className="hint"><strong>Note coach:</strong> {onboardingValue(selectedClientOnboarding?.notes)}</p>
               </div>
             </article>
             ) : null}
@@ -1831,11 +1820,11 @@ export function CoachDashboardPage() {
               <div className="modal-grid">
                 <label>Altezza (cm) *<input type="number" min={100} max={250} onFocus={selectNumericInputContents} value={onboardingDraft.heightCm} onChange={(event) => updateOnboardingField('heightCm', normalizeNumericRawInput(event.target.value))} /></label>
                 <label>Peso (kg) *<input type="number" min={30} max={250} onFocus={selectNumericInputContents} value={onboardingDraft.weightKg} onChange={(event) => updateOnboardingField('weightKg', normalizeNumericRawInput(event.target.value))} /></label>
-                <label>Programmi precedenti *<input value={onboardingDraft.pastProgram} onChange={(event) => updateOnboardingField('pastProgram', event.target.value)} placeholder="Es. Si con coach online" /></label>
-                <label>Frequenza allenamenti *<input value={onboardingDraft.trainingFrequency} onChange={(event) => updateOnboardingField('trainingFrequency', event.target.value)} placeholder="Es. 3-4 a settimana" /></label>
-                <label>Durata allenamento *<input value={onboardingDraft.workoutDuration} onChange={(event) => updateOnboardingField('workoutDuration', event.target.value)} placeholder="Es. 45 minuti" /></label>
-                <label>Dove si allena *<input value={onboardingDraft.workoutLocation} onChange={(event) => updateOnboardingField('workoutLocation', event.target.value)} /></label>
-                <label>Attrezzatura disponibile *<input value={onboardingDraft.equipment} onChange={(event) => updateOnboardingField('equipment', event.target.value)} /></label>
+                <label>Programmi precedenti<input value={onboardingDraft.pastProgram} onChange={(event) => updateOnboardingField('pastProgram', event.target.value)} placeholder="Es. Si con coach online" /></label>
+                <label>Frequenza allenamenti<input value={onboardingDraft.trainingFrequency} onChange={(event) => updateOnboardingField('trainingFrequency', event.target.value)} placeholder="Es. 3-4 a settimana" /></label>
+                <label>Durata allenamento<input value={onboardingDraft.workoutDuration} onChange={(event) => updateOnboardingField('workoutDuration', event.target.value)} placeholder="Es. 45 minuti" /></label>
+                <label>Dove si allena<input value={onboardingDraft.workoutLocation} onChange={(event) => updateOnboardingField('workoutLocation', event.target.value)} /></label>
+                <label>Attrezzatura disponibile<input value={onboardingDraft.equipment} onChange={(event) => updateOnboardingField('equipment', event.target.value)} /></label>
                 <label>Allenamenti fatti<textarea value={onboardingDraft.trainingTypeHistory} onChange={(event) => updateOnboardingField('trainingTypeHistory', event.target.value)} /></label>
                 <label>Infortuni/problemi<input value={onboardingDraft.hasInjuries} onChange={(event) => updateOnboardingField('hasInjuries', event.target.value)} placeholder="Si/No" /></label>
                 <label>Dettagli infortuni<textarea value={onboardingDraft.injuryDetails} onChange={(event) => updateOnboardingField('injuryDetails', event.target.value)} /></label>
@@ -1844,14 +1833,11 @@ export function CoachDashboardPage() {
 
             {profileStep === 2 ? (
               <div className="modal-grid">
-                <label>Obiettivo principale *<input value={onboardingDraft.objectivePrimary} onChange={(event) => updateOnboardingField('objectivePrimary', event.target.value)} /></label>
-                <label>Perché questo obiettivo? *<textarea value={onboardingDraft.objectiveReason} onChange={(event) => updateOnboardingField('objectiveReason', event.target.value)} /></label>
-                <label>Timeline risultati *<input value={onboardingDraft.expectedTimeline} onChange={(event) => updateOnboardingField('expectedTimeline', event.target.value)} /></label>
-                <label>Cosa lo ha bloccato<textarea value={onboardingDraft.whatBlockedSoFar} onChange={(event) => updateOnboardingField('whatBlockedSoFar', event.target.value)} /></label>
-                <label>Miglioramento nei prossimi 3 mesi<textarea value={onboardingDraft.oneThingToImprove} onChange={(event) => updateOnboardingField('oneThingToImprove', event.target.value)} /></label>
+                <label>Obiettivo principale<input value={onboardingDraft.objectivePrimary} onChange={(event) => updateOnboardingField('objectivePrimary', event.target.value)} /></label>
+                <label>Perché questo obiettivo?<textarea value={onboardingDraft.objectiveReason} onChange={(event) => updateOnboardingField('objectiveReason', event.target.value)} /></label>
+                <label>Cosa ti ha bloccato nel raggiungere l'obiettivo?<textarea value={onboardingDraft.whatBlockedSoFar} onChange={(event) => updateOnboardingField('whatBlockedSoFar', event.target.value)} /></label>
+                <label>Obiettivo nei prossimi 3 mesi<textarea value={onboardingDraft.oneThingToImprove} onChange={(event) => updateOnboardingField('oneThingToImprove', event.target.value)} /></label>
                 <label>Importanza obiettivo (1-10)<input type="number" min={1} max={10} onFocus={selectNumericInputContents} value={onboardingDraft.importanceScore} onChange={(event) => updateOnboardingField('importanceScore', normalizeNumericRawInput(event.target.value))} /></label>
-                <label>Rischio se non cambia<textarea value={onboardingDraft.riskIfNoChange} onChange={(event) => updateOnboardingField('riskIfNoChange', event.target.value)} /></label>
-                <label>Note coach (opzionale)<textarea value={onboardingDraft.notes} onChange={(event) => updateOnboardingField('notes', event.target.value)} /></label>
               </div>
             ) : null}
 
@@ -2247,64 +2233,65 @@ export function CoachDashboardPage() {
                   {(() => {
                     const imageKey = `${previewPlan.id}-${index}`;
                     const isImageLoading = previewImageLoading[imageKey] !== false;
+                    const hasImage = isImageMediaUrl(exercise.imageUrl);
+                    const hasVideo = isVideoMediaUrl(exercise.videoUrl);
                     return (
                       <>
-                  <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
-                  <div className="exercise-meta">
-                    {previewPlan.kind === 'circuit' ? (
-                      <span>{exercise.workValue || '-'} reps/tempo</span>
-                    ) : (
-                      <>
-                        <span>{exercise.sets || '-'} serie</span>
-                        <span>{exercise.reps || '-'} reps</span>
-                      </>
-                    )}
-                    <span>{exercise.weightKg || 0} kg</span>
-                    <span>{exercise.restSeconds || 0} sec recupero</span>
-                  </div>
-                  {exercise.advancedMethod ? (
-                    <p className="hint">
-                      <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
-                    </p>
-                  ) : null}
-                  {exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim() ? (
-                    <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
-                  ) : null}
-                  {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
-                  {exercise.imageUrl || exercise.videoUrl ? (
-                    <>
-                      {isImageMediaUrl(exercise.imageUrl) ? (
-                        <>
-                          {isImageLoading ? (
-                            <div className="media-loading" aria-live="polite">
-                              <span className="spinner" aria-hidden="true" />
-                              <span>Caricamento immagine...</span>
+                        <div className={hasImage ? 'coach-exercise-media-layout' : ''}>
+                          {hasImage ? (
+                            <div className="coach-exercise-media-visual">
+                              {isImageLoading ? (
+                                <div className="media-loading" aria-live="polite">
+                                  <span className="spinner" aria-hidden="true" />
+                                  <span>Caricamento immagine...</span>
+                                </div>
+                              ) : null}
+                              <img
+                                src={exercise.imageUrl}
+                                alt={`Media esercizio ${index + 1}`}
+                                className="exercise-upload-preview"
+                                style={{display: isImageLoading ? 'none' : 'block'}}
+                                onLoad={() => setPreviewImageLoading((prev) => ({...prev, [imageKey]: false}))}
+                                onError={() => setPreviewImageLoading((prev) => ({...prev, [imageKey]: false}))}
+                              />
                             </div>
                           ) : null}
-                          <img
-                            src={exercise.imageUrl}
-                            alt={`Media esercizio ${index + 1}`}
-                            className="exercise-upload-preview"
-                            style={{display: isImageLoading ? 'none' : 'block'}}
-                            onLoad={() => setPreviewImageLoading((prev) => ({...prev, [imageKey]: false}))}
-                            onError={() => setPreviewImageLoading((prev) => ({...prev, [imageKey]: false}))}
-                          />
-                        </>
-                      ) : null}
-                      {isVideoMediaUrl(exercise.videoUrl) ? (
-                        <>
-                          <a className="btn-link screen-only" href={exercise.videoUrl} target="_blank" rel="noreferrer">
-                            Apri video
-                          </a>
-                          <a className="hint print-only print-video-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">
-                            URL video: {exercise.videoUrl}
-                          </a>
-                        </>
-                      ) : null}
-                    </>
-                  ) : (
-                    <p className="hint">Nessun media allegato</p>
-                  )}
+                          <div className={hasImage ? 'coach-exercise-media-content' : ''}>
+                            <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
+                            <div className="exercise-meta">
+                              {previewPlan.kind === 'circuit' ? (
+                                <span>{exercise.workValue || '-'} reps/tempo</span>
+                              ) : (
+                                <>
+                                  <span>{exercise.sets || '-'} serie</span>
+                                  <span>{exercise.reps || '-'} reps</span>
+                                </>
+                              )}
+                              <span>{exercise.weightKg || 0} kg</span>
+                              <span>{exercise.restSeconds || 0} sec recupero</span>
+                            </div>
+                            {exercise.advancedMethod ? (
+                              <p className="hint">
+                                <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
+                              </p>
+                            ) : null}
+                            {exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim() ? (
+                              <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
+                            ) : null}
+                            {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
+                            {hasVideo ? (
+                              <>
+                                <a className="btn-link screen-only" href={exercise.videoUrl} target="_blank" rel="noreferrer">
+                                  Apri video
+                                </a>
+                                <a className="hint print-only print-video-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">
+                                  URL video: {exercise.videoUrl}
+                                </a>
+                              </>
+                            ) : null}
+                            {!hasImage && !hasVideo ? <p className="hint">Nessun media allegato</p> : null}
+                          </div>
+                        </div>
                       </>
                     );
                   })()}

@@ -180,6 +180,40 @@ p {
   font-size: 16px;
 }
 
+.warmup-block {
+  gap: 10px;
+}
+
+.warmup-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.warmup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.warmup-media-btn {
+  border: 1px solid rgba(24, 33, 38, 0.14);
+  background: rgba(24, 33, 38, 0.05);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.warmup-media-btn:hover {
+  border-color: rgba(214, 40, 40, 0.36);
+  background: rgba(214, 40, 40, 0.08);
+}
+
 .assigned-client-list {
   list-style: none;
   margin: 0;
@@ -412,6 +446,28 @@ a.btn {
   display: grid;
   gap: 8px;
   background: rgba(255, 255, 255, 0.72);
+}
+
+.coach-exercise-media-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.coach-exercise-media-visual {
+  flex: 0 0 180px;
+  width: 180px;
+}
+
+.coach-exercise-media-visual .exercise-upload-preview {
+  margin: 0;
+}
+
+.coach-exercise-media-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 8px;
 }
 
 .exercise-name {
@@ -1126,6 +1182,15 @@ a.btn {
 
   .shell-main .hero h1 {
     font-size: clamp(28px, 3vw, 42px);
+  }
+
+  .coach-exercise-media-layout {
+    flex-direction: column;
+  }
+
+  .coach-exercise-media-visual {
+    flex-basis: auto;
+    width: 100%;
   }
 }
 

@@ -586,33 +586,39 @@ export function ClientDashboardPage() {
                 <p className="hint">
                   Tipo scheda: <strong>{selectedPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
                 </p>
-                {(selectedPlan.warmup ?? '').trim() || getPlanWarmupVideoUrl(selectedPlan) || getPlanWarmupImageUrl(selectedPlan) ? (
-                  <div className="client-info-block">
-                    <p className="hint"><strong>Riscaldamento</strong></p>
-                    {(selectedPlan.warmup ?? '').trim() ? (
-                      <p className="hint">{selectedPlan.warmup}</p>
-                    ) : (
-                      <p className="hint">Indicazioni non presenti.</p>
-                    )}
-                    {getPlanWarmupImageUrl(selectedPlan) ? (
-                      <img
-                        src={getPlanWarmupImageUrl(selectedPlan)}
-                        alt="Immagine riscaldamento"
-                        className="exercise-upload-preview"
-                      />
-                    ) : null}
-                    {getPlanWarmupVideoUrl(selectedPlan) ? (
-                      <button className="btn-link" type="button" onClick={() => openMediaPreview(getPlanWarmupVideoUrl(selectedPlan), 'Riscaldamento')}>
-                        Apri video riscaldamento
-                      </button>
-                    ) : null}
-                    {getPlanWarmupImageUrl(selectedPlan) ? (
-                      <button className="btn-link" type="button" onClick={() => openMediaPreview(getPlanWarmupImageUrl(selectedPlan), 'Riscaldamento')}>
-                        Apri immagine riscaldamento
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
+                {(() => {
+                  const warmupText = (selectedPlan.warmup ?? '').trim();
+                  const warmupVideoUrl = getPlanWarmupVideoUrl(selectedPlan);
+                  const warmupImageUrl = getPlanWarmupImageUrl(selectedPlan);
+                  if (!warmupText && !warmupVideoUrl && !warmupImageUrl) return null;
+                  return (
+                    <div className="client-info-block warmup-block">
+                      <div className="warmup-head">
+                        <p className="hint"><strong>Riscaldamento</strong></p>
+                        <span className="hint">
+                          {[warmupImageUrl ? 'Immagine' : '', warmupVideoUrl ? 'Video' : ''].filter(Boolean).join(' + ') || 'Solo testo'}
+                        </span>
+                      </div>
+                      {warmupText ? (
+                        <p className="hint">{warmupText}</p>
+                      ) : (
+                        <p className="hint">Indicazioni testuali non presenti.</p>
+                      )}
+                      <div className="warmup-actions">
+                        {warmupImageUrl ? (
+                          <button className="warmup-media-btn" type="button" onClick={() => openMediaPreview(warmupImageUrl, 'Riscaldamento')}>
+                            Apri immagine
+                          </button>
+                        ) : null}
+                        {warmupVideoUrl ? (
+                          <button className="warmup-media-btn" type="button" onClick={() => openMediaPreview(warmupVideoUrl, 'Riscaldamento')}>
+                            Apri video
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {(selectedPlan.notes ?? '').trim() ? (
                   <div className="client-info-block">
                     <p className="hint"><strong>Note coach:</strong> {selectedPlan.notes}</p>
