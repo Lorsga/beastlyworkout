@@ -1672,10 +1672,7 @@ export function CoachDashboardPage() {
             {activeTab === 'clients' ? (
             <article className="card" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
               <h2>Anagrafica cliente</h2>
-              <p className="hint">L&apos;utente compila i dati base. Il questionario completo lo compili qui.</p>
-              <button className="btn" type="button" onClick={openProfileModal} disabled={loading || !selectedClientId}>
-                {selectedClientOnboarding ? 'Modifica anagrafica completa' : 'Compila anagrafica completa'}
-              </button>
+              <p className="hint">Sola lettura: l&apos;anagrafica viene compilata e aggiornata direttamente dal cliente nella sua area profilo.</p>
               {selectedClientWhatsappUrl ? (
                 <a className="btn btn-whatsapp" href={selectedClientWhatsappUrl} target="_blank" rel="noreferrer">
                   Scrivi al cliente su WhatsApp

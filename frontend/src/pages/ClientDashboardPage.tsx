@@ -8,6 +8,7 @@ import {
   getMyAssignedPlans,
   syncMyPlanWeightOverrides,
   setMyPlanExerciseWeightOverride,
+  setUserPrivateDoc,
   updateMyPlanExerciseWeight,
   getUserPrivateDoc,
   getUserProfile,
@@ -69,7 +70,62 @@ interface OnboardingDoc {
   sex?: string;
   heightCm?: string;
   weightKg?: string;
+  discoverySource?: string;
+  pastProgram?: string;
+  trainingFrequency?: string;
+  workoutDuration?: string;
+  workoutLocation?: string;
+  equipment?: string;
+  trainingTypeHistory?: string;
+  hasInjuries?: string;
+  injuryDetails?: string;
   objectivePrimary?: string;
+  objectiveReason?: string;
+  expectedTimeline?: string;
+  supportPreference?: string;
+  supportPreferenceOther?: string;
+  investmentRange?: string;
+  whatBlockedSoFar?: string;
+  oneThingToImprove?: string;
+  importanceScore?: number | string;
+  riskIfNoChange?: string;
+  readiness?: string;
+  notes?: string;
+  goal?: string;
+  experienceLevel?: string;
+  trainingDaysPerWeek?: number | string;
+  compiledBy?: string;
+}
+
+interface OnboardingDraft {
+  fullName: string;
+  email: string;
+  phone: string;
+  age: string;
+  sex: string;
+  heightCm: string;
+  weightKg: string;
+  discoverySource: string;
+  pastProgram: string;
+  trainingFrequency: string;
+  workoutDuration: string;
+  workoutLocation: string;
+  equipment: string;
+  trainingTypeHistory: string;
+  hasInjuries: string;
+  injuryDetails: string;
+  objectivePrimary: string;
+  objectiveReason: string;
+  expectedTimeline: string;
+  supportPreference: string;
+  supportPreferenceOther: string;
+  investmentRange: string;
+  whatBlockedSoFar: string;
+  oneThingToImprove: string;
+  importanceScore: string;
+  riskIfNoChange: string;
+  readiness: string;
+  notes: string;
 }
 
 type ClientTabId = 'plan' | 'profile';
@@ -206,6 +262,78 @@ function normalizeNumericRawInput(raw: string): string {
   return raw.replace(/^0+(?=\d)/, '');
 }
 
+function emptyOnboardingDraft(user?: { displayName?: string | null; email?: string | null }): OnboardingDraft {
+  return {
+    fullName: user?.displayName ?? '',
+    email: user?.email ?? '',
+    phone: '',
+    age: '',
+    sex: '',
+    heightCm: '',
+    weightKg: '',
+    discoverySource: '',
+    pastProgram: '',
+    trainingFrequency: '',
+    workoutDuration: '',
+    workoutLocation: '',
+    equipment: '',
+    trainingTypeHistory: '',
+    hasInjuries: '',
+    injuryDetails: '',
+    objectivePrimary: '',
+    objectiveReason: '',
+    expectedTimeline: '',
+    supportPreference: '',
+    supportPreferenceOther: '',
+    investmentRange: '',
+    whatBlockedSoFar: '',
+    oneThingToImprove: '',
+    importanceScore: '',
+    riskIfNoChange: '',
+    readiness: '',
+    notes: '',
+  };
+}
+
+function toOnboardingDraft(
+  source: OnboardingDoc | null,
+  user?: { displayName?: string | null; email?: string | null },
+): OnboardingDraft {
+  const base = emptyOnboardingDraft(user);
+  if (!source) return base;
+  return {
+    ...base,
+    fullName: source.fullName?.trim() || base.fullName,
+    email: source.email?.trim() || base.email,
+    phone: source.phone?.trim() || '',
+    age: source.age?.trim() || '',
+    sex: source.sex?.trim() || '',
+    heightCm: source.heightCm?.trim() || '',
+    weightKg: source.weightKg?.trim() || '',
+    discoverySource: source.discoverySource?.trim() || '',
+    pastProgram: source.pastProgram?.trim() || source.experienceLevel?.trim() || '',
+    trainingFrequency: source.trainingFrequency?.trim() || (source.trainingDaysPerWeek ? String(source.trainingDaysPerWeek) : ''),
+    workoutDuration: source.workoutDuration?.trim() || '',
+    workoutLocation: source.workoutLocation?.trim() || '',
+    equipment: source.equipment?.trim() || '',
+    trainingTypeHistory: source.trainingTypeHistory?.trim() || '',
+    hasInjuries: source.hasInjuries?.trim() || '',
+    injuryDetails: source.injuryDetails?.trim() || '',
+    objectivePrimary: source.objectivePrimary?.trim() || source.goal?.trim() || '',
+    objectiveReason: source.objectiveReason?.trim() || '',
+    expectedTimeline: source.expectedTimeline?.trim() || '',
+    supportPreference: source.supportPreference?.trim() || '',
+    supportPreferenceOther: source.supportPreferenceOther?.trim() || '',
+    investmentRange: source.investmentRange?.trim() || '',
+    whatBlockedSoFar: source.whatBlockedSoFar?.trim() || '',
+    oneThingToImprove: source.oneThingToImprove?.trim() || '',
+    importanceScore: source.importanceScore != null ? String(source.importanceScore) : '',
+    riskIfNoChange: source.riskIfNoChange?.trim() || '',
+    readiness: source.readiness?.trim() || '',
+    notes: source.notes?.trim() || '',
+  };
+}
+
 function applyClientWeightOverridesToPlan(plan: PlanDoc & { id: string }, clientUid: string): PlanDoc & { id: string } {
   const byClient = plan.clientWeightOverrides && typeof plan.clientWeightOverrides === 'object'
     ? plan.clientWeightOverrides
@@ -268,11 +396,14 @@ export function ClientDashboardPage() {
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingProfile, setDeletingProfile] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [coachWhatsappNumber, setCoachWhatsappNumber] = useState('');
   const [personalWeightOverrides, setPersonalWeightOverrides] = useState<Record<string, Record<string, number>>>({});
   const [exerciseWeightDrafts, setExerciseWeightDrafts] = useState<Record<string, string>>({});
   const [savingWeightKey, setSavingWeightKey] = useState('');
   const [editingWeightKey, setEditingWeightKey] = useState('');
+  const [onboardingDraft, setOnboardingDraft] = useState<OnboardingDraft>(emptyOnboardingDraft(user ?? undefined));
   const whatsappMessage = 'Ciao coach, avrei bisogno di un feedback sulla mia scheda.';
 
   useEffect(() => {
@@ -439,6 +570,11 @@ export function ClientDashboardPage() {
   ].filter((item) => (item.value ?? '').toString().trim().length > 0);
 
   useEffect(() => {
+    if (isEditingProfile) return;
+    setOnboardingDraft(toOnboardingDraft(onboarding, user ?? undefined));
+  }, [onboarding, user?.uid, isEditingProfile]);
+
+  useEffect(() => {
     const nextDrafts: Record<string, string> = {};
     for (const plan of plans) {
       const normalized = normalizeExercises(plan.exercises);
@@ -502,6 +638,71 @@ export function ClientDashboardPage() {
       [draftKey]: prev[draftKey] ?? String(currentWeight || 0),
     }));
     setEditingWeightKey(draftKey);
+  }
+
+  function validateProfileDraft(): string | null {
+    if (!onboardingDraft.fullName.trim()) return 'Inserisci nome e cognome.';
+    if (!onboardingDraft.age.trim()) return 'Inserisci età.';
+    if (!onboardingDraft.sex.trim()) return 'Inserisci sesso.';
+    if (!onboardingDraft.email.trim()) return 'Inserisci e-mail.';
+    if (!onboardingDraft.phone.trim()) return 'Inserisci telefono.';
+    if (!onboardingDraft.heightCm.trim()) return 'Inserisci altezza.';
+    if (!onboardingDraft.weightKg.trim()) return 'Inserisci peso.';
+    return null;
+  }
+
+  async function saveProfileOnboarding() {
+    const validationError = validateProfileDraft();
+    if (validationError) {
+      showError(validationError);
+      return;
+    }
+
+    const payload: OnboardingDoc = {
+      fullName: onboardingDraft.fullName.trim(),
+      email: onboardingDraft.email.trim(),
+      phone: onboardingDraft.phone.trim(),
+      age: onboardingDraft.age.trim(),
+      sex: onboardingDraft.sex.trim(),
+      heightCm: onboardingDraft.heightCm.trim(),
+      weightKg: onboardingDraft.weightKg.trim(),
+      discoverySource: onboardingDraft.discoverySource.trim(),
+      pastProgram: onboardingDraft.pastProgram.trim(),
+      trainingFrequency: onboardingDraft.trainingFrequency.trim(),
+      workoutDuration: onboardingDraft.workoutDuration.trim(),
+      workoutLocation: onboardingDraft.workoutLocation.trim(),
+      equipment: onboardingDraft.equipment.trim(),
+      trainingTypeHistory: onboardingDraft.trainingTypeHistory.trim(),
+      hasInjuries: onboardingDraft.hasInjuries.trim(),
+      injuryDetails: onboardingDraft.injuryDetails.trim(),
+      objectivePrimary: onboardingDraft.objectivePrimary.trim(),
+      objectiveReason: onboardingDraft.objectiveReason.trim(),
+      expectedTimeline: onboardingDraft.expectedTimeline.trim(),
+      supportPreference: onboardingDraft.supportPreference.trim(),
+      supportPreferenceOther: onboardingDraft.supportPreferenceOther.trim(),
+      investmentRange: onboardingDraft.investmentRange.trim(),
+      whatBlockedSoFar: onboardingDraft.whatBlockedSoFar.trim(),
+      oneThingToImprove: onboardingDraft.oneThingToImprove.trim(),
+      importanceScore: onboardingDraft.importanceScore ? Number(onboardingDraft.importanceScore) : undefined,
+      riskIfNoChange: onboardingDraft.riskIfNoChange.trim(),
+      readiness: onboardingDraft.readiness.trim(),
+      notes: onboardingDraft.notes.trim(),
+      goal: onboardingDraft.objectivePrimary.trim(),
+      experienceLevel: onboardingDraft.pastProgram.trim(),
+      compiledBy: 'client',
+    };
+
+    setSavingProfile(true);
+    try {
+      await setUserPrivateDoc('onboarding', payload as Record<string, unknown>);
+      setOnboarding(payload);
+      setIsEditingProfile(false);
+      showSuccess('Anagrafica aggiornata.');
+    } catch (error) {
+      showError(toMessage(error));
+    } finally {
+      setSavingProfile(false);
+    }
   }
 
   if (!user) return <Navigate to="/auth" replace />;
@@ -735,16 +936,80 @@ export function ClientDashboardPage() {
       {activeTab === 'profile' ? (
         <article className="card">
           <h2>Profilo e anagrafica</h2>
-          {profileRows.length > 0 ? (
-            <div className="client-info-block">
-              {profileRows.map((row) => (
-                <p key={row.label} className="hint">
-                  <strong>{row.label}:</strong> {row.value}
-                </p>
-              ))}
-            </div>
+          {isEditingProfile ? (
+            <>
+              <p className="hint">Modifica i tuoi dati. Solo tu puoi aggiornare questa anagrafica.</p>
+              <div className="modal-grid">
+                <label>Nome e cognome *<input value={onboardingDraft.fullName} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, fullName: event.target.value }))} /></label>
+                <label>Età *<input type="number" min={12} max={99} onFocus={selectNumericInputContents} value={onboardingDraft.age} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, age: normalizeNumericRawInput(event.target.value) }))} /></label>
+                <label>Sesso *<input value={onboardingDraft.sex} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, sex: event.target.value }))} /></label>
+                <label>E-mail *<input type="email" value={onboardingDraft.email} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, email: event.target.value }))} /></label>
+                <label>Telefono *<input type="tel" value={onboardingDraft.phone} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, phone: event.target.value }))} /></label>
+                <label>Come ci hai conosciuto<input value={onboardingDraft.discoverySource} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, discoverySource: event.target.value }))} /></label>
+              </div>
+              <div className="modal-grid">
+                <label>Altezza (cm) *<input type="number" min={100} max={250} onFocus={selectNumericInputContents} value={onboardingDraft.heightCm} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, heightCm: normalizeNumericRawInput(event.target.value) }))} /></label>
+                <label>Peso (kg) *<input type="number" min={30} max={250} onFocus={selectNumericInputContents} value={onboardingDraft.weightKg} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, weightKg: normalizeNumericRawInput(event.target.value) }))} /></label>
+                <label>Programmi precedenti<input value={onboardingDraft.pastProgram} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, pastProgram: event.target.value }))} /></label>
+                <label>Frequenza allenamenti<input value={onboardingDraft.trainingFrequency} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, trainingFrequency: event.target.value }))} /></label>
+                <label>Durata allenamento<input value={onboardingDraft.workoutDuration} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, workoutDuration: event.target.value }))} /></label>
+                <label>Dove ti alleni<input value={onboardingDraft.workoutLocation} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, workoutLocation: event.target.value }))} /></label>
+                <label>Attrezzatura disponibile<input value={onboardingDraft.equipment} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, equipment: event.target.value }))} /></label>
+                <label>Allenamenti fatti<textarea value={onboardingDraft.trainingTypeHistory} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, trainingTypeHistory: event.target.value }))} /></label>
+                <label>Infortuni/problemi<input value={onboardingDraft.hasInjuries} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, hasInjuries: event.target.value }))} /></label>
+                <label>Dettagli infortuni<textarea value={onboardingDraft.injuryDetails} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, injuryDetails: event.target.value }))} /></label>
+              </div>
+              <div className="modal-grid">
+                <label>Obiettivo principale<input value={onboardingDraft.objectivePrimary} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, objectivePrimary: event.target.value }))} /></label>
+                <label>Perché questo obiettivo?<textarea value={onboardingDraft.objectiveReason} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, objectiveReason: event.target.value }))} /></label>
+                <label>In quanto tempo vuoi risultati?<input value={onboardingDraft.expectedTimeline} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, expectedTimeline: event.target.value }))} /></label>
+                <label>Cosa ti ha bloccato?<textarea value={onboardingDraft.whatBlockedSoFar} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, whatBlockedSoFar: event.target.value }))} /></label>
+                <label>Cosa vuoi migliorare nei prossimi 3 mesi?<textarea value={onboardingDraft.oneThingToImprove} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, oneThingToImprove: event.target.value }))} /></label>
+                <label>Importanza obiettivo (1-10)<input type="number" min={1} max={10} onFocus={selectNumericInputContents} value={onboardingDraft.importanceScore} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, importanceScore: normalizeNumericRawInput(event.target.value) }))} /></label>
+                <label>Supporto preferito<input value={onboardingDraft.supportPreference} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, supportPreference: event.target.value }))} /></label>
+                <label>Supporto preferito (altro)<input value={onboardingDraft.supportPreferenceOther} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, supportPreferenceOther: event.target.value }))} /></label>
+                <label>Fascia investimento<input value={onboardingDraft.investmentRange} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, investmentRange: event.target.value }))} /></label>
+                <label>Rischio se non cambi nulla<textarea value={onboardingDraft.riskIfNoChange} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, riskIfNoChange: event.target.value }))} /></label>
+                <label>Sei pronto/a?<input value={onboardingDraft.readiness} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, readiness: event.target.value }))} /></label>
+                <label>Note personali<textarea value={onboardingDraft.notes} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, notes: event.target.value }))} /></label>
+              </div>
+              <div className="action-row-split">
+                <button
+                  className="btn btn-ghost"
+                  type="button"
+                  disabled={savingProfile}
+                  onClick={() => {
+                    setOnboardingDraft(toOnboardingDraft(onboarding, user ?? undefined));
+                    setIsEditingProfile(false);
+                  }}
+                >
+                  Annulla
+                </button>
+                <button className="btn btn-primary" type="button" disabled={savingProfile} onClick={() => void saveProfileOnboarding()}>
+                  {savingProfile ? 'Salvataggio...' : 'Salva'}
+                </button>
+              </div>
+            </>
+          ) : profileRows.length > 0 ? (
+            <>
+              <div className="client-info-block">
+                {profileRows.map((row) => (
+                  <p key={row.label} className="hint">
+                    <strong>{row.label}:</strong> {row.value}
+                  </p>
+                ))}
+              </div>
+              <button className="btn btn-ghost" type="button" onClick={() => setIsEditingProfile(true)}>
+                Modifica anagrafica
+              </button>
+            </>
           ) : (
-            <p className="hint">Anagrafica non ancora disponibile.</p>
+            <>
+              <p className="hint">Anagrafica non ancora disponibile.</p>
+              <button className="btn" type="button" onClick={() => setIsEditingProfile(true)}>
+                Compila anagrafica
+              </button>
+            </>
           )}
           <a
             className={`btn btn-whatsapp btn-block ${hasCoachWhatsapp ? '' : 'btn-disabled'}`.trim()}
