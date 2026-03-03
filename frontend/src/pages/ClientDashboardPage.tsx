@@ -683,7 +683,6 @@ export function ClientDashboardPage() {
       investmentRange: onboardingDraft.investmentRange.trim(),
       whatBlockedSoFar: onboardingDraft.whatBlockedSoFar.trim(),
       oneThingToImprove: onboardingDraft.oneThingToImprove.trim(),
-      importanceScore: onboardingDraft.importanceScore ? Number(onboardingDraft.importanceScore) : undefined,
       riskIfNoChange: onboardingDraft.riskIfNoChange.trim(),
       readiness: onboardingDraft.readiness.trim(),
       notes: onboardingDraft.notes.trim(),
@@ -691,6 +690,11 @@ export function ClientDashboardPage() {
       experienceLevel: onboardingDraft.pastProgram.trim(),
       compiledBy: 'client',
     };
+    const importanceScore = onboardingDraft.importanceScore.trim();
+    if (importanceScore) {
+      const parsed = Number(importanceScore);
+      if (Number.isFinite(parsed)) payload.importanceScore = parsed;
+    }
 
     setSavingProfile(true);
     try {
