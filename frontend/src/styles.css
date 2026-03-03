@@ -1272,4 +1272,20 @@ a.btn {
     max-height: 240px;
     object-fit: contain;
   }
+
+  .coach-exercise-media-layout {
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .coach-exercise-media-visual {
+    flex: 0 0 180px !important;
+    width: 180px !important;
+  }
+
+  .coach-exercise-media-content {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+  }
 }

@@ -595,9 +595,6 @@ export function ClientDashboardPage() {
                     <div className="client-info-block warmup-block">
                       <div className="warmup-head">
                         <p className="hint"><strong>Riscaldamento</strong></p>
-                        <span className="hint">
-                          {[warmupImageUrl ? 'Immagine' : '', warmupVideoUrl ? 'Video' : ''].filter(Boolean).join(' + ') || 'Solo testo'}
-                        </span>
                       </div>
                       {warmupText ? (
                         <p className="hint">{warmupText}</p>
@@ -709,18 +706,18 @@ export function ClientDashboardPage() {
                       })()}
                       {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
                       {exercise.videoUrl || exercise.imageUrl ? (
-                        <>
+                        <div className="warmup-actions">
                           {exercise.videoUrl ? (
-                            <button className="btn-link" type="button" onClick={() => openMediaPreview(exercise.videoUrl, exercise.name || `Esercizio ${index + 1}`)}>
+                            <button className="warmup-media-btn" type="button" onClick={() => openMediaPreview(exercise.videoUrl, exercise.name || `Esercizio ${index + 1}`)}>
                               Apri video
                             </button>
                           ) : null}
                           {exercise.imageUrl ? (
-                            <button className="btn-link" type="button" onClick={() => openMediaPreview(exercise.imageUrl, exercise.name || `Esercizio ${index + 1}`)}>
+                            <button className="warmup-media-btn" type="button" onClick={() => openMediaPreview(exercise.imageUrl, exercise.name || `Esercizio ${index + 1}`)}>
                               Apri immagine
                             </button>
                           ) : null}
-                        </>
+                        </div>
                       ) : (
                         <p className="hint">Nessun media allegato</p>
                       )}
