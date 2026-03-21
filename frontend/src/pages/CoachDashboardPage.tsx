@@ -1,7 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent } from 'react';
-import { DndContext, KeyboardSensor, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
 import Select, { type MultiValue, type StylesConfig } from 'react-select';
 import { useNavigate } from 'react-router-dom';
 
@@ -177,7 +174,6 @@ type PlanBuilderSection = 'details' | 'exercises';
 type ExerciseRepsUnit = 'reps' | 'seconds';
 type ExerciseMovementType = 'exercise' | 'stretching';
 type ExerciseDraft = {
-  draftId: string;
   displayOrder: number;
   movementType: ExerciseMovementType;
   name: string;
@@ -229,7 +225,6 @@ function normalizePlanExercises(value: unknown) {
       const repsUnit = normalizeExerciseRepsUnit(raw.repsUnit);
       const movementType = normalizeExerciseMovementType(raw.movementType);
       return {
-        draftId: createExerciseDraftId(),
         displayOrder: normalizeDisplayOrder(raw.displayOrder, array.length - index),
         movementType,
         name: asText(raw.name),
@@ -250,7 +245,6 @@ function normalizePlanExercises(value: unknown) {
       };
     })
     .filter((item): item is {
-      draftId: string;
       displayOrder: number;
       movementType: ExerciseMovementType;
       name: string;
@@ -287,13 +281,6 @@ function normalizeDisplayOrder(value: unknown, fallback: number): number {
 
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
   return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
-}
-
-function createExerciseDraftId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `exercise-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function formatExerciseSummary(
@@ -369,7 +356,6 @@ function getPlanWarmupImageUrl(plan: PlanDoc | null | undefined): string {
 
 function defaultExercise(movementType: ExerciseMovementType = 'exercise', displayOrder = 1) {
   return {
-    draftId: createExerciseDraftId(),
     displayOrder,
     movementType,
     name: '',
@@ -431,11 +417,6 @@ function nextExerciseDisplayOrder(items: Array<Pick<ExerciseDraft, 'displayOrder
   return items.reduce((max, item) => Math.max(max, Number(item.displayOrder) || 0), 0) + 1;
 }
 
-function nextTopExerciseDisplayOrder(items: Array<Pick<ExerciseDraft, 'displayOrder'>>): number {
-  if (items.length === 0) return 1;
-  return items.reduce((min, item) => Math.min(min, Number(item.displayOrder) || 1), Number.POSITIVE_INFINITY) - 1;
-}
-
 function renumberExerciseDisplayOrder(items: ExerciseDraft[]): ExerciseDraft[] {
   const ordered = sortExercisesForDisplay(items.map((item, index) => ({ index, displayOrder: item.displayOrder })));
   const nextOrderByIndex = new Map(ordered.map((item, position) => [item.index, position + 1]));
@@ -476,235 +457,6 @@ function emptyOnboardingDraft(base?: { name?: string; email?: string }): Onboard
     readiness: '',
     notes: '',
   };
-}
-
-type SortableExerciseEditorCardProps = {
-  itemId: string;
-  orderIndex: number;
-  exercise: ExerciseDraft;
-  builderIndex: number;
-  planKind: 'series_reps' | 'circuit';
-  uploading: boolean;
-  onReset: () => void;
-  onRemove: () => void;
-  onUpdate: (patch: Partial<ExerciseDraft>) => void;
-  onUploadMedia: (file: File | null) => void | Promise<void>;
-};
-
-function SortableExerciseEditorCard({
-  itemId,
-  orderIndex,
-  exercise,
-  builderIndex,
-  planKind,
-  uploading,
-  onReset,
-  onRemove,
-  onUpdate,
-  onUploadMedia,
-}: SortableExerciseEditorCardProps) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: itemId });
-  const cardStyle: CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    boxShadow: 'none',
-    border: '1px solid rgba(18,18,18,0.10)',
-  };
-  const title = exercise.name.trim() || `${movementTypeLabel(exercise.movementType)} ${orderIndex + 1}`;
-
-  return (
-    <article
-      ref={setNodeRef}
-      className={`card plan-exercise-editor ${isDragging ? 'plan-exercise-editor-dragging' : ''}`.trim()}
-      style={cardStyle}
-    >
-      <div className="plan-exercise-editor-head">
-        <div className="plan-exercise-editor-summary">
-          <span className="hint">{movementTypeLabel(exercise.movementType)} · Posizione {orderIndex + 1}</span>
-          <strong>{title}</strong>
-          <span className="hint">{formatExerciseSummary(exercise, planKind)}</span>
-        </div>
-        <div className="plan-exercise-editor-head-actions">
-          <button
-            ref={setActivatorNodeRef}
-            className="icon-btn drag-handle-btn"
-            type="button"
-            aria-label={`Trascina per riordinare ${title}`}
-            title="Trascina per riordinare"
-            {...attributes}
-            {...listeners}
-          >
-            ≡
-          </button>
-          <button className="icon-btn" type="button" onClick={onReset} aria-label={`Reset ${movementTypeLabel(exercise.movementType).toLowerCase()} ${orderIndex + 1}`} title="Reset">
-            ↻
-          </button>
-        </div>
-      </div>
-
-      <div className="plan-exercise-editor-body">
-        <label>
-          Nome {exercise.movementType === 'stretching' ? 'stretching' : 'esercizio'}
-          <input value={exercise.name} onChange={(event) => onUpdate({name: event.target.value})} placeholder={exercise.movementType === 'stretching' ? 'Es. Stretching quadricipiti' : 'Es. Squat bilanciere'} />
-        </label>
-        <label>
-          Note {exercise.movementType === 'stretching' ? 'stretching' : 'esercizio'}
-          <textarea
-            value={exercise.notes}
-            onChange={(event) => onUpdate({notes: event.target.value})}
-            placeholder="Note utili per questo elemento"
-          />
-        </label>
-        <div className="exercise-fields-inline">
-          {planKind === 'series_reps' ? (
-            <>
-              <label>
-                Serie
-                <input
-                  type="number"
-                  min={0}
-                  inputMode="numeric"
-                  onFocus={selectNumericInputContents}
-                  value={exercise.sets}
-                  onChange={(event) => onUpdate({sets: parseExerciseNumericInput(event.target.value)})}
-                />
-              </label>
-              <label>
-                Valore per serie
-                <input
-                  type="number"
-                  min={0}
-                  inputMode="numeric"
-                  onFocus={selectNumericInputContents}
-                  value={exercise.reps}
-                  onChange={(event) => onUpdate({reps: parseExerciseNumericInput(event.target.value)})}
-                />
-              </label>
-              <div className="exercise-unit-toggle">
-                <p className="hint">Unità</p>
-                <div className="exercise-unit-toggle-row">
-                  <button
-                    className={`btn btn-ghost ${exercise.repsUnit === 'reps' ? 'exercise-method-toggle-active' : ''}`.trim()}
-                    type="button"
-                    onClick={() => onUpdate({repsUnit: 'reps'})}
-                  >
-                    Reps
-                  </button>
-                  <button
-                    className={`btn btn-ghost ${exercise.repsUnit === 'seconds' ? 'exercise-method-toggle-active' : ''}`.trim()}
-                    type="button"
-                    onClick={() => onUpdate({repsUnit: 'seconds'})}
-                  >
-                    Sec
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <label>
-              Reps/tempo di lavoro
-              <input
-                type="number"
-                min={0}
-                inputMode="numeric"
-                onFocus={selectNumericInputContents}
-                value={exercise.workValue}
-                onChange={(event) => onUpdate({workValue: parseExerciseNumericInput(event.target.value)})}
-              />
-            </label>
-          )}
-          <label>
-            Peso (kg)
-            <input
-              type="number"
-              min={0}
-              inputMode="decimal"
-              onFocus={selectNumericInputContents}
-              value={exercise.weightKg}
-              onChange={(event) => onUpdate({weightKg: parseExerciseNumericInput(event.target.value)})}
-            />
-          </label>
-          <label>
-            Recupero (sec)
-            <input
-              type="number"
-              min={0}
-              inputMode="numeric"
-              onFocus={selectNumericInputContents}
-              value={exercise.restSeconds}
-              onChange={(event) => onUpdate({restSeconds: parseExerciseNumericInput(event.target.value)})}
-            />
-          </label>
-        </div>
-        <div className="exercise-method-toggle">
-          <p className="hint">Metodo opzionale</p>
-          <div className="exercise-method-toggle-row">
-            <button
-              className={`btn btn-ghost ${exercise.advancedMethod === 'rest_pause' ? 'exercise-method-toggle-active' : ''}`.trim()}
-              type="button"
-              onClick={() => onUpdate(exercise.advancedMethod === 'rest_pause'
-                ? { advancedMethod: '' }
-                : { advancedMethod: 'rest_pause' })}
-            >
-              Rest Pause
-            </button>
-            <button
-              className={`btn btn-ghost ${exercise.advancedMethod === 'drop_set' ? 'exercise-method-toggle-active' : ''}`.trim()}
-              type="button"
-              onClick={() => onUpdate(exercise.advancedMethod === 'drop_set'
-                ? { advancedMethod: '' }
-                : { advancedMethod: 'drop_set' })}
-            >
-              Drop set
-            </button>
-          </div>
-        </div>
-        {exercise.advancedMethod ? (
-          <label>
-            {exercise.advancedMethod === 'rest_pause' ? 'Note Rest Pause' : 'Note Drop set'}
-            <textarea
-              value={exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}
-              onChange={(event) => onUpdate(exercise.advancedMethod === 'rest_pause'
-                ? { restPauseNotes: event.target.value, advancedMethodNotes: event.target.value }
-                : { dropSetNotes: event.target.value, advancedMethodNotes: event.target.value })}
-              placeholder="Inserisci indicazioni per il cliente"
-            />
-          </label>
-        ) : null}
-        <label>
-          URL video (YouTube o link diretto)
-          <input
-            value={exercise.videoUrl}
-            onChange={(event) => onUpdate({videoUrl: event.target.value, mediaUrl: event.target.value || exercise.imageUrl})}
-            placeholder="https://..."
-          />
-        </label>
-        <label>
-          Carica un&apos;immagine (puoi tenerla insieme al video)
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(event) => void onUploadMedia(event.target.files?.[0] ?? null)}
-            disabled={uploading}
-          />
-          {isImageMediaUrl(exercise.imageUrl) ? <img src={exercise.imageUrl} alt={`Anteprima ${movementTypeLabel(exercise.movementType).toLowerCase()} ${builderIndex + 1}`} className="exercise-upload-preview" /> : null}
-        </label>
-        {isImageMediaUrl(exercise.imageUrl) ? (
-          <p className="hint">
-            Immagine caricata.
-            {' '}
-            <button className="btn-link" type="button" onClick={() => onUpdate({imageUrl: '', mediaUrl: exercise.videoUrl})}>
-              Rimuovi
-            </button>
-          </p>
-        ) : null}
-        {uploading ? <p className="hint">Caricamento media in corso...</p> : null}
-        <button className="btn btn-ghost" type="button" onClick={onRemove}>
-          Rimuovi {exercise.movementType === 'stretching' ? 'stretching' : 'esercizio'}
-        </button>
-      </div>
-    </article>
-  );
 }
 
 function toOnboardingDraft(data: OnboardingDoc | null, base?: { name?: string; email?: string }): OnboardingDraft {
@@ -935,22 +687,6 @@ export function CoachDashboardPage() {
   const [activeTab, setActiveTab] = useState<CoachTabId>('clients');
   const [planBuilderSection, setPlanBuilderSection] = useState<PlanBuilderSection>('details');
   const planBuilderScrollRef = useRef<HTMLElement | null>(null);
-  const planBuilderSensors = useSensors(
-    useSensor(MouseSensor, {
-      activationConstraint: {
-        distance: 6,
-      },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: {
-        delay: 180,
-        tolerance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  );
 
   const [selectedClientId, setSelectedClientId] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState('');
@@ -1028,7 +764,7 @@ export function CoachDashboardPage() {
     previewPlanMovements.map((exercise, index) => ({ exercise, index, displayOrder: exercise.displayOrder })),
   );
   const planBuilderDisplayItems = sortExercisesForDisplay(
-    exercises.map((exercise, index) => ({ id: exercise.draftId, exercise, index, displayOrder: exercise.displayOrder })),
+    exercises.map((exercise, index) => ({ exercise, index, displayOrder: exercise.displayOrder })),
   );
 
   const clientOptions: ClientOption[] = registeredClients.map((client) => ({
@@ -1272,13 +1008,13 @@ export function CoachDashboardPage() {
   }
 
   function addExercise() {
-    setExercises((prev) => renumberExerciseDisplayOrder([...prev, defaultExercise('exercise', nextTopExerciseDisplayOrder(prev))]));
+    setExercises((prev) => [defaultExercise('exercise', nextExerciseDisplayOrder(prev)), ...prev]);
     setPlanBuilderSection('exercises');
     scrollPlanBuilderToTop();
   }
 
   function addStretching() {
-    setExercises((prev) => renumberExerciseDisplayOrder([...prev, defaultExercise('stretching', nextTopExerciseDisplayOrder(prev))]));
+    setExercises((prev) => [defaultExercise('stretching', nextExerciseDisplayOrder(prev)), ...prev]);
     setPlanBuilderSection('exercises');
     scrollPlanBuilderToTop();
   }
@@ -1293,29 +1029,23 @@ export function CoachDashboardPage() {
     );
   }
 
-  function reorderExercisesByDisplay(activeId: string, overId: string) {
+  function moveExerciseDisplayOrder(index: number, direction: -1 | 1) {
     setExercises((prev) => {
       const ordered = sortExercisesForDisplay(prev.map((exercise, builderIndex) => ({
         builderIndex,
-        draftId: exercise.draftId,
         displayOrder: exercise.displayOrder,
       })));
-      const activeIndex = ordered.findIndex((item) => item.draftId === activeId);
-      const overIndex = ordered.findIndex((item) => item.draftId === overId);
-      if (activeIndex < 0 || overIndex < 0 || activeIndex === overIndex) return prev;
-      const nextOrdered = arrayMove(ordered, activeIndex, overIndex);
+      const currentPosition = ordered.findIndex((item) => item.builderIndex === index);
+      const nextPosition = currentPosition + direction;
+      if (currentPosition < 0 || nextPosition < 0 || nextPosition >= ordered.length) return prev;
+      const nextOrdered = [...ordered];
+      [nextOrdered[currentPosition], nextOrdered[nextPosition]] = [nextOrdered[nextPosition], nextOrdered[currentPosition]];
       const displayOrderByIndex = new Map(nextOrdered.map((item, position) => [item.builderIndex, position + 1]));
       return prev.map((item, builderIndex) => ({
         ...item,
         displayOrder: displayOrderByIndex.get(builderIndex) ?? item.displayOrder,
       }));
     });
-  }
-
-  function handleExerciseDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    reorderExercisesByDisplay(String(active.id), String(over.id));
   }
 
   function updateExercise(
@@ -2490,28 +2220,255 @@ export function CoachDashboardPage() {
                   <h3>{exercises.length} {exercises.length === 1 ? 'elemento' : 'elementi'}</h3>
                 </div>
               </div>
-              <p className="hint">Trascina dalla handle accanto al reset per cambiare l’ordine di visualizzazione.</p>
-              <DndContext sensors={planBuilderSensors} collisionDetection={closestCenter} onDragEnd={handleExerciseDragEnd}>
-                <SortableContext items={planBuilderDisplayItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+              {planBuilderDisplayItems.length > 0 ? (
+                <div className="plan-display-order-panel">
+                  <div className="plan-builder-group-head">
+                    <p className="hint">Ordine visualizzazione</p>
+                    <strong>{planBuilderDisplayItems.length}</strong>
+                  </div>
+                  <div className="plan-display-order-list">
+                    {planBuilderDisplayItems.map(({ exercise, index }, orderIndex) => {
+                      const title = exercise.name.trim() || `${movementTypeLabel(exercise.movementType)} ${orderIndex + 1}`;
+                      return (
+                        <div className="plan-display-order-row" key={`display-order-${exercise.movementType}-${index}`}>
+                          <div className="plan-display-order-main">
+                            <div className="plan-display-order-meta">
+                              <span className="plan-order-badge">{orderIndex + 1}</span>
+                              <span className="hint">{movementTypeLabel(exercise.movementType)}</span>
+                            </div>
+                            <strong>{title}</strong>
+                          </div>
+                          <div className="plan-display-order-actions">
+                            <button
+                              className="icon-btn"
+                              type="button"
+                              aria-label={`Sposta su ${title}`}
+                              title="Sposta su"
+                              disabled={orderIndex === 0}
+                              onClick={() => moveExerciseDisplayOrder(index, -1)}
+                            >
+                              ↑
+                            </button>
+                            <button
+                              className="icon-btn"
+                              type="button"
+                              aria-label={`Sposta giù ${title}`}
+                              title="Sposta giù"
+                              disabled={orderIndex === planBuilderDisplayItems.length - 1}
+                              onClick={() => moveExerciseDisplayOrder(index, 1)}
+                            >
+                              ↓
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+              {(() => {
+                const groupedMovements = splitExercisesByMovementType(
+                  exercises.map((exercise, index) => ({ exercise, index, movementType: exercise.movementType })),
+                );
+                const sections = [
+                  { id: 'exercise', title: 'Esercizi', items: groupedMovements.exercises },
+                  { id: 'stretching', title: 'Stretching', items: groupedMovements.stretchings },
+                ].filter((section) => section.items.length > 0);
+
+                return (
                   <div className="plan-builder-exercise-list">
-                    {planBuilderDisplayItems.map(({ id, exercise, index }, orderIndex) => (
-                      <SortableExerciseEditorCard
-                        key={id}
-                        itemId={id}
-                        orderIndex={orderIndex}
-                        exercise={exercise}
-                        builderIndex={index}
-                        planKind={planKind}
-                        uploading={uploadingExerciseIndex === index}
-                        onReset={() => resetExercise(index)}
-                        onRemove={() => removeExercise(index)}
-                        onUpdate={(patch) => updateExercise(index, patch)}
-                        onUploadMedia={(file) => onUploadMedia(index, file)}
-                      />
+                    {sections.map((section) => (
+                      <section className="plan-builder-group" key={section.id}>
+                        <div className="plan-builder-group-head">
+                          <p className="hint">{section.title}</p>
+                          <strong>{section.items.length}</strong>
+                        </div>
+                        <div className="plan-builder-group-list">
+                          {section.items.map(({ exercise, index }, sectionIndex) => {
+                            const exerciseTitle = exercise.name.trim() || `${movementTypeLabel(exercise.movementType)} ${sectionIndex + 1}`;
+                            return (
+                              <article className="card plan-exercise-editor" key={`exercise-${exercise.movementType}-${index}`} style={{boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)'}}>
+                                <div className="plan-exercise-editor-head">
+                                  <div className="plan-exercise-editor-summary">
+                                    <span className="hint">{movementTypeLabel(exercise.movementType)} {sectionIndex + 1}</span>
+                                    <strong>{exerciseTitle}</strong>
+                                    <span className="hint">Ordine visualizzazione {exercise.displayOrder} · {formatExerciseSummary(exercise, planKind)}</span>
+                                  </div>
+                                  <button className="icon-btn" type="button" onClick={() => resetExercise(index)} aria-label={`Reset ${movementTypeLabel(exercise.movementType).toLowerCase()} ${sectionIndex + 1}`} title="Reset">
+                                    ↻
+                                  </button>
+                                </div>
+
+                                <div className="plan-exercise-editor-body">
+                                  <label>
+                                    Nome {exercise.movementType === 'stretching' ? 'stretching' : 'esercizio'}
+                                    <input value={exercise.name} onChange={(event) => updateExercise(index, {name: event.target.value})} placeholder={exercise.movementType === 'stretching' ? 'Es. Stretching quadricipiti' : 'Es. Squat bilanciere'} />
+                                  </label>
+                                  <label>
+                                    Note {exercise.movementType === 'stretching' ? 'stretching' : 'esercizio'}
+                                    <textarea
+                                      value={exercise.notes}
+                                      onChange={(event) => updateExercise(index, {notes: event.target.value})}
+                                      placeholder="Note utili per questo elemento"
+                                    />
+                                  </label>
+                                  <div className="exercise-fields-inline">
+                                    {planKind === 'series_reps' ? (
+                                      <>
+                                        <label>
+                                          Serie
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            inputMode="numeric"
+                                            onFocus={selectNumericInputContents}
+                                            value={exercise.sets}
+                                            onChange={(event) => updateExercise(index, {sets: parseExerciseNumericInput(event.target.value)})}
+                                          />
+                                        </label>
+                                        <label>
+                                          Valore per serie
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            inputMode="numeric"
+                                            onFocus={selectNumericInputContents}
+                                            value={exercise.reps}
+                                            onChange={(event) => updateExercise(index, {reps: parseExerciseNumericInput(event.target.value)})}
+                                          />
+                                        </label>
+                                        <div className="exercise-unit-toggle">
+                                          <p className="hint">Unità</p>
+                                          <div className="exercise-unit-toggle-row">
+                                            <button
+                                              className={`btn btn-ghost ${exercise.repsUnit === 'reps' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                                              type="button"
+                                              onClick={() => updateExercise(index, {repsUnit: 'reps'})}
+                                            >
+                                              Reps
+                                            </button>
+                                            <button
+                                              className={`btn btn-ghost ${exercise.repsUnit === 'seconds' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                                              type="button"
+                                              onClick={() => updateExercise(index, {repsUnit: 'seconds'})}
+                                            >
+                                              Sec
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <label>
+                                        Reps/tempo di lavoro
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          inputMode="numeric"
+                                          onFocus={selectNumericInputContents}
+                                          value={exercise.workValue}
+                                          onChange={(event) => updateExercise(index, {workValue: parseExerciseNumericInput(event.target.value)})}
+                                        />
+                                      </label>
+                                    )}
+                                    <label>
+                                      Peso (kg)
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        inputMode="decimal"
+                                        onFocus={selectNumericInputContents}
+                                        value={exercise.weightKg}
+                                        onChange={(event) => updateExercise(index, {weightKg: parseExerciseNumericInput(event.target.value)})}
+                                      />
+                                    </label>
+                                    <label>
+                                      Recupero (sec)
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        inputMode="numeric"
+                                        onFocus={selectNumericInputContents}
+                                        value={exercise.restSeconds}
+                                        onChange={(event) => updateExercise(index, {restSeconds: parseExerciseNumericInput(event.target.value)})}
+                                      />
+                                    </label>
+                                  </div>
+                                  <div className="exercise-method-toggle">
+                                    <p className="hint">Metodo opzionale</p>
+                                    <div className="exercise-method-toggle-row">
+                                      <button
+                                        className={`btn btn-ghost ${exercise.advancedMethod === 'rest_pause' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                                        type="button"
+                                        onClick={() => updateExercise(index, exercise.advancedMethod === 'rest_pause'
+                                          ? { advancedMethod: '' }
+                                          : { advancedMethod: 'rest_pause' })}
+                                      >
+                                        Rest Pause
+                                      </button>
+                                      <button
+                                        className={`btn btn-ghost ${exercise.advancedMethod === 'drop_set' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                                        type="button"
+                                        onClick={() => updateExercise(index, exercise.advancedMethod === 'drop_set'
+                                          ? { advancedMethod: '' }
+                                          : { advancedMethod: 'drop_set' })}
+                                      >
+                                        Drop set
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {exercise.advancedMethod ? (
+                                    <label>
+                                      {exercise.advancedMethod === 'rest_pause' ? 'Note Rest Pause' : 'Note Drop set'}
+                                      <textarea
+                                        value={exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}
+                                        onChange={(event) => updateExercise(index, exercise.advancedMethod === 'rest_pause'
+                                          ? { restPauseNotes: event.target.value, advancedMethodNotes: event.target.value }
+                                          : { dropSetNotes: event.target.value, advancedMethodNotes: event.target.value })}
+                                        placeholder="Inserisci indicazioni per il cliente"
+                                      />
+                                    </label>
+                                  ) : null}
+                                  <label>
+                                    URL video (YouTube o link diretto)
+                                    <input
+                                      value={exercise.videoUrl}
+                                      onChange={(event) => updateExercise(index, {videoUrl: event.target.value, mediaUrl: event.target.value || exercise.imageUrl})}
+                                      placeholder="https://..."
+                                    />
+                                  </label>
+                                  <label>
+                                    Carica un&apos;immagine (puoi tenerla insieme al video)
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(event) => void onUploadMedia(index, event.target.files?.[0] ?? null)}
+                                      disabled={uploadingExerciseIndex === index}
+                                    />
+                                    {isImageMediaUrl(exercise.imageUrl) ? <img src={exercise.imageUrl} alt={`Anteprima ${movementTypeLabel(exercise.movementType).toLowerCase()} ${sectionIndex + 1}`} className="exercise-upload-preview" /> : null}
+                                  </label>
+                                  {isImageMediaUrl(exercise.imageUrl) ? (
+                                    <p className="hint">
+                                      Immagine caricata.
+                                      {' '}
+                                      <button className="btn-link" type="button" onClick={() => updateExercise(index, {imageUrl: '', mediaUrl: exercise.videoUrl})}>
+                                        Rimuovi
+                                      </button>
+                                    </p>
+                                  ) : null}
+                                  {uploadingExerciseIndex === index ? <p className="hint">Caricamento media in corso...</p> : null}
+                                  <button className="btn btn-ghost" type="button" onClick={() => removeExercise(index)}>
+                                    Rimuovi {exercise.movementType === 'stretching' ? 'stretching' : 'esercizio'}
+                                  </button>
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </section>
                     ))}
                   </div>
-                </SortableContext>
-              </DndContext>
+                );
+              })()}
             </div>
 
             <div className="plan-builder-desktop-actions desktop-only">

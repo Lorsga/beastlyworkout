@@ -842,6 +842,69 @@ a.btn {
   gap: 12px;
 }
 
+.plan-display-order-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(18, 18, 18, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.plan-display-order-list {
+  display: grid;
+  gap: 8px;
+}
+
+.plan-display-order-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(18, 18, 18, 0.08);
+  border-radius: 14px;
+  background: rgba(24, 33, 38, 0.03);
+}
+
+.plan-display-order-main {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  gap: 3px;
+}
+
+.plan-display-order-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-display-order-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-order-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(120deg, rgba(214, 40, 40, 0.12), rgba(255, 122, 0, 0.18));
+  color: var(--text);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.plan-display-order-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .plan-builder-group {
   display: grid;
   gap: 10px;
@@ -880,13 +943,6 @@ a.btn {
   gap: 10px;
 }
 
-.plan-exercise-editor-head-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
 .plan-exercise-editor-summary {
   flex: 1;
   display: grid;
@@ -901,20 +957,6 @@ a.btn {
 .plan-exercise-editor-body {
   display: grid;
   gap: 12px;
-}
-
-.plan-exercise-editor-dragging {
-  opacity: 0.88;
-  box-shadow: 0 18px 42px rgba(18, 18, 18, 0.18) !important;
-}
-
-.drag-handle-btn {
-  cursor: grab;
-  touch-action: none;
-}
-
-.drag-handle-btn:active {
-  cursor: grabbing;
 }
 
 .plan-builder-desktop-actions {
