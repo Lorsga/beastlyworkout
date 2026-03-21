@@ -49,6 +49,7 @@ export interface PlanExerciseInput {
   name: string;
   sets: number;
   reps: number;
+  repsUnit?: 'reps' | 'seconds';
   workValue?: number;
   weightKg?: number;
   restSeconds?: number;

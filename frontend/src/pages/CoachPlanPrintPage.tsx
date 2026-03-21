@@ -25,6 +25,7 @@ interface PlanDoc {
     dropSetNotes?: string;
     sets?: number;
     reps?: number;
+    repsUnit?: 'reps' | 'seconds';
     workValue?: number;
     weightKg?: number;
     restSeconds?: number;
@@ -42,6 +43,7 @@ interface UserProfileDoc {
 }
 
 type ClientOption = { value: string; label: string };
+type ExerciseRepsUnit = 'reps' | 'seconds';
 
 function asText(value: unknown): string {
   return typeof value === 'string' ? value : value == null ? '' : String(value);
@@ -97,6 +99,7 @@ function normalizePlanExercises(value: unknown) {
       const rawImageUrl = asText(raw.imageUrl).trim();
       const normalizedVideoUrl = rawVideoUrl || (isVideoMediaUrl(rawMediaUrl) ? rawMediaUrl : '');
       const normalizedImageUrl = rawImageUrl || (isImageMediaUrl(rawMediaUrl) ? rawMediaUrl : '');
+      const repsUnit = normalizeExerciseRepsUnit(raw.repsUnit);
       return {
         name: asText(raw.name),
         notes: asText(raw.notes),
@@ -105,6 +108,7 @@ function normalizePlanExercises(value: unknown) {
         dropSetNotes: rawDropSetNotes || (advancedMethod === 'drop_set' ? legacyAdvancedMethodNotes : ''),
         sets: Number(raw.sets ?? 3) || 3,
         reps: Number(raw.reps ?? 10) || 10,
+        repsUnit,
         workValue: Number(raw.workValue ?? raw.reps ?? 10) || 10,
         weightKg: Number(raw.weightKg ?? legacyWeight ?? 0) || 0,
         restSeconds: Number(raw.restSeconds ?? 60) || 60,
@@ -120,12 +124,21 @@ function normalizePlanExercises(value: unknown) {
       dropSetNotes: string;
       sets: number;
       reps: number;
+      repsUnit: ExerciseRepsUnit;
       workValue: number;
       weightKg: number;
       restSeconds: number;
       videoUrl: string;
       imageUrl: string;
     } => Boolean(item));
+}
+
+function normalizeExerciseRepsUnit(value: unknown): ExerciseRepsUnit {
+  return asText(value).trim() === 'seconds' ? 'seconds' : 'reps';
+}
+
+function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
+  return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
 }
 
 function getPlanWeightFeedback(
@@ -414,7 +427,7 @@ export function CoachPlanPrintPage() {
             <p class="meta">${
           currentPlan.kind === 'circuit'
             ? `${exercise.workValue || '-'} reps/tempo`
-            : `${exercise.sets || '-'} serie · ${exercise.reps || '-'} reps`
+            : `${exercise.sets || '-'} serie · ${formatSeriesTarget(exercise.reps, exercise.repsUnit)}`
         } · ${exercise.weightKg || 0} kg · ${exercise.restSeconds || 0} sec recupero</p>
             ${exercise.advancedMethod ? `<p><strong>Metodo:</strong> ${exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}</p>` : ''}
             ${
@@ -666,7 +679,7 @@ export function CoachPlanPrintPage() {
                     ) : (
                       <>
                         <span>{exercise.sets || '-'} serie</span>
-                        <span>{exercise.reps || '-'} reps</span>
+                        <span>{formatSeriesTarget(exercise.reps, exercise.repsUnit)}</span>
                       </>
                     )}
                     <span>{exercise.weightKg || 0} kg</span>

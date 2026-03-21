@@ -61,6 +61,7 @@ interface PlanDoc {
     dropSetNotes?: string;
     sets?: number;
     reps?: number;
+    repsUnit?: 'reps' | 'seconds';
     workValue?: number;
     weightKg?: number;
     restSeconds?: number;
@@ -160,6 +161,8 @@ type SupervisorCoachItem = {
 };
 
 type CoachTabId = 'code' | 'clients' | 'plans' | 'overview' | 'supervisor';
+type PlanBuilderSection = 'details' | 'exercises';
+type ExerciseRepsUnit = 'reps' | 'seconds';
 type ExerciseDraft = {
   name: string;
   notes: string;
@@ -169,6 +172,7 @@ type ExerciseDraft = {
   dropSetNotes: string;
   sets: number | '';
   reps: number | '';
+  repsUnit: ExerciseRepsUnit;
   workValue: number | '';
   weightKg: number | '';
   restSeconds: number | '';
@@ -206,6 +210,7 @@ function normalizePlanExercises(value: unknown) {
       const rawImageUrl = asText(raw.imageUrl).trim();
       const normalizedVideoUrl = rawVideoUrl || (isVideoMediaUrl(rawMediaUrl) ? rawMediaUrl : '');
       const normalizedImageUrl = rawImageUrl || (isImageMediaUrl(rawMediaUrl) ? rawMediaUrl : '');
+      const repsUnit = normalizeExerciseRepsUnit(raw.repsUnit);
       return {
         name: asText(raw.name),
         notes: asText(raw.notes),
@@ -215,6 +220,7 @@ function normalizePlanExercises(value: unknown) {
         dropSetNotes: rawDropSetNotes || (advancedMethod === 'drop_set' ? legacyAdvancedMethodNotes : ''),
         sets: Number(raw.sets ?? 3) || 3,
         reps: Number(raw.reps ?? 10) || 10,
+        repsUnit,
         workValue: Number(raw.workValue ?? raw.reps ?? 10) || 10,
         weightKg: Number(raw.weightKg ?? legacyWeight ?? 0) || 0,
         restSeconds: Number(raw.restSeconds ?? 60) || 60,
@@ -232,6 +238,7 @@ function normalizePlanExercises(value: unknown) {
       dropSetNotes: string;
       sets: number;
       reps: number;
+      repsUnit: ExerciseRepsUnit;
       workValue: number;
       weightKg: number;
       restSeconds: number;
@@ -239,6 +246,24 @@ function normalizePlanExercises(value: unknown) {
       imageUrl: string;
       mediaUrl: string;
     } => Boolean(item));
+}
+
+function normalizeExerciseRepsUnit(value: unknown): ExerciseRepsUnit {
+  return asText(value).trim() === 'seconds' ? 'seconds' : 'reps';
+}
+
+function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
+  return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
+}
+
+function formatExerciseSummary(
+  exercise: Pick<ExerciseDraft, 'sets' | 'reps' | 'repsUnit' | 'workValue' | 'weightKg' | 'restSeconds'>,
+  kind: 'series_reps' | 'circuit',
+): string {
+  const primary = kind === 'circuit'
+    ? `${Number(exercise.workValue) || 0} reps/tempo`
+    : `${Number(exercise.sets) || 0} serie · ${formatSeriesTarget(Number(exercise.reps) || 0, exercise.repsUnit)}`;
+  return `${primary} · ${Number(exercise.weightKg) || 0} kg · ${Number(exercise.restSeconds) || 0} sec rec`;
 }
 
 function onboardingValue(value: unknown): string {
@@ -297,6 +322,7 @@ function defaultExercise() {
     dropSetNotes: '',
     sets: 3,
     reps: 10,
+    repsUnit: 'reps' as ExerciseRepsUnit,
     workValue: 10,
     weightKg: 0,
     restSeconds: 60 as number | '',
@@ -319,6 +345,7 @@ function hasExerciseDraftData(exercise: ExerciseDraft): boolean {
     exercise.mediaUrl.trim().length > 0 ||
     Number(exercise.sets || 0) !== 3 ||
     Number(exercise.reps || 0) !== 10 ||
+    exercise.repsUnit !== 'reps' ||
     Number(exercise.workValue || 0) !== 10 ||
     Number(exercise.weightKg || 0) > 0 ||
     Number(exercise.restSeconds || 0) !== 60
@@ -591,6 +618,9 @@ export function CoachDashboardPage() {
   const [supervisorActionUid, setSupervisorActionUid] = useState('');
   const [previewLoadingPlanId, setPreviewLoadingPlanId] = useState('');
   const [activeTab, setActiveTab] = useState<CoachTabId>('clients');
+  const [planBuilderSection, setPlanBuilderSection] = useState<PlanBuilderSection>('details');
+  const [expandedExerciseIndex, setExpandedExerciseIndex] = useState(0);
+  const [isMobileViewport, setIsMobileViewport] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 880 : false));
 
   const [selectedClientId, setSelectedClientId] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState('');
@@ -668,6 +698,25 @@ export function CoachDashboardPage() {
       setActiveTab('clients');
     }
   }, [isSupervisor, activeTab]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const mediaQuery = window.matchMedia('(max-width: 879px)');
+    const applyMatch = () => setIsMobileViewport(mediaQuery.matches);
+    applyMatch();
+    mediaQuery.addEventListener('change', applyMatch);
+    return () => mediaQuery.removeEventListener('change', applyMatch);
+  }, []);
+
+  useEffect(() => {
+    if (!isPlanModalOpen) return;
+    setExpandedExerciseIndex((current) => {
+      if (exercises.length === 0) return 0;
+      if (current < 0) return 0;
+      if (current >= exercises.length) return exercises.length - 1;
+      return current;
+    });
+  }, [isPlanModalOpen, exercises.length]);
 
   useEffect(() => {
     const hash = window.location.hash.replace(/^#/, '');
@@ -864,10 +913,18 @@ export function CoachDashboardPage() {
 
   function addExercise() {
     setExercises((prev) => [...prev, defaultExercise()]);
+    setPlanBuilderSection('exercises');
+    setExpandedExerciseIndex(exercises.length);
   }
 
   function removeExercise(index: number) {
     setExercises((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== index)));
+    setExpandedExerciseIndex((current) => {
+      if (exercises.length <= 1) return 0;
+      if (current > index) return current - 1;
+      if (current >= exercises.length - 1) return Math.max(0, exercises.length - 2);
+      return current;
+    });
   }
 
   function resetExercise(index: number) {
@@ -1062,6 +1119,7 @@ export function CoachDashboardPage() {
             : '',
         sets: planKind === 'series_reps' ? Number(item.sets) || 0 : 0,
         reps: planKind === 'series_reps' ? Number(item.reps) || 0 : 0,
+        repsUnit: planKind === 'series_reps' ? item.repsUnit : 'reps',
         workValue: planKind === 'circuit' ? Number(item.workValue) || 0 : 0,
         weightKg: Number(item.weightKg) || 0,
         restSeconds: Number(item.restSeconds) || 0,
@@ -1125,6 +1183,8 @@ export function CoachDashboardPage() {
     setPlanWarmupImageUrl('');
     setPlanNotes('');
     setExercises([defaultExercise()]);
+    setPlanBuilderSection('details');
+    setExpandedExerciseIndex(0);
     setIsPlanModalOpen(true);
   }
 
@@ -1141,6 +1201,8 @@ export function CoachDashboardPage() {
     setPlanNotes(asText(plan.notes));
     const nextExercises = normalizePlanExercises(plan.exercises).filter((item) => item.name.trim().length > 0);
     setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
+    setPlanBuilderSection('details');
+    setExpandedExerciseIndex(0);
     setIsPlanModalOpen(true);
   }
 
@@ -1178,6 +1240,8 @@ export function CoachDashboardPage() {
   function closePlanModalWithoutSaving() {
     setIsCreatingPlan(false);
     reloadModalDraftFromServer();
+    setPlanBuilderSection('details');
+    setExpandedExerciseIndex(0);
     setIsPlanModalOpen(false);
   }
 
@@ -1244,6 +1308,7 @@ export function CoachDashboardPage() {
       dropSetNotes: exercise.dropSetNotes,
       sets: exercise.sets,
       reps: exercise.reps,
+      repsUnit: exercise.repsUnit,
       workValue: exercise.workValue,
       weightKg: exercise.weightKg,
       restSeconds: exercise.restSeconds,
@@ -1862,232 +1927,342 @@ export function CoachDashboardPage() {
 
       {isPlanModalOpen ? (
         <section className="modal-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && closePlanModalWithoutSaving()}>
-          <article className="card modal-card" onClick={(event) => event.stopPropagation()}>
-            <h2>{editingPlan ? 'Modifica scheda' : 'Compila la scheda'}</h2>
-            <p className="hint">Aggiungi esercizi uno alla volta per completare il programma.</p>
-            <div className="step-tabs plan-kind-tabs">
-              <button
-                className={`step-tab ${planKind === 'series_reps' ? 'step-tab-active' : ''}`.trim()}
-                type="button"
-                onClick={() => handlePlanKindChange('series_reps')}
-              >
-                Serie e reps
-              </button>
-              <button
-                className={`step-tab ${planKind === 'circuit' ? 'step-tab-active' : ''}`.trim()}
-                type="button"
-                onClick={() => handlePlanKindChange('circuit')}
-              >
-                Circuito
-              </button>
-            </div>
-            <label>
-              Titolo scheda *
-              <input
-                value={planTitle}
-                onChange={(event) => setPlanTitle(event.target.value)}
-                placeholder="Forza 4 settimane"
-                required
-              />
-            </label>
-            <label>
-              Riscaldamento (opzionale)
-              <textarea
-                value={planWarmup}
-                onChange={(event) => setPlanWarmup(event.target.value)}
-                placeholder="Es. 8-10 min mobilità, attivazione scapole, squat a corpo libero..."
-              />
-            </label>
-            <label>
-              URL video riscaldamento (opzionale)
-              <input
-                value={planWarmupVideoUrl}
-                onChange={(event) => setPlanWarmupVideoUrl(event.target.value)}
-                placeholder="https://..."
-              />
-            </label>
-            <label>
-              Immagine riscaldamento (opzionale)
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) => void onUploadWarmupMedia(event.target.files?.[0] ?? null)}
-                disabled={uploadingWarmupMedia}
-              />
-              {isImageMediaUrl(planWarmupImageUrl) ? <img src={planWarmupImageUrl} alt="Anteprima riscaldamento" className="exercise-upload-preview" /> : null}
-            </label>
-            {isImageMediaUrl(planWarmupImageUrl) ? (
-              <p className="hint">
-                Immagine riscaldamento caricata.
-                {' '}
-                <button className="btn-link" type="button" onClick={() => setPlanWarmupImageUrl('')}>
-                  Rimuovi
-                </button>
-              </p>
-            ) : null}
-            {uploadingWarmupMedia ? <p className="hint">Caricamento immagine riscaldamento in corso...</p> : null}
-            <label>
-              Note (opzionale)
-              <textarea
-                value={planNotes}
-                onChange={(event) => setPlanNotes(event.target.value)}
-                placeholder="Note utili per il cliente"
-              />
-            </label>
-            {exercises.map((exercise, index) => (
-              <article className="card" key={`exercise-${index}`} style={{boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)'}}>
-                <div className="exercise-head">
-                  <h2>Esercizio {index + 1}</h2>
-                  <button className="icon-btn" type="button" onClick={() => resetExercise(index)} aria-label={`Reset esercizio ${index + 1}`} title="Reset esercizio">
-                    ↻
+          <article className="card modal-card plan-builder-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="plan-builder-sticky">
+              <div className="plan-builder-header">
+                <div className="plan-builder-heading">
+                  <p className="eyebrow">{editingPlan ? 'Modifica scheda' : 'Nuova scheda'}</p>
+                  <h2>{editingPlan ? 'Modifica scheda' : 'Compila la scheda'}</h2>
+                  <p className="hint">Builder mobile ottimizzato: dettagli separati dagli esercizi e salvataggio sempre visibile.</p>
+                </div>
+                <div className="plan-builder-header-actions">
+                  <button
+                    className="btn btn-primary mobile-only"
+                    type="button"
+                    disabled={loading || isUploadingMedia}
+                    onClick={() => void savePlan()}
+                  >
+                    {isUploadingMedia ? 'Attendi...' : 'Salva'}
+                  </button>
+                  <button className="icon-btn" type="button" onClick={closePlanModalWithoutSaving} aria-label="Chiudi editor scheda" title="Chiudi">
+                    ✕
                   </button>
                 </div>
-                <label>
-                  Nome esercizio
-                  <input value={exercise.name} onChange={(event) => updateExercise(index, {name: event.target.value})} placeholder="Es. Squat bilanciere" />
-                </label>
-                <label>
-                  Note esercizio
-                  <textarea
-                    value={exercise.notes}
-                    onChange={(event) => updateExercise(index, {notes: event.target.value})}
-                    placeholder="Note utili per questo esercizio"
-                  />
-                </label>
-                <div className="exercise-fields-inline">
-                  {planKind === 'series_reps' ? (
-                    <>
-                      <label>
-                        Serie
-                        <input
-                          type="number"
-                          min={0}
-                          inputMode="numeric"
-                          onFocus={selectNumericInputContents}
-                          value={exercise.sets}
-                          onChange={(event) => updateExercise(index, {sets: parseExerciseNumericInput(event.target.value)})}
-                        />
-                      </label>
-                      <label>
-                        Ripetizioni
-                        <input
-                          type="number"
-                          min={0}
-                          inputMode="numeric"
-                          onFocus={selectNumericInputContents}
-                          value={exercise.reps}
-                          onChange={(event) => updateExercise(index, {reps: parseExerciseNumericInput(event.target.value)})}
-                        />
-                      </label>
-                    </>
-                  ) : (
-                    <label>
-                      Reps/tempo di lavoro
-                      <input
-                        type="number"
-                        min={0}
-                        inputMode="numeric"
-                        onFocus={selectNumericInputContents}
-                        value={exercise.workValue}
-                        onChange={(event) => updateExercise(index, {workValue: parseExerciseNumericInput(event.target.value)})}
-                      />
-                    </label>
-                  )}
-                  <label>
-                    Peso (kg)
-                    <input
-                      type="number"
-                      min={0}
-                      inputMode="decimal"
-                      onFocus={selectNumericInputContents}
-                      value={exercise.weightKg}
-                      onChange={(event) => updateExercise(index, {weightKg: parseExerciseNumericInput(event.target.value)})}
-                    />
-                  </label>
-                  <label>
-                    Recupero (sec)
-                    <input
-                      type="number"
-                      min={0}
-                      inputMode="numeric"
-                      onFocus={selectNumericInputContents}
-                      value={exercise.restSeconds}
-                      onChange={(event) => updateExercise(index, {restSeconds: parseExerciseNumericInput(event.target.value)})}
-                    />
-                  </label>
-                </div>
-                <div className="exercise-method-toggle">
-                  <p className="hint">Metodo opzionale</p>
-                  <div className="exercise-method-toggle-row">
-                    <button
-                      className={`btn btn-ghost ${exercise.advancedMethod === 'rest_pause' ? 'exercise-method-toggle-active' : ''}`.trim()}
-                      type="button"
-                      onClick={() => updateExercise(index, exercise.advancedMethod === 'rest_pause'
-                        ? { advancedMethod: '' }
-                        : { advancedMethod: 'rest_pause' })}
-                    >
-                      Rest Pause
-                    </button>
-                    <button
-                      className={`btn btn-ghost ${exercise.advancedMethod === 'drop_set' ? 'exercise-method-toggle-active' : ''}`.trim()}
-                      type="button"
-                      onClick={() => updateExercise(index, exercise.advancedMethod === 'drop_set'
-                        ? { advancedMethod: '' }
-                        : { advancedMethod: 'drop_set' })}
-                    >
-                      Drop set
-                    </button>
-                  </div>
-                </div>
-                {exercise.advancedMethod ? (
-                  <label>
-                    {exercise.advancedMethod === 'rest_pause' ? 'Note Rest Pause' : 'Note Drop set'}
-                    <textarea
-                      value={exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}
-                      onChange={(event) => updateExercise(index, exercise.advancedMethod === 'rest_pause'
-                        ? { restPauseNotes: event.target.value, advancedMethodNotes: event.target.value }
-                        : { dropSetNotes: event.target.value, advancedMethodNotes: event.target.value })}
-                      placeholder="Inserisci indicazioni per il cliente"
-                    />
-                  </label>
-                ) : null}
-                <label>
-                  URL video (YouTube o link diretto)
-                  <input
-                    value={exercise.videoUrl}
-                    onChange={(event) => updateExercise(index, {videoUrl: event.target.value, mediaUrl: event.target.value || exercise.imageUrl})}
-                    placeholder="https://..."
-                  />
-                </label>
-                <label>
-                  Carica un&apos;immagine (puoi tenerla insieme al video)
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) => void onUploadMedia(index, event.target.files?.[0] ?? null)}
-                    disabled={uploadingExerciseIndex === index}
-                  />
-                  {isImageMediaUrl(exercise.imageUrl) ? <img src={exercise.imageUrl} alt={`Anteprima esercizio ${index + 1}`} className="exercise-upload-preview" /> : null}
-                </label>
-                {isImageMediaUrl(exercise.imageUrl) ? (
-                  <p className="hint">
-                    Immagine caricata.
-                    {' '}
-                    <button className="btn-link" type="button" onClick={() => updateExercise(index, {imageUrl: '', mediaUrl: exercise.videoUrl})}>
-                      Rimuovi
-                    </button>
-                  </p>
-                ) : null}
-                {uploadingExerciseIndex === index ? <p className="hint">Caricamento media in corso...</p> : null}
-                <button className="btn btn-ghost" type="button" onClick={() => removeExercise(index)}>
-                  Rimuovi esercizio
+              </div>
+
+              <div className="step-tabs plan-builder-mobile-tabs mobile-only">
+                <button
+                  className={`step-tab ${planBuilderSection === 'details' ? 'step-tab-active' : ''}`.trim()}
+                  type="button"
+                  onClick={() => setPlanBuilderSection('details')}
+                >
+                  Scheda
                 </button>
-              </article>
-            ))}
-            <button className="btn btn-ghost" type="button" onClick={addExercise}>
-              Aggiungi esercizio
-            </button>
-            <div className="action-row-split">
+                <button
+                  className={`step-tab ${planBuilderSection === 'exercises' ? 'step-tab-active' : ''}`.trim()}
+                  type="button"
+                  onClick={() => {
+                    setPlanBuilderSection('exercises');
+                    setExpandedExerciseIndex((current) => (current >= 0 ? current : 0));
+                  }}
+                >
+                  Esercizi ({exercises.length})
+                </button>
+              </div>
+            </div>
+
+            <div className={`plan-builder-panel ${planBuilderSection !== 'details' ? 'plan-builder-panel-hidden-mobile' : ''}`.trim()}>
+              <p className="hint desktop-only">Imposta prima struttura e dettagli della scheda, poi passa agli esercizi.</p>
+              <div className="step-tabs plan-kind-tabs">
+                <button
+                  className={`step-tab ${planKind === 'series_reps' ? 'step-tab-active' : ''}`.trim()}
+                  type="button"
+                  onClick={() => handlePlanKindChange('series_reps')}
+                >
+                  Serie e reps
+                </button>
+                <button
+                  className={`step-tab ${planKind === 'circuit' ? 'step-tab-active' : ''}`.trim()}
+                  type="button"
+                  onClick={() => handlePlanKindChange('circuit')}
+                >
+                  Circuito
+                </button>
+              </div>
+              <label>
+                Titolo scheda *
+                <input
+                  value={planTitle}
+                  onChange={(event) => setPlanTitle(event.target.value)}
+                  placeholder="Forza 4 settimane"
+                  required
+                />
+              </label>
+              <label>
+                Riscaldamento (opzionale)
+                <textarea
+                  value={planWarmup}
+                  onChange={(event) => setPlanWarmup(event.target.value)}
+                  placeholder="Es. 8-10 min mobilità, attivazione scapole, squat a corpo libero..."
+                />
+              </label>
+              <label>
+                URL video riscaldamento (opzionale)
+                <input
+                  value={planWarmupVideoUrl}
+                  onChange={(event) => setPlanWarmupVideoUrl(event.target.value)}
+                  placeholder="https://..."
+                />
+              </label>
+              <label>
+                Immagine riscaldamento (opzionale)
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => void onUploadWarmupMedia(event.target.files?.[0] ?? null)}
+                  disabled={uploadingWarmupMedia}
+                />
+                {isImageMediaUrl(planWarmupImageUrl) ? <img src={planWarmupImageUrl} alt="Anteprima riscaldamento" className="exercise-upload-preview" /> : null}
+              </label>
+              {isImageMediaUrl(planWarmupImageUrl) ? (
+                <p className="hint">
+                  Immagine riscaldamento caricata.
+                  {' '}
+                  <button className="btn-link" type="button" onClick={() => setPlanWarmupImageUrl('')}>
+                    Rimuovi
+                  </button>
+                </p>
+              ) : null}
+              {uploadingWarmupMedia ? <p className="hint">Caricamento immagine riscaldamento in corso...</p> : null}
+              <label>
+                Note (opzionale)
+                <textarea
+                  value={planNotes}
+                  onChange={(event) => setPlanNotes(event.target.value)}
+                  placeholder="Note utili per il cliente"
+                />
+              </label>
+              <button
+                className="btn btn-ghost mobile-only"
+                type="button"
+                onClick={() => {
+                  setPlanBuilderSection('exercises');
+                  setExpandedExerciseIndex(0);
+                }}
+              >
+                Vai agli esercizi
+              </button>
+            </div>
+
+            <div className={`plan-builder-panel ${planBuilderSection !== 'exercises' ? 'plan-builder-panel-hidden-mobile' : ''}`.trim()}>
+              <div className="plan-builder-exercises-top">
+                <div>
+                  <p className="hint">Esercizi in scheda</p>
+                  <h3>{exercises.length} {exercises.length === 1 ? 'esercizio' : 'esercizi'}</h3>
+                </div>
+                <button className="btn btn-ghost desktop-only" type="button" onClick={addExercise}>
+                  Aggiungi esercizio
+                </button>
+              </div>
+              <div className="plan-builder-exercise-list">
+                {exercises.map((exercise, index) => {
+                  const isExpanded = !isMobileViewport || expandedExerciseIndex === index;
+                  const exerciseTitle = exercise.name.trim() || `Esercizio ${index + 1}`;
+                  return (
+                    <article className="card plan-exercise-editor" key={`exercise-${index}`} style={{boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)'}}>
+                      <div className="plan-exercise-editor-head">
+                        <button
+                          className="plan-exercise-editor-toggle"
+                          type="button"
+                          onClick={() => setExpandedExerciseIndex(index)}
+                          aria-expanded={isExpanded}
+                        >
+                          <span className="hint">Esercizio {index + 1}</span>
+                          <strong>{exerciseTitle}</strong>
+                          <span className="hint">{formatExerciseSummary(exercise, planKind)}</span>
+                          <span className="plan-exercise-editor-chevron mobile-only" aria-hidden="true">{isExpanded ? '−' : '+'}</span>
+                        </button>
+                        <button className="icon-btn" type="button" onClick={() => resetExercise(index)} aria-label={`Reset esercizio ${index + 1}`} title="Reset esercizio">
+                          ↻
+                        </button>
+                      </div>
+
+                      {isExpanded ? (
+                        <div className="plan-exercise-editor-body">
+                          <label>
+                            Nome esercizio
+                            <input value={exercise.name} onChange={(event) => updateExercise(index, {name: event.target.value})} placeholder="Es. Squat bilanciere" />
+                          </label>
+                          <label>
+                            Note esercizio
+                            <textarea
+                              value={exercise.notes}
+                              onChange={(event) => updateExercise(index, {notes: event.target.value})}
+                              placeholder="Note utili per questo esercizio"
+                            />
+                          </label>
+                          <div className="exercise-fields-inline">
+                            {planKind === 'series_reps' ? (
+                              <>
+                                <label>
+                                  Serie
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    inputMode="numeric"
+                                    onFocus={selectNumericInputContents}
+                                    value={exercise.sets}
+                                    onChange={(event) => updateExercise(index, {sets: parseExerciseNumericInput(event.target.value)})}
+                                  />
+                                </label>
+                                <label>
+                                  Valore per serie
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    inputMode="numeric"
+                                    onFocus={selectNumericInputContents}
+                                    value={exercise.reps}
+                                    onChange={(event) => updateExercise(index, {reps: parseExerciseNumericInput(event.target.value)})}
+                                  />
+                                </label>
+                                <div className="exercise-unit-toggle">
+                                  <p className="hint">Unità</p>
+                                  <div className="exercise-unit-toggle-row">
+                                    <button
+                                      className={`btn btn-ghost ${exercise.repsUnit === 'reps' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                                      type="button"
+                                      onClick={() => updateExercise(index, {repsUnit: 'reps'})}
+                                    >
+                                      Reps
+                                    </button>
+                                    <button
+                                      className={`btn btn-ghost ${exercise.repsUnit === 'seconds' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                                      type="button"
+                                      onClick={() => updateExercise(index, {repsUnit: 'seconds'})}
+                                    >
+                                      Sec
+                                    </button>
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <label>
+                                Reps/tempo di lavoro
+                                <input
+                                  type="number"
+                                  min={0}
+                                  inputMode="numeric"
+                                  onFocus={selectNumericInputContents}
+                                  value={exercise.workValue}
+                                  onChange={(event) => updateExercise(index, {workValue: parseExerciseNumericInput(event.target.value)})}
+                                />
+                              </label>
+                            )}
+                            <label>
+                              Peso (kg)
+                              <input
+                                type="number"
+                                min={0}
+                                inputMode="decimal"
+                                onFocus={selectNumericInputContents}
+                                value={exercise.weightKg}
+                                onChange={(event) => updateExercise(index, {weightKg: parseExerciseNumericInput(event.target.value)})}
+                              />
+                            </label>
+                            <label>
+                              Recupero (sec)
+                              <input
+                                type="number"
+                                min={0}
+                                inputMode="numeric"
+                                onFocus={selectNumericInputContents}
+                                value={exercise.restSeconds}
+                                onChange={(event) => updateExercise(index, {restSeconds: parseExerciseNumericInput(event.target.value)})}
+                              />
+                            </label>
+                          </div>
+                          <div className="exercise-method-toggle">
+                            <p className="hint">Metodo opzionale</p>
+                            <div className="exercise-method-toggle-row">
+                              <button
+                                className={`btn btn-ghost ${exercise.advancedMethod === 'rest_pause' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                                type="button"
+                                onClick={() => updateExercise(index, exercise.advancedMethod === 'rest_pause'
+                                  ? { advancedMethod: '' }
+                                  : { advancedMethod: 'rest_pause' })}
+                              >
+                                Rest Pause
+                              </button>
+                              <button
+                                className={`btn btn-ghost ${exercise.advancedMethod === 'drop_set' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                                type="button"
+                                onClick={() => updateExercise(index, exercise.advancedMethod === 'drop_set'
+                                  ? { advancedMethod: '' }
+                                  : { advancedMethod: 'drop_set' })}
+                              >
+                                Drop set
+                              </button>
+                            </div>
+                          </div>
+                          {exercise.advancedMethod ? (
+                            <label>
+                              {exercise.advancedMethod === 'rest_pause' ? 'Note Rest Pause' : 'Note Drop set'}
+                              <textarea
+                                value={exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}
+                                onChange={(event) => updateExercise(index, exercise.advancedMethod === 'rest_pause'
+                                  ? { restPauseNotes: event.target.value, advancedMethodNotes: event.target.value }
+                                  : { dropSetNotes: event.target.value, advancedMethodNotes: event.target.value })}
+                                placeholder="Inserisci indicazioni per il cliente"
+                              />
+                            </label>
+                          ) : null}
+                          <label>
+                            URL video (YouTube o link diretto)
+                            <input
+                              value={exercise.videoUrl}
+                              onChange={(event) => updateExercise(index, {videoUrl: event.target.value, mediaUrl: event.target.value || exercise.imageUrl})}
+                              placeholder="https://..."
+                            />
+                          </label>
+                          <label>
+                            Carica un&apos;immagine (puoi tenerla insieme al video)
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(event) => void onUploadMedia(index, event.target.files?.[0] ?? null)}
+                              disabled={uploadingExerciseIndex === index}
+                            />
+                            {isImageMediaUrl(exercise.imageUrl) ? <img src={exercise.imageUrl} alt={`Anteprima esercizio ${index + 1}`} className="exercise-upload-preview" /> : null}
+                          </label>
+                          {isImageMediaUrl(exercise.imageUrl) ? (
+                            <p className="hint">
+                              Immagine caricata.
+                              {' '}
+                              <button className="btn-link" type="button" onClick={() => updateExercise(index, {imageUrl: '', mediaUrl: exercise.videoUrl})}>
+                                Rimuovi
+                              </button>
+                            </p>
+                          ) : null}
+                          {uploadingExerciseIndex === index ? <p className="hint">Caricamento media in corso...</p> : null}
+                          <button className="btn btn-ghost" type="button" onClick={() => removeExercise(index)}>
+                            Rimuovi esercizio
+                          </button>
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className={`plan-builder-mobile-footer mobile-only ${planBuilderSection === 'exercises' ? '' : 'plan-builder-mobile-footer-hidden'}`.trim()}>
+              <button className="btn btn-ghost" type="button" onClick={addExercise}>
+                Aggiungi esercizio
+              </button>
+            </div>
+
+            <div className="plan-builder-desktop-actions">
               <button className="btn btn-ghost" type="button" onClick={closePlanModalWithoutSaving}>
                 Chiudi
               </button>
@@ -2267,7 +2442,7 @@ export function CoachDashboardPage() {
                               ) : (
                                 <>
                                   <span>{exercise.sets || '-'} serie</span>
-                                  <span>{exercise.reps || '-'} reps</span>
+                                  <span>{formatSeriesTarget(exercise.reps, exercise.repsUnit)}</span>
                                 </>
                               )}
                               <span>{exercise.weightKg || 0} kg</span>

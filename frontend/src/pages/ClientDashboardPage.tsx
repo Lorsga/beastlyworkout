@@ -40,6 +40,7 @@ interface PlanDoc {
     dropSetNotes?: string;
     sets?: number;
     reps?: number;
+    repsUnit?: 'reps' | 'seconds';
     workValue?: number;
     weightKg?: number;
     restSeconds?: number;
@@ -49,6 +50,8 @@ interface PlanDoc {
     imageUrl?: string;
   }>;
 }
+
+type ExerciseRepsUnit = 'reps' | 'seconds';
 
 interface UserProfileDoc {
   uid?: string;
@@ -180,6 +183,7 @@ function normalizeExercises(value: unknown): Array<{
   dropSetNotes: string;
   sets: number;
   reps: number;
+  repsUnit: ExerciseRepsUnit;
   workValue: number;
   weightKg: number;
   restSeconds: number;
@@ -207,6 +211,7 @@ function normalizeExercises(value: unknown): Array<{
       const rawImageUrl = typeof raw.imageUrl === 'string' ? raw.imageUrl.trim() : '';
       const normalizedVideoUrl = rawVideoUrl || (toYouTubeEmbedUrl(rawMediaUrl) || isVideoUrl(rawMediaUrl) ? rawMediaUrl : '');
       const normalizedImageUrl = rawImageUrl || (isImageUrl(rawMediaUrl) ? rawMediaUrl : '');
+      const repsUnit = normalizeExerciseRepsUnit(raw.repsUnit);
       return {
         name: typeof raw.name === 'string' ? raw.name : '',
         notes: typeof raw.notes === 'string' ? raw.notes : '',
@@ -216,6 +221,7 @@ function normalizeExercises(value: unknown): Array<{
         dropSetNotes,
         sets: typeof raw.sets === 'number' ? raw.sets : Number(raw.sets ?? 0) || 0,
         reps: typeof raw.reps === 'number' ? raw.reps : Number(raw.reps ?? 0) || 0,
+        repsUnit,
         workValue: typeof raw.workValue === 'number' ? raw.workValue : Number(raw.workValue ?? raw.reps ?? 0) || 0,
         weightKg: typeof raw.weightKg === 'number' ? raw.weightKg : Number(raw.weightKg ?? legacyWeight ?? 0) || 0,
         restSeconds: typeof raw.restSeconds === 'number' ? raw.restSeconds : Number(raw.restSeconds ?? 0) || 0,
@@ -233,6 +239,7 @@ function normalizeExercises(value: unknown): Array<{
       dropSetNotes: string;
       sets: number;
       reps: number;
+      repsUnit: ExerciseRepsUnit;
       workValue: number;
       weightKg: number;
       restSeconds: number;
@@ -240,6 +247,14 @@ function normalizeExercises(value: unknown): Array<{
       imageUrl: string;
       mediaUrl: string;
     } => Boolean(item));
+}
+
+function normalizeExerciseRepsUnit(value: unknown): ExerciseRepsUnit {
+  return typeof value === 'string' && value.trim() === 'seconds' ? 'seconds' : 'reps';
+}
+
+function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
+  return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
 }
 
 function normalizeWhatsappPhone(raw: string): string {
@@ -836,7 +851,7 @@ export function ClientDashboardPage() {
                         ) : (
                           <>
                             <span>{exercise.sets ?? '-'} serie</span>
-                            <span>{exercise.reps || '-'} reps</span>
+                            <span>{formatSeriesTarget(exercise.reps, exercise.repsUnit)}</span>
                           </>
                         )}
                         <span>{exercise.weightKg || 0} kg</span>
