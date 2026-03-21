@@ -17,6 +17,7 @@ interface PlanDoc {
   assignedClientIds?: string[];
   clientWeightOverrides?: Record<string, Record<string, number>>;
   exercises?: Array<{
+    displayOrder?: number;
     movementType?: 'exercise' | 'stretching';
     name?: string;
     notes?: string;
@@ -87,7 +88,7 @@ function getPlanWarmupImageUrl(plan: PlanDoc | null | undefined): string {
 function normalizePlanExercises(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value
-    .map((item) => {
+    .map((item, index, array) => {
       if (!item || typeof item !== 'object') return null;
       const raw = item as Record<string, unknown>;
       const legacyWeight = Number(asText(raw.weight).replace(/[^\d.-]/g, ''));
@@ -104,6 +105,7 @@ function normalizePlanExercises(value: unknown) {
       const repsUnit = normalizeExerciseRepsUnit(raw.repsUnit);
       const movementType = normalizeExerciseMovementType(raw.movementType);
       return {
+        displayOrder: normalizeDisplayOrder(raw.displayOrder, array.length - index),
         movementType,
         name: asText(raw.name),
         notes: asText(raw.notes),
@@ -121,6 +123,7 @@ function normalizePlanExercises(value: unknown) {
       };
     })
     .filter((item): item is {
+      displayOrder: number;
       movementType: ExerciseMovementType;
       name: string;
       notes: string;
@@ -146,23 +149,22 @@ function normalizeExerciseMovementType(value: unknown): ExerciseMovementType {
   return asText(value).trim() === 'stretching' ? 'stretching' : 'exercise';
 }
 
+function normalizeDisplayOrder(value: unknown, fallback: number): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) return Math.floor(numeric);
+  return fallback;
+}
+
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
   return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
 }
 
-function splitExercisesByMovementType<T extends { movementType: ExerciseMovementType }>(items: T[]) {
-  return {
-    exercises: items.filter((item) => item.movementType === 'exercise'),
-    stretchings: items.filter((item) => item.movementType === 'stretching'),
-  };
+function movementTypeLabel(value: ExerciseMovementType): string {
+  return value === 'stretching' ? 'Stretching' : 'Esercizio';
 }
 
-function splitExercisesByMovementTypeForDisplay<T extends { movementType: ExerciseMovementType }>(items: T[]) {
-  const grouped = splitExercisesByMovementType(items);
-  return {
-    exercises: [...grouped.exercises].reverse(),
-    stretchings: [...grouped.stretchings].reverse(),
-  };
+function sortExercisesForDisplay<T extends { displayOrder: number }>(items: T[]) {
+  return [...items].sort((a, b) => a.displayOrder - b.displayOrder);
 }
 
 function getPlanWeightFeedback(
@@ -281,7 +283,10 @@ export function CoachPlanPrintPage() {
   );
 
   const exercises = useMemo(() => normalizePlanExercises(plan?.exercises), [plan?.exercises]);
-  const exerciseSections = useMemo(() => splitExercisesByMovementTypeForDisplay(exercises), [exercises]);
+  const exerciseDisplayItems = useMemo(
+    () => sortExercisesForDisplay(exercises.map((exercise, index) => ({ exercise, index, displayOrder: exercise.displayOrder }))),
+    [exercises],
+  );
   const imageUrls = useMemo(
     () => {
       const urls = exercises.map((exercise) => exercise.imageUrl).filter((url): url is string => Boolean(url));
@@ -441,23 +446,19 @@ export function CoachPlanPrintPage() {
       </section>`
       : '';
 
-    const exercisesHtml = [
-      { title: 'Esercizi', items: exerciseSections.exercises },
-      { title: 'Stretching', items: exerciseSections.stretchings },
-    ]
-      .filter((section) => section.items.length > 0)
-      .map(
-        (section) => `
+    const exercisesHtml = exerciseDisplayItems.length > 0
+      ? `
       <section class="section-block">
-        <h3>${escapeHtml(section.title)}</h3>
-        ${section.items
+        <h3>Sequenza visualizzazione</h3>
+        ${exerciseDisplayItems
           .map(
-            (exercise, index) => `
+            ({ exercise }, index) => `
           <article class="exercise">
             <div class="${exercise.imageUrl ? 'exercise-row' : ''}">
-              ${exercise.imageUrl ? `<div class="exercise-media"><img src="${escapeHtml(exercise.imageUrl)}" alt="Media ${escapeHtml(section.title)} ${index + 1}" /></div>` : ''}
+              ${exercise.imageUrl ? `<div class="exercise-media"><img src="${escapeHtml(exercise.imageUrl)}" alt="Media ${escapeHtml(movementTypeLabel(exercise.movementType))} ${index + 1}" /></div>` : ''}
               <div class="exercise-content">
-                <h4>${escapeHtml(exercise.name || `${section.title === 'Stretching' ? 'Stretching' : 'Esercizio'} ${index + 1}`)}</h4>
+                <p><strong>${escapeHtml(movementTypeLabel(exercise.movementType))}</strong> · Ordine ${index + 1}</p>
+                <h4>${escapeHtml(exercise.name || `${movementTypeLabel(exercise.movementType)} ${index + 1}`)}</h4>
                 <p class="meta">${
                   currentPlan.kind === 'circuit'
                     ? `${exercise.workValue || '-'} reps/tempo`
@@ -476,9 +477,8 @@ export function CoachPlanPrintPage() {
           </article>`,
           )
           .join('')}
-      </section>`,
-      )
-      .join('');
+      </section>`
+      : '';
     const warmupImageUrl = getPlanWarmupImageUrl(currentPlan);
     const warmupVideoUrl = getPlanWarmupVideoUrl(currentPlan);
     const warmupText = asText(currentPlan.warmup).trim();
@@ -700,57 +700,53 @@ export function CoachPlanPrintPage() {
           </div>
         ) : null}
 
-        {[
-          { id: 'exercise', title: 'Esercizi', items: exerciseSections.exercises },
-          { id: 'stretching', title: 'Stretching', items: exerciseSections.stretchings },
-        ]
-          .filter((section) => section.items.length > 0)
-          .map((section) => (
-            <section className="plan-preview-section" key={section.id}>
-              <div className="plan-builder-group-head">
-                <p className="hint">{section.title}</p>
-                <strong>{section.items.length}</strong>
-              </div>
-              <div className="exercise-grid">
-                {section.items.map((exercise, index) => (
-                  <article className="exercise-card" key={`print-${section.id}-${index}`}>
-                    <div className={exercise.imageUrl ? 'coach-exercise-media-layout' : ''}>
-                      {exercise.imageUrl ? (
-                        <div className="coach-exercise-media-visual">
-                          <img src={exercise.imageUrl} alt={`Media ${section.title.toLowerCase()} ${index + 1}`} className="exercise-upload-preview" />
-                        </div>
-                      ) : null}
-                      <div className={exercise.imageUrl ? 'coach-exercise-media-content' : ''}>
-                        <p className="exercise-name">{exercise.name || `${section.id === 'stretching' ? 'Stretching' : 'Esercizio'} ${index + 1}`}</p>
-                        <div className="exercise-meta">
-                          {currentPlan.kind === 'circuit' ? (
-                            <span>{exercise.workValue || '-'} reps/tempo</span>
-                          ) : (
-                            <>
-                              <span>{exercise.sets || '-'} serie</span>
-                              <span>{formatSeriesTarget(exercise.reps, exercise.repsUnit)}</span>
-                            </>
-                          )}
-                          <span>{exercise.weightKg || 0} kg</span>
-                          <span>{exercise.restSeconds || 0} sec recupero</span>
-                        </div>
-                        {exercise.advancedMethod ? (
-                          <p className="hint">
-                            <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
-                          </p>
-                        ) : null}
-                        {exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim() ? (
-                          <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
-                        ) : null}
-                        {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
-                        {exercise.videoUrl ? <a className="hint print-video-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">URL video: {exercise.videoUrl}</a> : null}
+        {exerciseDisplayItems.length > 0 ? (
+          <section className="plan-preview-section">
+            <div className="plan-builder-group-head">
+              <p className="hint">Sequenza visualizzazione</p>
+              <strong>{exerciseDisplayItems.length}</strong>
+            </div>
+            <div className="exercise-grid">
+              {exerciseDisplayItems.map(({ exercise }, index) => (
+                <article className="exercise-card" key={`print-sequence-${index}`}>
+                  <div className={exercise.imageUrl ? 'coach-exercise-media-layout' : ''}>
+                    {exercise.imageUrl ? (
+                      <div className="coach-exercise-media-visual">
+                        <img src={exercise.imageUrl} alt={`Media ${movementTypeLabel(exercise.movementType).toLowerCase()} ${index + 1}`} className="exercise-upload-preview" />
                       </div>
+                    ) : null}
+                    <div className={exercise.imageUrl ? 'coach-exercise-media-content' : ''}>
+                      <p className="hint"><strong>{movementTypeLabel(exercise.movementType)}</strong> · Ordine {index + 1}</p>
+                      <p className="exercise-name">{exercise.name || `${movementTypeLabel(exercise.movementType)} ${index + 1}`}</p>
+                      <div className="exercise-meta">
+                        {currentPlan.kind === 'circuit' ? (
+                          <span>{exercise.workValue || '-'} reps/tempo</span>
+                        ) : (
+                          <>
+                            <span>{exercise.sets || '-'} serie</span>
+                            <span>{formatSeriesTarget(exercise.reps, exercise.repsUnit)}</span>
+                          </>
+                        )}
+                        <span>{exercise.weightKg || 0} kg</span>
+                        <span>{exercise.restSeconds || 0} sec recupero</span>
+                      </div>
+                      {exercise.advancedMethod ? (
+                        <p className="hint">
+                          <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
+                        </p>
+                      ) : null}
+                      {exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim() ? (
+                        <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
+                      ) : null}
+                      {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
+                      {exercise.videoUrl ? <a className="hint print-video-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">URL video: {exercise.videoUrl}</a> : null}
                     </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </section>
       {isAssignModalOpen ? (
         <section

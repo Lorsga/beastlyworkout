@@ -47,6 +47,7 @@ export interface PlanInput {
 
 export interface PlanExerciseInput {
   name: string;
+  displayOrder?: number;
   movementType?: 'exercise' | 'stretching';
   sets: number;
   reps: number;

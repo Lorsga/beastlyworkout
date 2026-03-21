@@ -53,6 +53,7 @@ interface PlanDoc {
   }>;
   clientWeightOverrides?: Record<string, Record<string, number>>;
   exercises?: Array<{
+    displayOrder?: number;
     movementType?: 'exercise' | 'stretching';
     name?: string;
     notes?: string;
@@ -173,6 +174,7 @@ type PlanBuilderSection = 'details' | 'exercises';
 type ExerciseRepsUnit = 'reps' | 'seconds';
 type ExerciseMovementType = 'exercise' | 'stretching';
 type ExerciseDraft = {
+  displayOrder: number;
   movementType: ExerciseMovementType;
   name: string;
   notes: string;
@@ -206,7 +208,7 @@ function getClientAuthUid(profile: UserProfileDoc & { id: string }): string {
 function normalizePlanExercises(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value
-    .map((item) => {
+    .map((item, index, array) => {
       if (!item || typeof item !== 'object') return null;
       const raw = item as Record<string, unknown>;
       const legacyWeight = Number(asText(raw.weight).replace(/[^\d.-]/g, ''));
@@ -223,6 +225,7 @@ function normalizePlanExercises(value: unknown) {
       const repsUnit = normalizeExerciseRepsUnit(raw.repsUnit);
       const movementType = normalizeExerciseMovementType(raw.movementType);
       return {
+        displayOrder: normalizeDisplayOrder(raw.displayOrder, array.length - index),
         movementType,
         name: asText(raw.name),
         notes: asText(raw.notes),
@@ -242,6 +245,7 @@ function normalizePlanExercises(value: unknown) {
       };
     })
     .filter((item): item is {
+      displayOrder: number;
       movementType: ExerciseMovementType;
       name: string;
       notes: string;
@@ -269,6 +273,12 @@ function normalizeExerciseMovementType(value: unknown): ExerciseMovementType {
   return asText(value).trim() === 'stretching' ? 'stretching' : 'exercise';
 }
 
+function normalizeDisplayOrder(value: unknown, fallback: number): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) return Math.floor(numeric);
+  return fallback;
+}
+
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
   return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
 }
@@ -294,12 +304,8 @@ function splitExercisesByMovementType<T extends { movementType: ExerciseMovement
   };
 }
 
-function splitExercisesByMovementTypeForDisplay<T extends { movementType: ExerciseMovementType }>(items: T[]) {
-  const grouped = splitExercisesByMovementType(items);
-  return {
-    exercises: [...grouped.exercises].reverse(),
-    stretchings: [...grouped.stretchings].reverse(),
-  };
+function sortExercisesForDisplay<T extends { displayOrder: number }>(items: T[]) {
+  return [...items].sort((a, b) => a.displayOrder - b.displayOrder);
 }
 
 function onboardingValue(value: unknown): string {
@@ -348,8 +354,9 @@ function getPlanWarmupImageUrl(plan: PlanDoc | null | undefined): string {
   return isImageMediaUrl(legacy) ? legacy : '';
 }
 
-function defaultExercise(movementType: ExerciseMovementType = 'exercise') {
+function defaultExercise(movementType: ExerciseMovementType = 'exercise', displayOrder = 1) {
   return {
+    displayOrder,
     movementType,
     name: '',
     notes: '',
@@ -404,6 +411,19 @@ function parseExerciseNumericInput(raw: string): number | '' {
   if (!normalized) return '';
   const value = Number(normalized);
   return Number.isFinite(value) ? value : '';
+}
+
+function nextExerciseDisplayOrder(items: Array<Pick<ExerciseDraft, 'displayOrder'>>): number {
+  return items.reduce((max, item) => Math.max(max, Number(item.displayOrder) || 0), 0) + 1;
+}
+
+function renumberExerciseDisplayOrder(items: ExerciseDraft[]): ExerciseDraft[] {
+  const ordered = sortExercisesForDisplay(items.map((item, index) => ({ index, displayOrder: item.displayOrder })));
+  const nextOrderByIndex = new Map(ordered.map((item, position) => [item.index, position + 1]));
+  return items.map((item, index) => ({
+    ...item,
+    displayOrder: nextOrderByIndex.get(index) ?? index + 1,
+  }));
 }
 
 function emptyOnboardingDraft(base?: { name?: string; email?: string }): OnboardingDraft {
@@ -740,7 +760,12 @@ export function CoachDashboardPage() {
   }, [registeredClients, coachPlanTemplatesChronological]);
   const previewPlanWeightFeedback = previewPlan ? getPlanWeightFeedback(previewPlan, clientLabelById) : [];
   const previewPlanMovements = previewPlan ? normalizePlanExercises(previewPlan.exercises) : [];
-  const previewPlanSections = splitExercisesByMovementTypeForDisplay(previewPlanMovements);
+  const previewPlanDisplayItems = sortExercisesForDisplay(
+    previewPlanMovements.map((exercise, index) => ({ exercise, index, displayOrder: exercise.displayOrder })),
+  );
+  const planBuilderDisplayItems = sortExercisesForDisplay(
+    exercises.map((exercise, index) => ({ exercise, index, displayOrder: exercise.displayOrder })),
+  );
 
   const clientOptions: ClientOption[] = registeredClients.map((client) => ({
     value: getClientAuthUid(client),
@@ -983,25 +1008,44 @@ export function CoachDashboardPage() {
   }
 
   function addExercise() {
-    setExercises((prev) => [defaultExercise(), ...prev]);
+    setExercises((prev) => [defaultExercise('exercise', nextExerciseDisplayOrder(prev)), ...prev]);
     setPlanBuilderSection('exercises');
     scrollPlanBuilderToTop();
   }
 
   function addStretching() {
-    setExercises((prev) => [defaultExercise('stretching'), ...prev]);
+    setExercises((prev) => [defaultExercise('stretching', nextExerciseDisplayOrder(prev)), ...prev]);
     setPlanBuilderSection('exercises');
     scrollPlanBuilderToTop();
   }
 
   function removeExercise(index: number) {
-    setExercises((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== index)));
+    setExercises((prev) => (prev.length <= 1 ? prev : renumberExerciseDisplayOrder(prev.filter((_, idx) => idx !== index))));
   }
 
   function resetExercise(index: number) {
     setExercises((prev) =>
-      prev.map((item, idx) => (idx === index ? defaultExercise(item.movementType) : item)),
+      prev.map((item, idx) => (idx === index ? defaultExercise(item.movementType, item.displayOrder) : item)),
     );
+  }
+
+  function moveExerciseDisplayOrder(index: number, direction: -1 | 1) {
+    setExercises((prev) => {
+      const ordered = sortExercisesForDisplay(prev.map((exercise, builderIndex) => ({
+        builderIndex,
+        displayOrder: exercise.displayOrder,
+      })));
+      const currentPosition = ordered.findIndex((item) => item.builderIndex === index);
+      const nextPosition = currentPosition + direction;
+      if (currentPosition < 0 || nextPosition < 0 || nextPosition >= ordered.length) return prev;
+      const nextOrdered = [...ordered];
+      [nextOrdered[currentPosition], nextOrdered[nextPosition]] = [nextOrdered[nextPosition], nextOrdered[currentPosition]];
+      const displayOrderByIndex = new Map(nextOrdered.map((item, position) => [item.builderIndex, position + 1]));
+      return prev.map((item, builderIndex) => ({
+        ...item,
+        displayOrder: displayOrderByIndex.get(builderIndex) ?? item.displayOrder,
+      }));
+    });
   }
 
   function updateExercise(
@@ -1023,7 +1067,7 @@ export function CoachDashboardPage() {
       setPlanWarmupVideoUrl('');
       setPlanWarmupImageUrl('');
       setPlanNotes('');
-      setExercises([defaultExercise()]);
+      setExercises([defaultExercise('exercise', 1)]);
       return;
     }
     setPlanKind(selectedPlan.kind === 'circuit' ? 'circuit' : 'series_reps');
@@ -1033,7 +1077,7 @@ export function CoachDashboardPage() {
     setPlanWarmupImageUrl(getPlanWarmupImageUrl(selectedPlan));
     setPlanNotes(asText(selectedPlan.notes));
     const nextExercises = normalizePlanExercises(selectedPlan.exercises).filter((item) => item.name.trim().length > 0);
-    setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
+    setExercises(nextExercises.length > 0 ? renumberExerciseDisplayOrder(nextExercises) : [defaultExercise('exercise', 1)]);
   }
 
   function handlePlanKindChange(nextKind: 'series_reps' | 'circuit') {
@@ -1048,7 +1092,7 @@ export function CoachDashboardPage() {
         'Cambiando categoria di allenamento, i dati inseriti in questa scheda verranno cancellati. Vuoi continuare?',
       );
       if (!confirmed) return;
-      setExercises([defaultExercise()]);
+      setExercises([defaultExercise('exercise', 1)]);
       setPlanNotes('');
       setPlanWarmup('');
       setPlanWarmupVideoUrl('');
@@ -1180,6 +1224,7 @@ export function CoachDashboardPage() {
 
     const preparedExercises = exercises
       .map((item) => ({
+        displayOrder: item.displayOrder,
         movementType: item.movementType,
         name: item.name.trim(),
         notes: item.notes.trim(),
@@ -1259,7 +1304,7 @@ export function CoachDashboardPage() {
     setPlanWarmupVideoUrl('');
     setPlanWarmupImageUrl('');
     setPlanNotes('');
-    setExercises([defaultExercise()]);
+    setExercises([defaultExercise('exercise', 1)]);
     setPlanBuilderSection('details');
     setIsPlanModalOpen(true);
   }
@@ -1276,7 +1321,7 @@ export function CoachDashboardPage() {
     setPlanWarmupImageUrl(getPlanWarmupImageUrl(plan));
     setPlanNotes(asText(plan.notes));
     const nextExercises = normalizePlanExercises(plan.exercises).filter((item) => item.name.trim().length > 0);
-    setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
+    setExercises(nextExercises.length > 0 ? renumberExerciseDisplayOrder(nextExercises) : [defaultExercise('exercise', 1)]);
     setPlanBuilderSection('details');
     setIsPlanModalOpen(true);
   }
@@ -1374,6 +1419,7 @@ export function CoachDashboardPage() {
     const source = coachPlanTemplates.find((plan) => plan.id === planId);
     if (!source) return;
     const sourceExercises = normalizePlanExercises(source.exercises).map((exercise) => ({
+      displayOrder: exercise.displayOrder,
       movementType: exercise.movementType,
       name: exercise.name,
       notes: exercise.notes,
@@ -2174,6 +2220,52 @@ export function CoachDashboardPage() {
                   <h3>{exercises.length} {exercises.length === 1 ? 'elemento' : 'elementi'}</h3>
                 </div>
               </div>
+              {planBuilderDisplayItems.length > 0 ? (
+                <div className="plan-display-order-panel">
+                  <div className="plan-builder-group-head">
+                    <p className="hint">Ordine visualizzazione</p>
+                    <strong>{planBuilderDisplayItems.length}</strong>
+                  </div>
+                  <div className="plan-display-order-list">
+                    {planBuilderDisplayItems.map(({ exercise, index }, orderIndex) => {
+                      const title = exercise.name.trim() || `${movementTypeLabel(exercise.movementType)} ${orderIndex + 1}`;
+                      return (
+                        <div className="plan-display-order-row" key={`display-order-${exercise.movementType}-${index}`}>
+                          <div className="plan-display-order-main">
+                            <div className="plan-display-order-meta">
+                              <span className="plan-order-badge">{orderIndex + 1}</span>
+                              <span className="hint">{movementTypeLabel(exercise.movementType)}</span>
+                            </div>
+                            <strong>{title}</strong>
+                          </div>
+                          <div className="plan-display-order-actions">
+                            <button
+                              className="icon-btn"
+                              type="button"
+                              aria-label={`Sposta su ${title}`}
+                              title="Sposta su"
+                              disabled={orderIndex === 0}
+                              onClick={() => moveExerciseDisplayOrder(index, -1)}
+                            >
+                              ↑
+                            </button>
+                            <button
+                              className="icon-btn"
+                              type="button"
+                              aria-label={`Sposta giù ${title}`}
+                              title="Sposta giù"
+                              disabled={orderIndex === planBuilderDisplayItems.length - 1}
+                              onClick={() => moveExerciseDisplayOrder(index, 1)}
+                            >
+                              ↓
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
               {(() => {
                 const groupedMovements = splitExercisesByMovementType(
                   exercises.map((exercise, index) => ({ exercise, index, movementType: exercise.movementType })),
@@ -2200,7 +2292,7 @@ export function CoachDashboardPage() {
                                   <div className="plan-exercise-editor-summary">
                                     <span className="hint">{movementTypeLabel(exercise.movementType)} {sectionIndex + 1}</span>
                                     <strong>{exerciseTitle}</strong>
-                                    <span className="hint">{formatExerciseSummary(exercise, planKind)}</span>
+                                    <span className="hint">Ordine visualizzazione {exercise.displayOrder} · {formatExerciseSummary(exercise, planKind)}</span>
                                   </div>
                                   <button className="icon-btn" type="button" onClick={() => resetExercise(index)} aria-label={`Reset ${movementTypeLabel(exercise.movementType).toLowerCase()} ${sectionIndex + 1}`} title="Reset">
                                     ↻
@@ -2532,88 +2624,84 @@ export function CoachDashboardPage() {
                 ))}
               </div>
             ) : null}
-            {[
-              { id: 'exercise', title: 'Esercizi', items: previewPlanSections.exercises },
-              { id: 'stretching', title: 'Stretching', items: previewPlanSections.stretchings },
-            ]
-              .filter((section) => section.items.length > 0)
-              .map((section) => (
-                <section className="plan-preview-section" key={section.id}>
-                  <div className="plan-builder-group-head">
-                    <p className="hint">{section.title}</p>
-                    <strong>{section.items.length}</strong>
-                  </div>
-                  <div className="exercise-grid">
-                    {section.items.map((exercise, index) => (
-                      <article className="exercise-card" key={`preview-${section.id}-${index}`}>
-                        {(() => {
-                          const imageKey = `${previewPlan.id}-${section.id}-${index}`;
-                          const isImageLoading = previewImageLoading[imageKey] !== false;
-                          const hasImage = isImageMediaUrl(exercise.imageUrl);
-                          const hasVideo = isVideoMediaUrl(exercise.videoUrl);
-                          return (
-                            <div className={hasImage ? 'coach-exercise-media-layout' : ''}>
-                              {hasImage ? (
-                                <div className="coach-exercise-media-visual">
-                                  {isImageLoading ? (
-                                    <div className="media-loading" aria-live="polite">
-                                      <span className="spinner" aria-hidden="true" />
-                                      <span>Caricamento immagine...</span>
-                                    </div>
-                                  ) : null}
-                                  <img
-                                    src={exercise.imageUrl}
-                                    alt={`Media ${section.title.toLowerCase()} ${index + 1}`}
-                                    className="exercise-upload-preview"
-                                    style={{display: isImageLoading ? 'none' : 'block'}}
-                                    onLoad={() => setPreviewImageLoading((prev) => ({...prev, [imageKey]: false}))}
-                                    onError={() => setPreviewImageLoading((prev) => ({...prev, [imageKey]: false}))}
-                                  />
-                                </div>
-                              ) : null}
-                              <div className={hasImage ? 'coach-exercise-media-content' : ''}>
-                                <p className="exercise-name">{exercise.name || `${section.id === 'stretching' ? 'Stretching' : 'Esercizio'} ${index + 1}`}</p>
-                                <div className="exercise-meta">
-                                  {previewPlan.kind === 'circuit' ? (
-                                    <span>{exercise.workValue || '-'} reps/tempo</span>
-                                  ) : (
-                                    <>
-                                      <span>{exercise.sets || '-'} serie</span>
-                                      <span>{formatSeriesTarget(exercise.reps, exercise.repsUnit)}</span>
-                                    </>
-                                  )}
-                                  <span>{exercise.weightKg || 0} kg</span>
-                                  <span>{exercise.restSeconds || 0} sec recupero</span>
-                                </div>
-                                {exercise.advancedMethod ? (
-                                  <p className="hint">
-                                    <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
-                                  </p>
+            {previewPlanDisplayItems.length > 0 ? (
+              <section className="plan-preview-section">
+                <div className="plan-builder-group-head">
+                  <p className="hint">Sequenza visualizzazione</p>
+                  <strong>{previewPlanDisplayItems.length}</strong>
+                </div>
+                <div className="exercise-grid">
+                  {previewPlanDisplayItems.map(({ exercise, index }, orderIndex) => (
+                    <article className="exercise-card" key={`preview-${index}`}>
+                      {(() => {
+                        const imageKey = `${previewPlan.id}-${index}`;
+                        const isImageLoading = previewImageLoading[imageKey] !== false;
+                        const hasImage = isImageMediaUrl(exercise.imageUrl);
+                        const hasVideo = isVideoMediaUrl(exercise.videoUrl);
+                        return (
+                          <div className={hasImage ? 'coach-exercise-media-layout' : ''}>
+                            {hasImage ? (
+                              <div className="coach-exercise-media-visual">
+                                {isImageLoading ? (
+                                  <div className="media-loading" aria-live="polite">
+                                    <span className="spinner" aria-hidden="true" />
+                                    <span>Caricamento immagine...</span>
+                                  </div>
                                 ) : null}
-                                {exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim() ? (
-                                  <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
-                                ) : null}
-                                {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
-                                {hasVideo ? (
-                                  <>
-                                    <a className="btn-link screen-only" href={exercise.videoUrl} target="_blank" rel="noreferrer">
-                                      Apri video
-                                    </a>
-                                    <a className="hint print-only print-video-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">
-                                      URL video: {exercise.videoUrl}
-                                    </a>
-                                  </>
-                                ) : null}
-                                {!hasImage && !hasVideo ? <p className="hint">Nessun media allegato</p> : null}
+                                <img
+                                  src={exercise.imageUrl}
+                                  alt={`Media ${movementTypeLabel(exercise.movementType).toLowerCase()} ${orderIndex + 1}`}
+                                  className="exercise-upload-preview"
+                                  style={{display: isImageLoading ? 'none' : 'block'}}
+                                  onLoad={() => setPreviewImageLoading((prev) => ({...prev, [imageKey]: false}))}
+                                  onError={() => setPreviewImageLoading((prev) => ({...prev, [imageKey]: false}))}
+                                />
                               </div>
+                            ) : null}
+                            <div className={hasImage ? 'coach-exercise-media-content' : ''}>
+                              <p className="hint"><strong>{movementTypeLabel(exercise.movementType)}</strong> · Ordine {orderIndex + 1}</p>
+                              <p className="exercise-name">{exercise.name || `${movementTypeLabel(exercise.movementType)} ${orderIndex + 1}`}</p>
+                              <div className="exercise-meta">
+                                {previewPlan.kind === 'circuit' ? (
+                                  <span>{exercise.workValue || '-'} reps/tempo</span>
+                                ) : (
+                                  <>
+                                    <span>{exercise.sets || '-'} serie</span>
+                                    <span>{formatSeriesTarget(exercise.reps, exercise.repsUnit)}</span>
+                                  </>
+                                )}
+                                <span>{exercise.weightKg || 0} kg</span>
+                                <span>{exercise.restSeconds || 0} sec recupero</span>
+                              </div>
+                              {exercise.advancedMethod ? (
+                                <p className="hint">
+                                  <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
+                                </p>
+                              ) : null}
+                              {exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim() ? (
+                                <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
+                              ) : null}
+                              {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
+                              {hasVideo ? (
+                                <>
+                                  <a className="btn-link screen-only" href={exercise.videoUrl} target="_blank" rel="noreferrer">
+                                    Apri video
+                                  </a>
+                                  <a className="hint print-only print-video-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">
+                                    URL video: {exercise.videoUrl}
+                                  </a>
+                                </>
+                              ) : null}
+                              {!hasImage && !hasVideo ? <p className="hint">Nessun media allegato</p> : null}
                             </div>
-                          );
-                        })()}
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              ))}
+                          </div>
+                        );
+                      })()}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </article>
         </section>
       ) : null}
