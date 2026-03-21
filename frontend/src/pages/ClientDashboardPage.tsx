@@ -32,6 +32,7 @@ interface PlanDoc {
   warmupMediaUrl?: string;
   clientWeightOverrides?: Record<string, Record<string, number>>;
   exercises?: Array<{
+    movementType?: 'exercise' | 'stretching';
     name?: string;
     notes?: string;
     advancedMethod?: 'rest_pause' | 'drop_set' | '';
@@ -52,6 +53,7 @@ interface PlanDoc {
 }
 
 type ExerciseRepsUnit = 'reps' | 'seconds';
+type ExerciseMovementType = 'exercise' | 'stretching';
 
 interface UserProfileDoc {
   uid?: string;
@@ -175,6 +177,7 @@ function getPlanWarmupImageUrl(plan: PlanDoc | null | undefined): string {
 }
 
 function normalizeExercises(value: unknown): Array<{
+  movementType: ExerciseMovementType;
   name: string;
   notes: string;
   advancedMethod: '' | 'rest_pause' | 'drop_set';
@@ -212,7 +215,9 @@ function normalizeExercises(value: unknown): Array<{
       const normalizedVideoUrl = rawVideoUrl || (toYouTubeEmbedUrl(rawMediaUrl) || isVideoUrl(rawMediaUrl) ? rawMediaUrl : '');
       const normalizedImageUrl = rawImageUrl || (isImageUrl(rawMediaUrl) ? rawMediaUrl : '');
       const repsUnit = normalizeExerciseRepsUnit(raw.repsUnit);
+      const movementType = normalizeExerciseMovementType(raw.movementType);
       return {
+        movementType,
         name: typeof raw.name === 'string' ? raw.name : '',
         notes: typeof raw.notes === 'string' ? raw.notes : '',
         advancedMethod,
@@ -231,6 +236,7 @@ function normalizeExercises(value: unknown): Array<{
       };
     })
     .filter((item): item is {
+      movementType: ExerciseMovementType;
       name: string;
       notes: string;
       advancedMethod: '' | 'rest_pause' | 'drop_set';
@@ -253,8 +259,19 @@ function normalizeExerciseRepsUnit(value: unknown): ExerciseRepsUnit {
   return typeof value === 'string' && value.trim() === 'seconds' ? 'seconds' : 'reps';
 }
 
+function normalizeExerciseMovementType(value: unknown): ExerciseMovementType {
+  return typeof value === 'string' && value.trim() === 'stretching' ? 'stretching' : 'exercise';
+}
+
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
   return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
+}
+
+function splitExercisesByMovementType<T extends { movementType: ExerciseMovementType }>(items: T[]) {
+  return {
+    exercises: items.filter((item) => item.movementType === 'exercise'),
+    stretchings: items.filter((item) => item.movementType === 'stretching'),
+  };
 }
 
 function normalizeWhatsappPhone(raw: string): string {
@@ -571,6 +588,9 @@ export function ClientDashboardPage() {
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? plans[0];
   const selectedPlanExercises = normalizeExercises(selectedPlan?.exercises);
+  const selectedPlanSections = splitExercisesByMovementType(
+    selectedPlanExercises.map((exercise, index) => ({ exercise, index, movementType: exercise.movementType })),
+  );
   const hasCoachWhatsapp = coachWhatsappNumber.length > 6;
   const coachWhatsappUrl = hasCoachWhatsapp ? buildWhatsAppUrl(whatsappMessage, coachWhatsappNumber) : '#';
   const profileRows = [
@@ -841,109 +861,122 @@ export function ClientDashboardPage() {
                     <p className="hint"><strong>Note coach:</strong> {selectedPlan.notes}</p>
                   </div>
                 ) : null}
-                <div className="exercise-grid">
-                  {selectedPlanExercises.map((exercise, index) => (
-                    <article className="exercise-card" key={`plan-ex-${index}`}>
-                      <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
-                      <div className="exercise-meta">
-                        {selectedPlan.kind === 'circuit' ? (
-                          <span>{exercise.workValue || '-'} reps/tempo</span>
-                        ) : (
-                          <>
-                            <span>{exercise.sets ?? '-'} serie</span>
-                            <span>{formatSeriesTarget(exercise.reps, exercise.repsUnit)}</span>
-                          </>
-                        )}
-                        <span>{exercise.weightKg || 0} kg</span>
-                        <span>{exercise.restSeconds || 0} sec recupero</span>
+                {[
+                  { id: 'exercise', title: 'Esercizi', items: selectedPlanSections.exercises },
+                  { id: 'stretching', title: 'Stretching', items: selectedPlanSections.stretchings },
+                ]
+                  .filter((section) => section.items.length > 0)
+                  .map((section) => (
+                    <section className="plan-preview-section" key={section.id}>
+                      <div className="plan-builder-group-head">
+                        <p className="hint">{section.title}</p>
+                        <strong>{section.items.length}</strong>
                       </div>
-                      {exercise.advancedMethod ? (
-                        <p className="hint">
-                          <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
-                        </p>
-                      ) : null}
-                      {exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim() ? (
-                        <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
-                      ) : null}
-                      {(() => {
-                        const weightKey = `${selectedPlan.id}:${index}`;
-                        const isEditingWeight = editingWeightKey === weightKey;
-                        const isSavingWeight = savingWeightKey === weightKey;
-                        return isEditingWeight ? (
-                          <div className="exercise-weight-edit-row">
-                            <label>
-                              Peso (kg)
-                              <input
-                                type="number"
-                                min={0}
-                                inputMode="decimal"
-                                onFocus={selectNumericInputContents}
-                                value={exerciseWeightDrafts[weightKey] ?? String(exercise.weightKg || 0)}
-                                onChange={(event) =>
-                                  setExerciseWeightDrafts((prev) => ({
-                                    ...prev,
-                                    [weightKey]: normalizeNumericRawInput(event.target.value),
-                                  }))
-                                }
-                              />
-                            </label>
-                            <div className="exercise-weight-actions">
-                              <button
-                                className="btn btn-ghost"
-                                type="button"
-                                disabled={isSavingWeight}
-                                onClick={() => setEditingWeightKey('')}
-                              >
-                                Annulla
-                              </button>
-                              <button
-                                className="btn"
-                                type="button"
-                                disabled={isSavingWeight}
-                                onClick={() => void saveExerciseWeight(selectedPlan.id, index, exercise.weightKg || 0)}
-                              >
-                                {isSavingWeight ? 'Salvataggio...' : 'Salva'}
-                              </button>
+                      <div className="exercise-grid">
+                        {section.items.map(({ exercise, index }, itemIndex) => (
+                          <article className="exercise-card" key={`plan-${section.id}-${index}`}>
+                            <p className="exercise-name">{exercise.name || `${section.id === 'stretching' ? 'Stretching' : 'Esercizio'} ${itemIndex + 1}`}</p>
+                            <div className="exercise-meta">
+                              {selectedPlan.kind === 'circuit' ? (
+                                <span>{exercise.workValue || '-'} reps/tempo</span>
+                              ) : (
+                                <>
+                                  <span>{exercise.sets ?? '-'} serie</span>
+                                  <span>{formatSeriesTarget(exercise.reps, exercise.repsUnit)}</span>
+                                </>
+                              )}
+                              <span>{exercise.weightKg || 0} kg</span>
+                              <span>{exercise.restSeconds || 0} sec recupero</span>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="exercise-weight-readonly">
-                            <div>
-                              <p className="hint"><strong>Peso (kg)</strong></p>
-                              <p className="exercise-weight-value">{exercise.weightKg || 0}</p>
-                            </div>
-                            <button
-                              className="icon-btn"
-                              type="button"
-                              aria-label="Modifica peso esercizio"
-                              title="Modifica peso"
-                              onClick={() => openWeightEditor(selectedPlan.id, index, exercise.weightKg || 0)}
-                            >
-                              ✎
-                            </button>
-                          </div>
-                        );
-                      })()}
-                      {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
-                      {exercise.videoUrl || exercise.imageUrl ? (
-                        <div className="warmup-actions">
-                          {exercise.videoUrl ? (
-                            <button className="warmup-media-btn" type="button" onClick={() => openMediaPreview(exercise.videoUrl, exercise.name || `Esercizio ${index + 1}`)}>
-                              Apri video
-                            </button>
-                          ) : null}
-                          {exercise.imageUrl ? (
-                            <button className="warmup-media-btn" type="button" onClick={() => openMediaPreview(exercise.imageUrl, exercise.name || `Esercizio ${index + 1}`)}>
-                              Apri immagine
-                            </button>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <p className="hint">Nessun media allegato</p>
-                      )}
-                    </article>
+                            {exercise.advancedMethod ? (
+                              <p className="hint">
+                                <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
+                              </p>
+                            ) : null}
+                            {exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim() ? (
+                              <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
+                            ) : null}
+                            {(() => {
+                              const weightKey = `${selectedPlan.id}:${index}`;
+                              const isEditingWeight = editingWeightKey === weightKey;
+                              const isSavingWeight = savingWeightKey === weightKey;
+                              return isEditingWeight ? (
+                                <div className="exercise-weight-edit-row">
+                                  <label>
+                                    Peso (kg)
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      inputMode="decimal"
+                                      onFocus={selectNumericInputContents}
+                                      value={exerciseWeightDrafts[weightKey] ?? String(exercise.weightKg || 0)}
+                                      onChange={(event) =>
+                                        setExerciseWeightDrafts((prev) => ({
+                                          ...prev,
+                                          [weightKey]: normalizeNumericRawInput(event.target.value),
+                                        }))
+                                      }
+                                    />
+                                  </label>
+                                  <div className="exercise-weight-actions">
+                                    <button
+                                      className="btn btn-ghost"
+                                      type="button"
+                                      disabled={isSavingWeight}
+                                      onClick={() => setEditingWeightKey('')}
+                                    >
+                                      Annulla
+                                    </button>
+                                    <button
+                                      className="btn"
+                                      type="button"
+                                      disabled={isSavingWeight}
+                                      onClick={() => void saveExerciseWeight(selectedPlan.id, index, exercise.weightKg || 0)}
+                                    >
+                                      {isSavingWeight ? 'Salvataggio...' : 'Salva'}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="exercise-weight-readonly">
+                                  <div>
+                                    <p className="hint"><strong>Peso (kg)</strong></p>
+                                    <p className="exercise-weight-value">{exercise.weightKg || 0}</p>
+                                  </div>
+                                  <button
+                                    className="icon-btn"
+                                    type="button"
+                                    aria-label="Modifica peso esercizio"
+                                    title="Modifica peso"
+                                    onClick={() => openWeightEditor(selectedPlan.id, index, exercise.weightKg || 0)}
+                                  >
+                                    ✎
+                                  </button>
+                                </div>
+                              );
+                            })()}
+                            {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
+                            {exercise.videoUrl || exercise.imageUrl ? (
+                              <div className="warmup-actions">
+                                {exercise.videoUrl ? (
+                                  <button className="warmup-media-btn" type="button" onClick={() => openMediaPreview(exercise.videoUrl, exercise.name || `${section.id === 'stretching' ? 'Stretching' : 'Esercizio'} ${itemIndex + 1}`)}>
+                                    Apri video
+                                  </button>
+                                ) : null}
+                                {exercise.imageUrl ? (
+                                  <button className="warmup-media-btn" type="button" onClick={() => openMediaPreview(exercise.imageUrl, exercise.name || `${section.id === 'stretching' ? 'Stretching' : 'Esercizio'} ${itemIndex + 1}`)}>
+                                    Apri immagine
+                                  </button>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <p className="hint">Nessun media allegato</p>
+                            )}
+                          </article>
+                        ))}
+                      </div>
+                    </section>
                   ))}
-                </div>
               </>
             ) : (
               <p className="hint">La tua scheda non è ancora disponibile. Il coach la pubblicherà a breve.</p>

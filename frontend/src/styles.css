@@ -753,11 +753,17 @@ a.btn {
   overflow-y: auto;
 }
 
+.plan-builder-overlay {
+  padding: 0;
+  place-items: stretch;
+}
+
 .plan-builder-modal {
   align-self: stretch;
-  max-height: calc(100dvh - 32px);
-  min-height: calc(100dvh - 32px);
-  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+  width: 100%;
+  max-height: 100dvh;
+  min-height: 100dvh;
+  border-radius: 0;
   gap: 14px;
 }
 
@@ -766,7 +772,7 @@ a.btn {
   top: 0;
   z-index: 3;
   margin: -18px -18px 0;
-  padding: 18px 18px 12px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 18px 12px;
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(18, 18, 18, 0.08);
@@ -808,6 +814,12 @@ a.btn {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.plan-builder-sticky-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .plan-builder-panel {
   display: grid;
   gap: 12px;
@@ -829,6 +841,33 @@ a.btn {
   gap: 12px;
 }
 
+.plan-builder-group {
+  display: grid;
+  gap: 10px;
+}
+
+.plan-builder-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.plan-builder-group-head p,
+.plan-builder-group-head strong {
+  margin: 0;
+}
+
+.plan-builder-group-list {
+  display: grid;
+  gap: 12px;
+}
+
+.plan-preview-section {
+  display: grid;
+  gap: 10px;
+}
+
 .plan-exercise-editor {
   gap: 12px;
 }
@@ -836,35 +875,19 @@ a.btn {
 .plan-exercise-editor-head {
   display: flex;
   align-items: flex-start;
+  justify-content: space-between;
   gap: 10px;
 }
 
-.plan-exercise-editor-toggle {
+.plan-exercise-editor-summary {
   flex: 1;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  padding: 0 34px 0 0;
-  position: relative;
   display: grid;
   gap: 4px;
-  cursor: pointer;
 }
 
-.plan-exercise-editor-toggle strong {
+.plan-exercise-editor-summary strong {
   font-size: 20px;
   line-height: 1.05;
-}
-
-.plan-exercise-editor-chevron {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1;
 }
 
 .plan-exercise-editor-body {
@@ -872,23 +895,15 @@ a.btn {
   gap: 12px;
 }
 
-.plan-builder-mobile-footer {
-  position: sticky;
-  bottom: -18px;
-  z-index: 2;
-  margin: 0 -18px -18px;
-  padding: 12px 18px calc(18px + env(safe-area-inset-bottom, 0px));
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(12px);
-  border-top: 1px solid rgba(18, 18, 18, 0.08);
-}
-
-.plan-builder-mobile-footer-hidden {
-  display: none;
-}
-
 .plan-builder-desktop-actions {
   display: none;
+}
+
+.plan-builder-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .media-frame {
@@ -1309,7 +1324,13 @@ a.btn {
   .plan-builder-modal {
     min-height: auto;
     max-height: 86vh;
-    padding-bottom: 18px;
+    width: min(720px, 100%);
+    border-radius: var(--radius);
+  }
+
+  .plan-builder-overlay {
+    padding: 16px;
+    place-items: center;
   }
 
   .plan-builder-sticky {
@@ -1325,19 +1346,10 @@ a.btn {
     display: grid;
   }
 
-  .plan-builder-mobile-footer {
-    display: none;
-  }
-
   .plan-builder-desktop-actions {
     display: flex;
     align-items: center;
     gap: 8px;
-  }
-
-  .plan-exercise-editor-toggle {
-    padding-right: 0;
-    cursor: default;
   }
 
   .preview-modal-overlay {

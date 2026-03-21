@@ -53,6 +53,7 @@ interface PlanDoc {
   }>;
   clientWeightOverrides?: Record<string, Record<string, number>>;
   exercises?: Array<{
+    movementType?: 'exercise' | 'stretching';
     name?: string;
     notes?: string;
     advancedMethod?: 'rest_pause' | 'drop_set' | '';
@@ -163,7 +164,9 @@ type SupervisorCoachItem = {
 type CoachTabId = 'code' | 'clients' | 'plans' | 'overview' | 'supervisor';
 type PlanBuilderSection = 'details' | 'exercises';
 type ExerciseRepsUnit = 'reps' | 'seconds';
+type ExerciseMovementType = 'exercise' | 'stretching';
 type ExerciseDraft = {
+  movementType: ExerciseMovementType;
   name: string;
   notes: string;
   advancedMethod: '' | 'rest_pause' | 'drop_set';
@@ -211,7 +214,9 @@ function normalizePlanExercises(value: unknown) {
       const normalizedVideoUrl = rawVideoUrl || (isVideoMediaUrl(rawMediaUrl) ? rawMediaUrl : '');
       const normalizedImageUrl = rawImageUrl || (isImageMediaUrl(rawMediaUrl) ? rawMediaUrl : '');
       const repsUnit = normalizeExerciseRepsUnit(raw.repsUnit);
+      const movementType = normalizeExerciseMovementType(raw.movementType);
       return {
+        movementType,
         name: asText(raw.name),
         notes: asText(raw.notes),
         advancedMethod,
@@ -230,6 +235,7 @@ function normalizePlanExercises(value: unknown) {
       };
     })
     .filter((item): item is {
+      movementType: ExerciseMovementType;
       name: string;
       notes: string;
       advancedMethod: '' | 'rest_pause' | 'drop_set';
@@ -252,6 +258,10 @@ function normalizeExerciseRepsUnit(value: unknown): ExerciseRepsUnit {
   return asText(value).trim() === 'seconds' ? 'seconds' : 'reps';
 }
 
+function normalizeExerciseMovementType(value: unknown): ExerciseMovementType {
+  return asText(value).trim() === 'stretching' ? 'stretching' : 'exercise';
+}
+
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
   return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
 }
@@ -264,6 +274,17 @@ function formatExerciseSummary(
     ? `${Number(exercise.workValue) || 0} reps/tempo`
     : `${Number(exercise.sets) || 0} serie · ${formatSeriesTarget(Number(exercise.reps) || 0, exercise.repsUnit)}`;
   return `${primary} · ${Number(exercise.weightKg) || 0} kg · ${Number(exercise.restSeconds) || 0} sec rec`;
+}
+
+function movementTypeLabel(value: ExerciseMovementType): string {
+  return value === 'stretching' ? 'Stretching' : 'Esercizio';
+}
+
+function splitExercisesByMovementType<T extends { movementType: ExerciseMovementType }>(items: T[]) {
+  return {
+    exercises: items.filter((item) => item.movementType === 'exercise'),
+    stretchings: items.filter((item) => item.movementType === 'stretching'),
+  };
 }
 
 function onboardingValue(value: unknown): string {
@@ -312,8 +333,9 @@ function getPlanWarmupImageUrl(plan: PlanDoc | null | undefined): string {
   return isImageMediaUrl(legacy) ? legacy : '';
 }
 
-function defaultExercise() {
+function defaultExercise(movementType: ExerciseMovementType = 'exercise') {
   return {
+    movementType,
     name: '',
     notes: '',
     advancedMethod: '' as '' | 'rest_pause' | 'drop_set',
@@ -619,8 +641,6 @@ export function CoachDashboardPage() {
   const [previewLoadingPlanId, setPreviewLoadingPlanId] = useState('');
   const [activeTab, setActiveTab] = useState<CoachTabId>('clients');
   const [planBuilderSection, setPlanBuilderSection] = useState<PlanBuilderSection>('details');
-  const [expandedExerciseIndex, setExpandedExerciseIndex] = useState(0);
-  const [isMobileViewport, setIsMobileViewport] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 880 : false));
 
   const [selectedClientId, setSelectedClientId] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState('');
@@ -660,6 +680,8 @@ export function CoachDashboardPage() {
     return acc;
   }, {});
   const previewPlanWeightFeedback = previewPlan ? getPlanWeightFeedback(previewPlan, clientLabelById) : [];
+  const previewPlanMovements = previewPlan ? normalizePlanExercises(previewPlan.exercises) : [];
+  const previewPlanSections = splitExercisesByMovementType(previewPlanMovements);
 
   const clientOptions: ClientOption[] = registeredClients.map((client) => ({
     value: getClientAuthUid(client),
@@ -698,25 +720,6 @@ export function CoachDashboardPage() {
       setActiveTab('clients');
     }
   }, [isSupervisor, activeTab]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-    const mediaQuery = window.matchMedia('(max-width: 879px)');
-    const applyMatch = () => setIsMobileViewport(mediaQuery.matches);
-    applyMatch();
-    mediaQuery.addEventListener('change', applyMatch);
-    return () => mediaQuery.removeEventListener('change', applyMatch);
-  }, []);
-
-  useEffect(() => {
-    if (!isPlanModalOpen) return;
-    setExpandedExerciseIndex((current) => {
-      if (exercises.length === 0) return 0;
-      if (current < 0) return 0;
-      if (current >= exercises.length) return exercises.length - 1;
-      return current;
-    });
-  }, [isPlanModalOpen, exercises.length]);
 
   useEffect(() => {
     const hash = window.location.hash.replace(/^#/, '');
@@ -914,21 +917,21 @@ export function CoachDashboardPage() {
   function addExercise() {
     setExercises((prev) => [...prev, defaultExercise()]);
     setPlanBuilderSection('exercises');
-    setExpandedExerciseIndex(exercises.length);
+  }
+
+  function addStretching() {
+    setExercises((prev) => [...prev, defaultExercise('stretching')]);
+    setPlanBuilderSection('exercises');
   }
 
   function removeExercise(index: number) {
     setExercises((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== index)));
-    setExpandedExerciseIndex((current) => {
-      if (exercises.length <= 1) return 0;
-      if (current > index) return current - 1;
-      if (current >= exercises.length - 1) return Math.max(0, exercises.length - 2);
-      return current;
-    });
   }
 
   function resetExercise(index: number) {
-    updateExercise(index, defaultExercise());
+    setExercises((prev) =>
+      prev.map((item, idx) => (idx === index ? defaultExercise(item.movementType) : item)),
+    );
   }
 
   function updateExercise(
@@ -1107,6 +1110,7 @@ export function CoachDashboardPage() {
 
     const preparedExercises = exercises
       .map((item) => ({
+        movementType: item.movementType,
         name: item.name.trim(),
         notes: item.notes.trim(),
         advancedMethod: item.advancedMethod || '',
@@ -1184,7 +1188,6 @@ export function CoachDashboardPage() {
     setPlanNotes('');
     setExercises([defaultExercise()]);
     setPlanBuilderSection('details');
-    setExpandedExerciseIndex(0);
     setIsPlanModalOpen(true);
   }
 
@@ -1202,7 +1205,6 @@ export function CoachDashboardPage() {
     const nextExercises = normalizePlanExercises(plan.exercises).filter((item) => item.name.trim().length > 0);
     setExercises(nextExercises.length > 0 ? nextExercises : [defaultExercise()]);
     setPlanBuilderSection('details');
-    setExpandedExerciseIndex(0);
     setIsPlanModalOpen(true);
   }
 
@@ -1241,7 +1243,6 @@ export function CoachDashboardPage() {
     setIsCreatingPlan(false);
     reloadModalDraftFromServer();
     setPlanBuilderSection('details');
-    setExpandedExerciseIndex(0);
     setIsPlanModalOpen(false);
   }
 
@@ -1300,6 +1301,7 @@ export function CoachDashboardPage() {
     const source = coachPlanTemplates.find((plan) => plan.id === planId);
     if (!source) return;
     const sourceExercises = normalizePlanExercises(source.exercises).map((exercise) => ({
+      movementType: exercise.movementType,
       name: exercise.name,
       notes: exercise.notes,
       advancedMethod: exercise.advancedMethod,
@@ -1811,7 +1813,14 @@ export function CoachDashboardPage() {
                           </button>
                         </div>
                         <p className="hint">Tipo: {plan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</p>
-                        <p className="hint">Esercizi: {normalizePlanExercises(plan.exercises).length}</p>
+                        {(() => {
+                          const groupedMovements = splitExercisesByMovementType(normalizePlanExercises(plan.exercises));
+                          return (
+                            <p className="hint">
+                              Esercizi: {groupedMovements.exercises.length} · Stretching: {groupedMovements.stretchings.length}
+                            </p>
+                          );
+                        })()}
                         <p className="hint">Assegnata a: {Array.isArray(plan.assignedClientIds) ? plan.assignedClientIds.length : 0} clienti</p>
                         <p className="hint">Modifiche peso clienti: {getPlanWeightFeedbackCount(plan, clientLabelById)}</p>
                         <div className="plan-card-actions">
@@ -1926,7 +1935,7 @@ export function CoachDashboardPage() {
       ) : null}
 
       {isPlanModalOpen ? (
-        <section className="modal-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && closePlanModalWithoutSaving()}>
+        <section className="modal-overlay plan-builder-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && closePlanModalWithoutSaving()}>
           <article className="card modal-card plan-builder-modal" onClick={(event) => event.stopPropagation()}>
             <div className="plan-builder-sticky">
               <div className="plan-builder-header">
@@ -1961,14 +1970,22 @@ export function CoachDashboardPage() {
                 <button
                   className={`step-tab ${planBuilderSection === 'exercises' ? 'step-tab-active' : ''}`.trim()}
                   type="button"
-                  onClick={() => {
-                    setPlanBuilderSection('exercises');
-                    setExpandedExerciseIndex((current) => (current >= 0 ? current : 0));
-                  }}
+                  onClick={() => setPlanBuilderSection('exercises')}
                 >
-                  Esercizi ({exercises.length})
+                  Contenuti ({exercises.length})
                 </button>
               </div>
+
+              {planBuilderSection === 'exercises' ? (
+                <div className="plan-builder-sticky-actions mobile-only">
+                  <button className="btn btn-ghost" type="button" onClick={addExercise}>
+                    + Esercizio
+                  </button>
+                  <button className="btn btn-ghost" type="button" onClick={addStretching}>
+                    + Stretching
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             <div className={`plan-builder-panel ${planBuilderSection !== 'details' ? 'plan-builder-panel-hidden-mobile' : ''}`.trim()}>
@@ -2045,221 +2062,230 @@ export function CoachDashboardPage() {
               <button
                 className="btn btn-ghost mobile-only"
                 type="button"
-                onClick={() => {
-                  setPlanBuilderSection('exercises');
-                  setExpandedExerciseIndex(0);
-                }}
+                onClick={() => setPlanBuilderSection('exercises')}
               >
-                Vai agli esercizi
+                Vai ai contenuti
               </button>
             </div>
 
             <div className={`plan-builder-panel ${planBuilderSection !== 'exercises' ? 'plan-builder-panel-hidden-mobile' : ''}`.trim()}>
               <div className="plan-builder-exercises-top">
                 <div>
-                  <p className="hint">Esercizi in scheda</p>
-                  <h3>{exercises.length} {exercises.length === 1 ? 'esercizio' : 'esercizi'}</h3>
+                  <p className="hint">Contenuti in scheda</p>
+                  <h3>{exercises.length} {exercises.length === 1 ? 'elemento' : 'elementi'}</h3>
                 </div>
-                <button className="btn btn-ghost desktop-only" type="button" onClick={addExercise}>
-                  Aggiungi esercizio
-                </button>
+                <div className="plan-builder-inline-actions desktop-only">
+                  <button className="btn btn-ghost" type="button" onClick={addExercise}>
+                    + Esercizio
+                  </button>
+                  <button className="btn btn-ghost" type="button" onClick={addStretching}>
+                    + Stretching
+                  </button>
+                </div>
               </div>
-              <div className="plan-builder-exercise-list">
-                {exercises.map((exercise, index) => {
-                  const isExpanded = !isMobileViewport || expandedExerciseIndex === index;
-                  const exerciseTitle = exercise.name.trim() || `Esercizio ${index + 1}`;
-                  return (
-                    <article className="card plan-exercise-editor" key={`exercise-${index}`} style={{boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)'}}>
-                      <div className="plan-exercise-editor-head">
-                        <button
-                          className="plan-exercise-editor-toggle"
-                          type="button"
-                          onClick={() => setExpandedExerciseIndex(index)}
-                          aria-expanded={isExpanded}
-                        >
-                          <span className="hint">Esercizio {index + 1}</span>
-                          <strong>{exerciseTitle}</strong>
-                          <span className="hint">{formatExerciseSummary(exercise, planKind)}</span>
-                          <span className="plan-exercise-editor-chevron mobile-only" aria-hidden="true">{isExpanded ? '−' : '+'}</span>
-                        </button>
-                        <button className="icon-btn" type="button" onClick={() => resetExercise(index)} aria-label={`Reset esercizio ${index + 1}`} title="Reset esercizio">
-                          ↻
-                        </button>
-                      </div>
+              {(() => {
+                const groupedMovements = splitExercisesByMovementType(
+                  exercises.map((exercise, index) => ({ exercise, index, movementType: exercise.movementType })),
+                );
+                const sections = [
+                  { id: 'exercise', title: 'Esercizi', items: groupedMovements.exercises },
+                  { id: 'stretching', title: 'Stretching', items: groupedMovements.stretchings },
+                ].filter((section) => section.items.length > 0);
 
-                      {isExpanded ? (
-                        <div className="plan-exercise-editor-body">
-                          <label>
-                            Nome esercizio
-                            <input value={exercise.name} onChange={(event) => updateExercise(index, {name: event.target.value})} placeholder="Es. Squat bilanciere" />
-                          </label>
-                          <label>
-                            Note esercizio
-                            <textarea
-                              value={exercise.notes}
-                              onChange={(event) => updateExercise(index, {notes: event.target.value})}
-                              placeholder="Note utili per questo esercizio"
-                            />
-                          </label>
-                          <div className="exercise-fields-inline">
-                            {planKind === 'series_reps' ? (
-                              <>
-                                <label>
-                                  Serie
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    inputMode="numeric"
-                                    onFocus={selectNumericInputContents}
-                                    value={exercise.sets}
-                                    onChange={(event) => updateExercise(index, {sets: parseExerciseNumericInput(event.target.value)})}
-                                  />
-                                </label>
-                                <label>
-                                  Valore per serie
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    inputMode="numeric"
-                                    onFocus={selectNumericInputContents}
-                                    value={exercise.reps}
-                                    onChange={(event) => updateExercise(index, {reps: parseExerciseNumericInput(event.target.value)})}
-                                  />
-                                </label>
-                                <div className="exercise-unit-toggle">
-                                  <p className="hint">Unità</p>
-                                  <div className="exercise-unit-toggle-row">
-                                    <button
-                                      className={`btn btn-ghost ${exercise.repsUnit === 'reps' ? 'exercise-method-toggle-active' : ''}`.trim()}
-                                      type="button"
-                                      onClick={() => updateExercise(index, {repsUnit: 'reps'})}
-                                    >
-                                      Reps
-                                    </button>
-                                    <button
-                                      className={`btn btn-ghost ${exercise.repsUnit === 'seconds' ? 'exercise-method-toggle-active' : ''}`.trim()}
-                                      type="button"
-                                      onClick={() => updateExercise(index, {repsUnit: 'seconds'})}
-                                    >
-                                      Sec
-                                    </button>
-                                  </div>
-                                </div>
-                              </>
-                            ) : (
-                              <label>
-                                Reps/tempo di lavoro
-                                <input
-                                  type="number"
-                                  min={0}
-                                  inputMode="numeric"
-                                  onFocus={selectNumericInputContents}
-                                  value={exercise.workValue}
-                                  onChange={(event) => updateExercise(index, {workValue: parseExerciseNumericInput(event.target.value)})}
-                                />
-                              </label>
-                            )}
-                            <label>
-                              Peso (kg)
-                              <input
-                                type="number"
-                                min={0}
-                                inputMode="decimal"
-                                onFocus={selectNumericInputContents}
-                                value={exercise.weightKg}
-                                onChange={(event) => updateExercise(index, {weightKg: parseExerciseNumericInput(event.target.value)})}
-                              />
-                            </label>
-                            <label>
-                              Recupero (sec)
-                              <input
-                                type="number"
-                                min={0}
-                                inputMode="numeric"
-                                onFocus={selectNumericInputContents}
-                                value={exercise.restSeconds}
-                                onChange={(event) => updateExercise(index, {restSeconds: parseExerciseNumericInput(event.target.value)})}
-                              />
-                            </label>
-                          </div>
-                          <div className="exercise-method-toggle">
-                            <p className="hint">Metodo opzionale</p>
-                            <div className="exercise-method-toggle-row">
-                              <button
-                                className={`btn btn-ghost ${exercise.advancedMethod === 'rest_pause' ? 'exercise-method-toggle-active' : ''}`.trim()}
-                                type="button"
-                                onClick={() => updateExercise(index, exercise.advancedMethod === 'rest_pause'
-                                  ? { advancedMethod: '' }
-                                  : { advancedMethod: 'rest_pause' })}
-                              >
-                                Rest Pause
-                              </button>
-                              <button
-                                className={`btn btn-ghost ${exercise.advancedMethod === 'drop_set' ? 'exercise-method-toggle-active' : ''}`.trim()}
-                                type="button"
-                                onClick={() => updateExercise(index, exercise.advancedMethod === 'drop_set'
-                                  ? { advancedMethod: '' }
-                                  : { advancedMethod: 'drop_set' })}
-                              >
-                                Drop set
-                              </button>
-                            </div>
-                          </div>
-                          {exercise.advancedMethod ? (
-                            <label>
-                              {exercise.advancedMethod === 'rest_pause' ? 'Note Rest Pause' : 'Note Drop set'}
-                              <textarea
-                                value={exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}
-                                onChange={(event) => updateExercise(index, exercise.advancedMethod === 'rest_pause'
-                                  ? { restPauseNotes: event.target.value, advancedMethodNotes: event.target.value }
-                                  : { dropSetNotes: event.target.value, advancedMethodNotes: event.target.value })}
-                                placeholder="Inserisci indicazioni per il cliente"
-                              />
-                            </label>
-                          ) : null}
-                          <label>
-                            URL video (YouTube o link diretto)
-                            <input
-                              value={exercise.videoUrl}
-                              onChange={(event) => updateExercise(index, {videoUrl: event.target.value, mediaUrl: event.target.value || exercise.imageUrl})}
-                              placeholder="https://..."
-                            />
-                          </label>
-                          <label>
-                            Carica un&apos;immagine (puoi tenerla insieme al video)
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(event) => void onUploadMedia(index, event.target.files?.[0] ?? null)}
-                              disabled={uploadingExerciseIndex === index}
-                            />
-                            {isImageMediaUrl(exercise.imageUrl) ? <img src={exercise.imageUrl} alt={`Anteprima esercizio ${index + 1}`} className="exercise-upload-preview" /> : null}
-                          </label>
-                          {isImageMediaUrl(exercise.imageUrl) ? (
-                            <p className="hint">
-                              Immagine caricata.
-                              {' '}
-                              <button className="btn-link" type="button" onClick={() => updateExercise(index, {imageUrl: '', mediaUrl: exercise.videoUrl})}>
-                                Rimuovi
-                              </button>
-                            </p>
-                          ) : null}
-                          {uploadingExerciseIndex === index ? <p className="hint">Caricamento media in corso...</p> : null}
-                          <button className="btn btn-ghost" type="button" onClick={() => removeExercise(index)}>
-                            Rimuovi esercizio
-                          </button>
+                return (
+                  <div className="plan-builder-exercise-list">
+                    {sections.map((section) => (
+                      <section className="plan-builder-group" key={section.id}>
+                        <div className="plan-builder-group-head">
+                          <p className="hint">{section.title}</p>
+                          <strong>{section.items.length}</strong>
                         </div>
-                      ) : null}
-                    </article>
-                  );
-                })}
-              </div>
-            </div>
+                        <div className="plan-builder-group-list">
+                          {section.items.map(({ exercise, index }, sectionIndex) => {
+                            const exerciseTitle = exercise.name.trim() || `${movementTypeLabel(exercise.movementType)} ${sectionIndex + 1}`;
+                            return (
+                              <article className="card plan-exercise-editor" key={`exercise-${exercise.movementType}-${index}`} style={{boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)'}}>
+                                <div className="plan-exercise-editor-head">
+                                  <div className="plan-exercise-editor-summary">
+                                    <span className="hint">{movementTypeLabel(exercise.movementType)} {sectionIndex + 1}</span>
+                                    <strong>{exerciseTitle}</strong>
+                                    <span className="hint">{formatExerciseSummary(exercise, planKind)}</span>
+                                  </div>
+                                  <button className="icon-btn" type="button" onClick={() => resetExercise(index)} aria-label={`Reset ${movementTypeLabel(exercise.movementType).toLowerCase()} ${sectionIndex + 1}`} title="Reset">
+                                    ↻
+                                  </button>
+                                </div>
 
-            <div className={`plan-builder-mobile-footer mobile-only ${planBuilderSection === 'exercises' ? '' : 'plan-builder-mobile-footer-hidden'}`.trim()}>
-              <button className="btn btn-ghost" type="button" onClick={addExercise}>
-                Aggiungi esercizio
-              </button>
+                                <div className="plan-exercise-editor-body">
+                                  <label>
+                                    Nome {exercise.movementType === 'stretching' ? 'stretching' : 'esercizio'}
+                                    <input value={exercise.name} onChange={(event) => updateExercise(index, {name: event.target.value})} placeholder={exercise.movementType === 'stretching' ? 'Es. Stretching quadricipiti' : 'Es. Squat bilanciere'} />
+                                  </label>
+                                  <label>
+                                    Note {exercise.movementType === 'stretching' ? 'stretching' : 'esercizio'}
+                                    <textarea
+                                      value={exercise.notes}
+                                      onChange={(event) => updateExercise(index, {notes: event.target.value})}
+                                      placeholder="Note utili per questo elemento"
+                                    />
+                                  </label>
+                                  <div className="exercise-fields-inline">
+                                    {planKind === 'series_reps' ? (
+                                      <>
+                                        <label>
+                                          Serie
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            inputMode="numeric"
+                                            onFocus={selectNumericInputContents}
+                                            value={exercise.sets}
+                                            onChange={(event) => updateExercise(index, {sets: parseExerciseNumericInput(event.target.value)})}
+                                          />
+                                        </label>
+                                        <label>
+                                          Valore per serie
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            inputMode="numeric"
+                                            onFocus={selectNumericInputContents}
+                                            value={exercise.reps}
+                                            onChange={(event) => updateExercise(index, {reps: parseExerciseNumericInput(event.target.value)})}
+                                          />
+                                        </label>
+                                        <div className="exercise-unit-toggle">
+                                          <p className="hint">Unità</p>
+                                          <div className="exercise-unit-toggle-row">
+                                            <button
+                                              className={`btn btn-ghost ${exercise.repsUnit === 'reps' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                                              type="button"
+                                              onClick={() => updateExercise(index, {repsUnit: 'reps'})}
+                                            >
+                                              Reps
+                                            </button>
+                                            <button
+                                              className={`btn btn-ghost ${exercise.repsUnit === 'seconds' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                                              type="button"
+                                              onClick={() => updateExercise(index, {repsUnit: 'seconds'})}
+                                            >
+                                              Sec
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <label>
+                                        Reps/tempo di lavoro
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          inputMode="numeric"
+                                          onFocus={selectNumericInputContents}
+                                          value={exercise.workValue}
+                                          onChange={(event) => updateExercise(index, {workValue: parseExerciseNumericInput(event.target.value)})}
+                                        />
+                                      </label>
+                                    )}
+                                    <label>
+                                      Peso (kg)
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        inputMode="decimal"
+                                        onFocus={selectNumericInputContents}
+                                        value={exercise.weightKg}
+                                        onChange={(event) => updateExercise(index, {weightKg: parseExerciseNumericInput(event.target.value)})}
+                                      />
+                                    </label>
+                                    <label>
+                                      Recupero (sec)
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        inputMode="numeric"
+                                        onFocus={selectNumericInputContents}
+                                        value={exercise.restSeconds}
+                                        onChange={(event) => updateExercise(index, {restSeconds: parseExerciseNumericInput(event.target.value)})}
+                                      />
+                                    </label>
+                                  </div>
+                                  <div className="exercise-method-toggle">
+                                    <p className="hint">Metodo opzionale</p>
+                                    <div className="exercise-method-toggle-row">
+                                      <button
+                                        className={`btn btn-ghost ${exercise.advancedMethod === 'rest_pause' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                                        type="button"
+                                        onClick={() => updateExercise(index, exercise.advancedMethod === 'rest_pause'
+                                          ? { advancedMethod: '' }
+                                          : { advancedMethod: 'rest_pause' })}
+                                      >
+                                        Rest Pause
+                                      </button>
+                                      <button
+                                        className={`btn btn-ghost ${exercise.advancedMethod === 'drop_set' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                                        type="button"
+                                        onClick={() => updateExercise(index, exercise.advancedMethod === 'drop_set'
+                                          ? { advancedMethod: '' }
+                                          : { advancedMethod: 'drop_set' })}
+                                      >
+                                        Drop set
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {exercise.advancedMethod ? (
+                                    <label>
+                                      {exercise.advancedMethod === 'rest_pause' ? 'Note Rest Pause' : 'Note Drop set'}
+                                      <textarea
+                                        value={exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}
+                                        onChange={(event) => updateExercise(index, exercise.advancedMethod === 'rest_pause'
+                                          ? { restPauseNotes: event.target.value, advancedMethodNotes: event.target.value }
+                                          : { dropSetNotes: event.target.value, advancedMethodNotes: event.target.value })}
+                                        placeholder="Inserisci indicazioni per il cliente"
+                                      />
+                                    </label>
+                                  ) : null}
+                                  <label>
+                                    URL video (YouTube o link diretto)
+                                    <input
+                                      value={exercise.videoUrl}
+                                      onChange={(event) => updateExercise(index, {videoUrl: event.target.value, mediaUrl: event.target.value || exercise.imageUrl})}
+                                      placeholder="https://..."
+                                    />
+                                  </label>
+                                  <label>
+                                    Carica un&apos;immagine (puoi tenerla insieme al video)
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(event) => void onUploadMedia(index, event.target.files?.[0] ?? null)}
+                                      disabled={uploadingExerciseIndex === index}
+                                    />
+                                    {isImageMediaUrl(exercise.imageUrl) ? <img src={exercise.imageUrl} alt={`Anteprima ${movementTypeLabel(exercise.movementType).toLowerCase()} ${sectionIndex + 1}`} className="exercise-upload-preview" /> : null}
+                                  </label>
+                                  {isImageMediaUrl(exercise.imageUrl) ? (
+                                    <p className="hint">
+                                      Immagine caricata.
+                                      {' '}
+                                      <button className="btn-link" type="button" onClick={() => updateExercise(index, {imageUrl: '', mediaUrl: exercise.videoUrl})}>
+                                        Rimuovi
+                                      </button>
+                                    </p>
+                                  ) : null}
+                                  {uploadingExerciseIndex === index ? <p className="hint">Caricamento media in corso...</p> : null}
+                                  <button className="btn btn-ghost" type="button" onClick={() => removeExercise(index)}>
+                                    Rimuovi {exercise.movementType === 'stretching' ? 'stretching' : 'esercizio'}
+                                  </button>
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="plan-builder-desktop-actions">
@@ -2405,77 +2431,88 @@ export function CoachDashboardPage() {
                 ))}
               </div>
             ) : null}
-            <div className="exercise-grid">
-              {normalizePlanExercises(previewPlan.exercises).map((exercise, index) => (
-                <article className="exercise-card" key={`preview-ex-${index}`}>
-                  {(() => {
-                    const imageKey = `${previewPlan.id}-${index}`;
-                    const isImageLoading = previewImageLoading[imageKey] !== false;
-                    const hasImage = isImageMediaUrl(exercise.imageUrl);
-                    const hasVideo = isVideoMediaUrl(exercise.videoUrl);
-                    return (
-                      <>
-                        <div className={hasImage ? 'coach-exercise-media-layout' : ''}>
-                          {hasImage ? (
-                            <div className="coach-exercise-media-visual">
-                              {isImageLoading ? (
-                                <div className="media-loading" aria-live="polite">
-                                  <span className="spinner" aria-hidden="true" />
-                                  <span>Caricamento immagine...</span>
+            {[
+              { id: 'exercise', title: 'Esercizi', items: previewPlanSections.exercises },
+              { id: 'stretching', title: 'Stretching', items: previewPlanSections.stretchings },
+            ]
+              .filter((section) => section.items.length > 0)
+              .map((section) => (
+                <section className="plan-preview-section" key={section.id}>
+                  <div className="plan-builder-group-head">
+                    <p className="hint">{section.title}</p>
+                    <strong>{section.items.length}</strong>
+                  </div>
+                  <div className="exercise-grid">
+                    {section.items.map((exercise, index) => (
+                      <article className="exercise-card" key={`preview-${section.id}-${index}`}>
+                        {(() => {
+                          const imageKey = `${previewPlan.id}-${section.id}-${index}`;
+                          const isImageLoading = previewImageLoading[imageKey] !== false;
+                          const hasImage = isImageMediaUrl(exercise.imageUrl);
+                          const hasVideo = isVideoMediaUrl(exercise.videoUrl);
+                          return (
+                            <div className={hasImage ? 'coach-exercise-media-layout' : ''}>
+                              {hasImage ? (
+                                <div className="coach-exercise-media-visual">
+                                  {isImageLoading ? (
+                                    <div className="media-loading" aria-live="polite">
+                                      <span className="spinner" aria-hidden="true" />
+                                      <span>Caricamento immagine...</span>
+                                    </div>
+                                  ) : null}
+                                  <img
+                                    src={exercise.imageUrl}
+                                    alt={`Media ${section.title.toLowerCase()} ${index + 1}`}
+                                    className="exercise-upload-preview"
+                                    style={{display: isImageLoading ? 'none' : 'block'}}
+                                    onLoad={() => setPreviewImageLoading((prev) => ({...prev, [imageKey]: false}))}
+                                    onError={() => setPreviewImageLoading((prev) => ({...prev, [imageKey]: false}))}
+                                  />
                                 </div>
                               ) : null}
-                              <img
-                                src={exercise.imageUrl}
-                                alt={`Media esercizio ${index + 1}`}
-                                className="exercise-upload-preview"
-                                style={{display: isImageLoading ? 'none' : 'block'}}
-                                onLoad={() => setPreviewImageLoading((prev) => ({...prev, [imageKey]: false}))}
-                                onError={() => setPreviewImageLoading((prev) => ({...prev, [imageKey]: false}))}
-                              />
+                              <div className={hasImage ? 'coach-exercise-media-content' : ''}>
+                                <p className="exercise-name">{exercise.name || `${section.id === 'stretching' ? 'Stretching' : 'Esercizio'} ${index + 1}`}</p>
+                                <div className="exercise-meta">
+                                  {previewPlan.kind === 'circuit' ? (
+                                    <span>{exercise.workValue || '-'} reps/tempo</span>
+                                  ) : (
+                                    <>
+                                      <span>{exercise.sets || '-'} serie</span>
+                                      <span>{formatSeriesTarget(exercise.reps, exercise.repsUnit)}</span>
+                                    </>
+                                  )}
+                                  <span>{exercise.weightKg || 0} kg</span>
+                                  <span>{exercise.restSeconds || 0} sec recupero</span>
+                                </div>
+                                {exercise.advancedMethod ? (
+                                  <p className="hint">
+                                    <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
+                                  </p>
+                                ) : null}
+                                {exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim() ? (
+                                  <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
+                                ) : null}
+                                {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
+                                {hasVideo ? (
+                                  <>
+                                    <a className="btn-link screen-only" href={exercise.videoUrl} target="_blank" rel="noreferrer">
+                                      Apri video
+                                    </a>
+                                    <a className="hint print-only print-video-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">
+                                      URL video: {exercise.videoUrl}
+                                    </a>
+                                  </>
+                                ) : null}
+                                {!hasImage && !hasVideo ? <p className="hint">Nessun media allegato</p> : null}
+                              </div>
                             </div>
-                          ) : null}
-                          <div className={hasImage ? 'coach-exercise-media-content' : ''}>
-                            <p className="exercise-name">{exercise.name || `Esercizio ${index + 1}`}</p>
-                            <div className="exercise-meta">
-                              {previewPlan.kind === 'circuit' ? (
-                                <span>{exercise.workValue || '-'} reps/tempo</span>
-                              ) : (
-                                <>
-                                  <span>{exercise.sets || '-'} serie</span>
-                                  <span>{formatSeriesTarget(exercise.reps, exercise.repsUnit)}</span>
-                                </>
-                              )}
-                              <span>{exercise.weightKg || 0} kg</span>
-                              <span>{exercise.restSeconds || 0} sec recupero</span>
-                            </div>
-                            {exercise.advancedMethod ? (
-                              <p className="hint">
-                                <strong>Metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}
-                              </p>
-                            ) : null}
-                            {exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim() ? (
-                              <p className="hint"><strong>Note metodo:</strong> {exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes}</p>
-                            ) : null}
-                            {exercise.notes.trim() ? <p className="hint"><strong>Note:</strong> {exercise.notes}</p> : null}
-                            {hasVideo ? (
-                              <>
-                                <a className="btn-link screen-only" href={exercise.videoUrl} target="_blank" rel="noreferrer">
-                                  Apri video
-                                </a>
-                                <a className="hint print-only print-video-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">
-                                  URL video: {exercise.videoUrl}
-                                </a>
-                              </>
-                            ) : null}
-                            {!hasImage && !hasVideo ? <p className="hint">Nessun media allegato</p> : null}
-                          </div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </article>
+                          );
+                        })()}
+                      </article>
+                    ))}
+                  </div>
+                </section>
               ))}
-            </div>
           </article>
         </section>
       ) : null}
