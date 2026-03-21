@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent } from 'react';
-import { DndContext, DragOverlay, KeyboardSensor, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
+import { DndContext, KeyboardSensor, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import Select, { type MultiValue, type StylesConfig } from 'react-select';
@@ -707,28 +707,6 @@ function SortableExerciseEditorCard({
   );
 }
 
-function ExerciseDragOverlayCard({
-  exercise,
-  orderIndex,
-  planKind,
-}: {
-  exercise: ExerciseDraft;
-  orderIndex: number;
-  planKind: 'series_reps' | 'circuit';
-}) {
-  const title = exercise.name.trim() || `${movementTypeLabel(exercise.movementType)} ${orderIndex + 1}`;
-  return (
-    <article className="card plan-exercise-drag-overlay">
-      <div className="plan-exercise-drag-overlay-badge">Stai spostando</div>
-      <div className="plan-exercise-drag-overlay-head">
-        <span className="hint">{movementTypeLabel(exercise.movementType)} · Posizione {orderIndex + 1}</span>
-        <strong>{title}</strong>
-      </div>
-      <p className="hint">{formatExerciseSummary(exercise, planKind)}</p>
-    </article>
-  );
-}
-
 function toOnboardingDraft(data: OnboardingDoc | null, base?: { name?: string; email?: string }): OnboardingDraft {
   const seed = emptyOnboardingDraft(base);
   if (!data) return seed;
@@ -984,7 +962,6 @@ export function CoachDashboardPage() {
   const [planWarmupImageUrl, setPlanWarmupImageUrl] = useState('');
   const [planNotes, setPlanNotes] = useState('');
   const [exercises, setExercises] = useState<ExerciseDraft[]>([defaultExercise()]);
-  const [activeExerciseDragId, setActiveExerciseDragId] = useState('');
   const [assigningClientIds, setAssigningClientIds] = useState<string[]>([]);
   const [isAssignmentModeModalOpen, setIsAssignmentModeModalOpen] = useState(false);
   const [assignmentTargetClientId, setAssignmentTargetClientId] = useState('');
@@ -1053,9 +1030,6 @@ export function CoachDashboardPage() {
   const planBuilderDisplayItems = sortExercisesForDisplay(
     exercises.map((exercise, index) => ({ id: exercise.draftId, exercise, index, displayOrder: exercise.displayOrder })),
   );
-  const activeExerciseDragItem = activeExerciseDragId
-    ? planBuilderDisplayItems.find((item) => item.id === activeExerciseDragId) ?? null
-    : null;
 
   const clientOptions: ClientOption[] = registeredClients.map((client) => ({
     value: getClientAuthUid(client),
@@ -1338,20 +1312,10 @@ export function CoachDashboardPage() {
     });
   }
 
-  function handleExerciseDragStart(event: DragStartEvent) {
-    setActiveExerciseDragId(String(event.active.id));
-  }
-
   function handleExerciseDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    if (over && active.id !== over.id) {
-      reorderExercisesByDisplay(String(active.id), String(over.id));
-    }
-    setActiveExerciseDragId('');
-  }
-
-  function handleExerciseDragCancel() {
-    setActiveExerciseDragId('');
+    if (!over || active.id === over.id) return;
+    reorderExercisesByDisplay(String(active.id), String(over.id));
   }
 
   function updateExercise(
@@ -2527,15 +2491,9 @@ export function CoachDashboardPage() {
                 </div>
               </div>
               <p className="hint">Trascina dalla handle accanto al reset per cambiare l’ordine di visualizzazione.</p>
-              <DndContext
-                sensors={planBuilderSensors}
-                collisionDetection={closestCenter}
-                onDragStart={handleExerciseDragStart}
-                onDragEnd={handleExerciseDragEnd}
-                onDragCancel={handleExerciseDragCancel}
-              >
+              <DndContext sensors={planBuilderSensors} collisionDetection={closestCenter} onDragEnd={handleExerciseDragEnd}>
                 <SortableContext items={planBuilderDisplayItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
-                  <div className={`plan-builder-exercise-list ${activeExerciseDragItem ? 'plan-builder-exercise-list-dragging' : ''}`.trim()}>
+                  <div className="plan-builder-exercise-list">
                     {planBuilderDisplayItems.map(({ id, exercise, index }, orderIndex) => (
                       <SortableExerciseEditorCard
                         key={id}
@@ -2553,15 +2511,6 @@ export function CoachDashboardPage() {
                     ))}
                   </div>
                 </SortableContext>
-                <DragOverlay>
-                  {activeExerciseDragItem ? (
-                    <ExerciseDragOverlayCard
-                      exercise={activeExerciseDragItem.exercise}
-                      orderIndex={planBuilderDisplayItems.findIndex((item) => item.id === activeExerciseDragItem.id)}
-                      planKind={planKind}
-                    />
-                  ) : null}
-                </DragOverlay>
               </DndContext>
             </div>
 
