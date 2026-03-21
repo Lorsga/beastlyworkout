@@ -274,6 +274,14 @@ function splitExercisesByMovementType<T extends { movementType: ExerciseMovement
   };
 }
 
+function splitExercisesByMovementTypeForDisplay<T extends { movementType: ExerciseMovementType }>(items: T[]) {
+  const grouped = splitExercisesByMovementType(items);
+  return {
+    exercises: [...grouped.exercises].reverse(),
+    stretchings: [...grouped.stretchings].reverse(),
+  };
+}
+
 function normalizeWhatsappPhone(raw: string): string {
   const digits = raw.replace(/[^\d+]/g, '').replace(/\s+/g, '');
   if (!digits) return '';
@@ -588,7 +596,7 @@ export function ClientDashboardPage() {
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? plans[0];
   const selectedPlanExercises = normalizeExercises(selectedPlan?.exercises);
-  const selectedPlanSections = splitExercisesByMovementType(
+  const selectedPlanSections = splitExercisesByMovementTypeForDisplay(
     selectedPlanExercises.map((exercise, index) => ({ exercise, index, movementType: exercise.movementType })),
   );
   const hasCoachWhatsapp = coachWhatsappNumber.length > 6;

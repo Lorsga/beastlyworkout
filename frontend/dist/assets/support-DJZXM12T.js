@@ -1,0 +1,1 @@
+function e(t){return t.replace(/[^\d]/g,"")}const i="393405882404".trim(),n=e(i);n.length>6;function c(t,o){const r=e(o??n),a=encodeURIComponent(t??"Ciao coach, avrei bisogno di un feedback sulla mia scheda.");return`https://wa.me/${r}?text=${a}`}export{c as b};

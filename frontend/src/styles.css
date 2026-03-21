@@ -765,14 +765,15 @@ a.btn {
   min-height: 100dvh;
   border-radius: 0;
   gap: 14px;
+  padding-top: 18px;
 }
 
 .plan-builder-sticky {
   position: sticky;
-  top: 0;
+  top: -18px;
   z-index: 3;
   margin: -18px -18px 0;
-  padding: calc(10px + env(safe-area-inset-top, 0px)) 18px 12px;
+  padding: calc(18px + env(safe-area-inset-top, 0px)) 18px 12px;
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(18, 18, 18, 0.08);
@@ -1235,6 +1236,73 @@ a.btn {
   padding: 2px 0 6px;
 }
 
+.plan-groups {
+  display: grid;
+  gap: 12px;
+}
+
+.plan-group-accordion {
+  border: 1px solid rgba(18, 18, 18, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  overflow: hidden;
+}
+
+.plan-group-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.plan-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.plan-group-summary::after {
+  content: '▾';
+  font-size: 18px;
+  line-height: 1;
+  color: var(--muted);
+  transition: transform 180ms ease;
+}
+
+.plan-group-accordion[open] .plan-group-summary::after {
+  transform: rotate(180deg);
+}
+
+.plan-group-summary-main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.plan-group-summary-main p,
+.plan-group-summary-main strong {
+  margin: 0;
+}
+
+.plan-group-summary-count {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(24, 33, 38, 0.08);
+  font-weight: 700;
+}
+
+.plan-group-body {
+  border-top: 1px solid rgba(18, 18, 18, 0.08);
+  padding: 0 18px 18px;
+}
+
 .plan-card {
   width: 100%;
 }
@@ -1322,6 +1390,7 @@ a.btn {
   }
 
   .plan-builder-modal {
+    padding-top: 18px;
     min-height: auto;
     max-height: 86vh;
     width: min(720px, 100%);
@@ -1349,7 +1418,9 @@ a.btn {
   .plan-builder-desktop-actions {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
+    margin-top: 4px;
   }
 
   .preview-modal-overlay {

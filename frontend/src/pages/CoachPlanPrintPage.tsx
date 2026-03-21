@@ -157,6 +157,14 @@ function splitExercisesByMovementType<T extends { movementType: ExerciseMovement
   };
 }
 
+function splitExercisesByMovementTypeForDisplay<T extends { movementType: ExerciseMovementType }>(items: T[]) {
+  const grouped = splitExercisesByMovementType(items);
+  return {
+    exercises: [...grouped.exercises].reverse(),
+    stretchings: [...grouped.stretchings].reverse(),
+  };
+}
+
 function getPlanWeightFeedback(
   plan: PlanDoc,
   clientLabelById: Record<string, string>,
@@ -273,7 +281,7 @@ export function CoachPlanPrintPage() {
   );
 
   const exercises = useMemo(() => normalizePlanExercises(plan?.exercises), [plan?.exercises]);
-  const exerciseSections = useMemo(() => splitExercisesByMovementType(exercises), [exercises]);
+  const exerciseSections = useMemo(() => splitExercisesByMovementTypeForDisplay(exercises), [exercises]);
   const imageUrls = useMemo(
     () => {
       const urls = exercises.map((exercise) => exercise.imageUrl).filter((url): url is string => Boolean(url));

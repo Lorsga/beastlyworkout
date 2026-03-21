@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FocusEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
 import Select, { type MultiValue, type StylesConfig } from 'react-select';
 import { useNavigate } from 'react-router-dom';
 
@@ -148,6 +148,13 @@ interface OnboardingDraft {
   notes: string;
 }
 
+type PlanGroupBucket = {
+  id: string;
+  label: string;
+  plans: Array<PlanDoc & { id: string }>;
+  kind: 'client' | 'unassigned';
+};
+
 type ClientOption = { value: string; label: string };
 type SupervisorCoachItem = {
   uid: string;
@@ -284,6 +291,14 @@ function splitExercisesByMovementType<T extends { movementType: ExerciseMovement
   return {
     exercises: items.filter((item) => item.movementType === 'exercise'),
     stretchings: items.filter((item) => item.movementType === 'stretching'),
+  };
+}
+
+function splitExercisesByMovementTypeForDisplay<T extends { movementType: ExerciseMovementType }>(items: T[]) {
+  const grouped = splitExercisesByMovementType(items);
+  return {
+    exercises: [...grouped.exercises].reverse(),
+    stretchings: [...grouped.stretchings].reverse(),
   };
 }
 
@@ -519,6 +534,16 @@ function toTimestamp(value?: string | null): number | null {
   return Number.isNaN(time) ? null : time;
 }
 
+function getPlanCreatedAtIso(plan: PlanDoc & { id: string }): string | null {
+  return toIsoDateString((plan as {createdAt?: unknown}).createdAt);
+}
+
+function comparePlansChronologically(a: PlanDoc & { id: string }, b: PlanDoc & { id: string }): number {
+  const byTime = (toTimestamp(getPlanCreatedAtIso(a)) ?? 0) - (toTimestamp(getPlanCreatedAtIso(b)) ?? 0);
+  if (byTime !== 0) return byTime;
+  return asText(a.title).localeCompare(asText(b.title), 'it');
+}
+
 function getCoachEffectiveExpiry(coach: Pick<SupervisorCoachItem, 'status' | 'expiresAt' | 'trialEndsAt' | 'subscriptionEndsAt'>): string | null {
   if (coach.status === 'trial_active') return coach.trialEndsAt ?? coach.expiresAt ?? coach.subscriptionEndsAt ?? null;
   if (coach.status === 'active_paid') return coach.subscriptionEndsAt ?? coach.expiresAt ?? coach.trialEndsAt ?? null;
@@ -641,6 +666,7 @@ export function CoachDashboardPage() {
   const [previewLoadingPlanId, setPreviewLoadingPlanId] = useState('');
   const [activeTab, setActiveTab] = useState<CoachTabId>('clients');
   const [planBuilderSection, setPlanBuilderSection] = useState<PlanBuilderSection>('details');
+  const planBuilderScrollRef = useRef<HTMLElement | null>(null);
 
   const [selectedClientId, setSelectedClientId] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState('');
@@ -666,6 +692,7 @@ export function CoachDashboardPage() {
     const bTime = toTimestamp(asText((b as {createdAt?: unknown}).createdAt as string)) ?? 0;
     return bTime - aTime;
   });
+  const coachPlanTemplatesChronological = [...plans].sort(comparePlansChronologically);
   const selectedPlan = coachPlanTemplates.find((plan) => plan.id === selectedPlanId) ?? null;
   const editingPlan = isPlanModalOpen ? selectedPlan : null;
   const previewPlan = isPlanPreviewOpen ? selectedPlan : null;
@@ -679,9 +706,41 @@ export function CoachDashboardPage() {
     acc[client.id] = label;
     return acc;
   }, {});
+  const groupedPlanBuckets = useMemo<PlanGroupBucket[]>(() => {
+    const assignedGroups: PlanGroupBucket[] = registeredClients
+      .map((client) => {
+        const clientId = getClientAuthUid(client);
+        const clientPlans = coachPlanTemplatesChronological.filter((plan) => Array.isArray(plan.assignedClientIds) && plan.assignedClientIds.includes(clientId));
+        return {
+          id: clientId,
+          label: asText(client.displayName).trim() || asText(client.email).trim() || client.id,
+          plans: clientPlans,
+          kind: 'client' as const,
+        };
+      })
+      .filter((group) => group.plans.length > 0)
+      .sort((a, b) => {
+        const byTime = comparePlansChronologically(a.plans[0], b.plans[0]);
+        if (byTime !== 0) return byTime;
+        return a.label.localeCompare(b.label, 'it');
+      });
+
+    const unassignedPlans = coachPlanTemplatesChronological.filter((plan) => !Array.isArray(plan.assignedClientIds) || plan.assignedClientIds.length === 0);
+
+    if (unassignedPlans.length > 0) {
+      assignedGroups.push({
+        id: 'unassigned',
+        label: 'Schede non assegnate',
+        plans: unassignedPlans,
+        kind: 'unassigned',
+      });
+    }
+
+    return assignedGroups;
+  }, [registeredClients, coachPlanTemplatesChronological]);
   const previewPlanWeightFeedback = previewPlan ? getPlanWeightFeedback(previewPlan, clientLabelById) : [];
   const previewPlanMovements = previewPlan ? normalizePlanExercises(previewPlan.exercises) : [];
-  const previewPlanSections = splitExercisesByMovementType(previewPlanMovements);
+  const previewPlanSections = splitExercisesByMovementTypeForDisplay(previewPlanMovements);
 
   const clientOptions: ClientOption[] = registeredClients.map((client) => ({
     value: getClientAuthUid(client),
@@ -914,14 +973,25 @@ export function CoachDashboardPage() {
     return undefined;
   }
 
+  function scrollPlanBuilderToTop() {
+    window.requestAnimationFrame(() => {
+      planBuilderScrollRef.current?.scrollTo({
+        top: 0,
+        behavior: 'smooth',
+      });
+    });
+  }
+
   function addExercise() {
-    setExercises((prev) => [...prev, defaultExercise()]);
+    setExercises((prev) => [defaultExercise(), ...prev]);
     setPlanBuilderSection('exercises');
+    scrollPlanBuilderToTop();
   }
 
   function addStretching() {
-    setExercises((prev) => [...prev, defaultExercise('stretching')]);
+    setExercises((prev) => [defaultExercise('stretching'), ...prev]);
     setPlanBuilderSection('exercises');
+    scrollPlanBuilderToTop();
   }
 
   function removeExercise(index: number) {
@@ -1139,7 +1209,7 @@ export function CoachDashboardPage() {
     }
 
     if (editingPlan) {
-      await runAction(
+      const updated = await runAction(
         () =>
           updatePlanAsCoach(editingPlan.id, {
             title: normalizedTitle,
@@ -1154,7 +1224,10 @@ export function CoachDashboardPage() {
           }),
         'Scheda aggiornata con successo.',
       );
-      setSelectedPlanId(editingPlan.id);
+      if (updated !== undefined) {
+        setSelectedPlanId(editingPlan.id);
+      }
+      return;
     } else {
       const created = await runAction(
         () =>
@@ -1787,7 +1860,7 @@ export function CoachDashboardPage() {
               <>
                 <p className="hint">
                   {coachPlanTemplates.length > 0
-                    ? `Hai ${coachPlanTemplates.length} scheda/e create: puoi modificarle, eliminarle o assegnarle ai clienti.`
+                    ? `Hai ${coachPlanTemplates.length} scheda/e create: ora le trovi raggruppate per cliente e ordinate cronologicamente.`
                     : 'Non hai ancora schede create: inizia con una nuova scheda.'}
                 </p>
 
@@ -1797,49 +1870,75 @@ export function CoachDashboardPage() {
                   </button>
                 </div>
                 {coachPlanTemplates.length > 0 ? (
-                  <div className="plan-carousel">
-                    {coachPlanTemplates.map((plan) => (
-                      <article className="card plan-card" key={plan.id} style={{ boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)' }}>
-                        <div className="exercise-head">
-                          <h3>{plan.title || 'Scheda senza titolo'}</h3>
-                          <button
-                            className="icon-btn"
-                            type="button"
-                            aria-label="Duplica scheda"
-                            title="Duplica scheda"
-                            onClick={() => void duplicatePlan(plan.id)}
-                          >
-                            ⧉
-                          </button>
-                        </div>
-                        <p className="hint">Tipo: {plan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</p>
-                        {(() => {
-                          const groupedMovements = splitExercisesByMovementType(normalizePlanExercises(plan.exercises));
-                          return (
+                  <div className="plan-groups">
+                    {groupedPlanBuckets.map((group, groupIndex) => (
+                      <details className="plan-group-accordion" key={group.id} open={groupIndex === 0}>
+                        <summary className="plan-group-summary">
+                          <div className="plan-group-summary-main">
+                            <strong>{group.label}</strong>
                             <p className="hint">
-                              Esercizi: {groupedMovements.exercises.length} · Stretching: {groupedMovements.stretchings.length}
+                              {group.kind === 'unassigned'
+                                ? `${group.plans.length} ${group.plans.length === 1 ? 'scheda pronta da assegnare' : 'schede pronte da assegnare'}`
+                                : `${group.plans.length} ${group.plans.length === 1 ? 'scheda assegnata' : 'schede assegnate'}`}
                             </p>
-                          );
-                        })()}
-                        <p className="hint">Assegnata a: {Array.isArray(plan.assignedClientIds) ? plan.assignedClientIds.length : 0} clienti</p>
-                        <p className="hint">Modifiche peso clienti: {getPlanWeightFeedbackCount(plan, clientLabelById)}</p>
-                        <div className="plan-card-actions">
-                          <button
-                            className="btn btn-ghost"
-                            disabled={loading}
-                            onClick={() => navigate(`/app/coach/plan/${plan.id}/preview`)}
-                            type="button"
-                          >
-                            Visualizza
-                          </button>
-                          <button className="btn" disabled={loading} onClick={() => openEditPlanModal(plan.id)} type="button">
-                            Modifica
-                          </button>
-                          <button className="btn btn-danger" disabled={loading} onClick={() => void deletePlan(plan.id)} type="button">
-                            Elimina
-                          </button>
+                          </div>
+                          <span className="plan-group-summary-count">{group.plans.length}</span>
+                        </summary>
+                        <div className="plan-group-body">
+                          <div className="plan-carousel">
+                            {group.plans.map((plan) => (
+                              <article className="card plan-card" key={`${group.id}-${plan.id}`} style={{ boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)' }}>
+                                <div className="exercise-head">
+                                  <h3>{plan.title || 'Scheda senza titolo'}</h3>
+                                  <button
+                                    className="icon-btn"
+                                    type="button"
+                                    aria-label="Duplica scheda"
+                                    title="Duplica scheda"
+                                    onClick={() => void duplicatePlan(plan.id)}
+                                  >
+                                    ⧉
+                                  </button>
+                                </div>
+                                <p className="hint">Creata: {formatDate(getPlanCreatedAtIso(plan))}</p>
+                                <p className="hint">Tipo: {plan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</p>
+                                {(() => {
+                                  const groupedMovements = splitExercisesByMovementType(normalizePlanExercises(plan.exercises));
+                                  return (
+                                    <p className="hint">
+                                      Esercizi: {groupedMovements.exercises.length} · Stretching: {groupedMovements.stretchings.length}
+                                    </p>
+                                  );
+                                })()}
+                                <p className="hint">
+                                  {Array.isArray(plan.assignedClientIds) && plan.assignedClientIds.length > 1
+                                    ? `Condivisa con altri ${plan.assignedClientIds.length - 1} ${plan.assignedClientIds.length - 1 === 1 ? 'cliente' : 'clienti'}`
+                                    : group.kind === 'unassigned'
+                                      ? 'Non ancora assegnata'
+                                      : 'Assegnata a questo cliente'}
+                                </p>
+                                <p className="hint">Modifiche peso clienti: {getPlanWeightFeedbackCount(plan, clientLabelById)}</p>
+                                <div className="plan-card-actions">
+                                  <button
+                                    className="btn btn-ghost"
+                                    disabled={loading}
+                                    onClick={() => navigate(`/app/coach/plan/${plan.id}/preview`)}
+                                    type="button"
+                                  >
+                                    Visualizza
+                                  </button>
+                                  <button className="btn" disabled={loading} onClick={() => openEditPlanModal(plan.id)} type="button">
+                                    Modifica
+                                  </button>
+                                  <button className="btn btn-danger" disabled={loading} onClick={() => void deletePlan(plan.id)} type="button">
+                                    Elimina
+                                  </button>
+                                </div>
+                              </article>
+                            ))}
+                          </div>
                         </div>
-                      </article>
+                      </details>
                     ))}
                   </div>
                 ) : (
@@ -1936,7 +2035,7 @@ export function CoachDashboardPage() {
 
       {isPlanModalOpen ? (
         <section className="modal-overlay plan-builder-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && closePlanModalWithoutSaving()}>
-          <article className="card modal-card plan-builder-modal" onClick={(event) => event.stopPropagation()}>
+          <article className="card modal-card plan-builder-modal" ref={planBuilderScrollRef} onClick={(event) => event.stopPropagation()}>
             <div className="plan-builder-sticky">
               <div className="plan-builder-header">
                 <div className="plan-builder-heading">
@@ -2073,14 +2172,6 @@ export function CoachDashboardPage() {
                 <div>
                   <p className="hint">Contenuti in scheda</p>
                   <h3>{exercises.length} {exercises.length === 1 ? 'elemento' : 'elementi'}</h3>
-                </div>
-                <div className="plan-builder-inline-actions desktop-only">
-                  <button className="btn btn-ghost" type="button" onClick={addExercise}>
-                    + Esercizio
-                  </button>
-                  <button className="btn btn-ghost" type="button" onClick={addStretching}>
-                    + Stretching
-                  </button>
                 </div>
               </div>
               {(() => {
@@ -2288,13 +2379,23 @@ export function CoachDashboardPage() {
               })()}
             </div>
 
-            <div className="plan-builder-desktop-actions">
-              <button className="btn btn-ghost" type="button" onClick={closePlanModalWithoutSaving}>
-                Chiudi
-              </button>
-              <button className="btn btn-primary" type="button" disabled={loading || isUploadingMedia} onClick={() => void savePlan()}>
-                {isUploadingMedia ? 'Attendi caricamento media...' : 'Salva'}
-              </button>
+            <div className="plan-builder-desktop-actions desktop-only">
+              <div className="plan-builder-inline-actions">
+                <button className="btn btn-ghost" type="button" onClick={addExercise}>
+                  + Esercizio
+                </button>
+                <button className="btn btn-ghost" type="button" onClick={addStretching}>
+                  + Stretching
+                </button>
+              </div>
+              <div className="plan-builder-inline-actions">
+                <button className="btn btn-ghost" type="button" onClick={closePlanModalWithoutSaving}>
+                  Chiudi
+                </button>
+                <button className="btn btn-primary" type="button" disabled={loading || isUploadingMedia} onClick={() => void savePlan()}>
+                  {isUploadingMedia ? 'Attendi caricamento media...' : 'Salva'}
+                </button>
+              </div>
             </div>
           </article>
         </section>
