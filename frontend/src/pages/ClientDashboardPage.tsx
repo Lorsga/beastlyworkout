@@ -25,6 +25,7 @@ interface PlanDoc {
   title: string;
   status: string;
   kind?: 'series_reps' | 'circuit';
+  circuitRounds?: number | null;
   notes?: string;
   warmup?: string;
   warmupVideoUrl?: string;
@@ -278,6 +279,12 @@ function normalizeExerciseNumber(value: unknown, fallback: number): number {
   if (typeof value === 'string' && value.trim() === '') return 0;
   const numeric = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function normalizeCircuitRounds(value: unknown, fallback = 1): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(5, Math.max(1, Math.floor(numeric)));
 }
 
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
@@ -851,6 +858,11 @@ export function ClientDashboardPage() {
                 <p className="hint">
                   Tipo scheda: <strong>{selectedPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
                 </p>
+                {selectedPlan.kind === 'circuit' ? (
+                  <p className="hint">
+                    Giri circuito: <strong>{normalizeCircuitRounds(selectedPlan.circuitRounds, 1)}</strong>
+                  </p>
+                ) : null}
                 {(() => {
                   const warmupText = (selectedPlan.warmup ?? '').trim();
                   const warmupVideoUrl = getPlanWarmupVideoUrl(selectedPlan);

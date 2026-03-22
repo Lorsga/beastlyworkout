@@ -9,6 +9,7 @@ import { toMessage } from '../utils/firestore';
 interface PlanDoc {
   title?: string;
   kind?: 'series_reps' | 'circuit';
+  circuitRounds?: number | null;
   notes?: string;
   warmup?: string;
   warmupVideoUrl?: string;
@@ -160,6 +161,12 @@ function normalizeExerciseNumber(value: unknown, fallback: number): number {
   if (typeof value === 'string' && value.trim() === '') return 0;
   const numeric = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function normalizeCircuitRounds(value: unknown, fallback = 1): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(5, Math.max(1, Math.floor(numeric)));
 }
 
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
@@ -538,6 +545,7 @@ export function CoachPlanPrintPage() {
   <div class="block">
     <p><strong>Titolo programma:</strong> ${escapeHtml(currentPlan.title || 'Senza titolo')}</p>
     <p><strong>Tipo scheda:</strong> ${escapeHtml(currentPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps')}</p>
+    ${currentPlan.kind === 'circuit' ? `<p><strong>Giri circuito:</strong> ${normalizeCircuitRounds(currentPlan.circuitRounds, 1)}</p>` : ''}
     ${asText(currentPlan.notes).trim() ? `<p><strong>Note coach:</strong> ${escapeHtml(asText(currentPlan.notes))}</p>` : ''}
   </div>
   ${warmupBlockHtml}
@@ -664,6 +672,11 @@ export function CoachPlanPrintPage() {
         <p className="hint">
           Tipo scheda: <strong>{currentPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
         </p>
+        {currentPlan.kind === 'circuit' ? (
+          <p className="hint">
+            Giri circuito: <strong>{normalizeCircuitRounds(currentPlan.circuitRounds, 1)}</strong>
+          </p>
+        ) : null}
         {asText(currentPlan.warmup).trim() || getPlanWarmupImageUrl(currentPlan) || getPlanWarmupVideoUrl(currentPlan) ? (
           <div className="client-info-block">
             <div className={getPlanWarmupImageUrl(currentPlan) ? 'warmup-media-layout' : ''}>

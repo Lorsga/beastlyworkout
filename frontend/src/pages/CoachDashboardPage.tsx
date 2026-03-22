@@ -38,6 +38,7 @@ interface PlanDoc {
   title: string;
   status: string;
   kind?: 'series_reps' | 'circuit';
+  circuitRounds?: number | null;
   notes?: string;
   warmup?: string;
   warmupVideoUrl?: string;
@@ -284,6 +285,12 @@ function normalizeExerciseNumber(value: unknown, fallback: number): number {
   if (typeof value === 'string' && value.trim() === '') return 0;
   const numeric = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function normalizeCircuitRounds(value: unknown, fallback = 1): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(5, Math.max(1, Math.floor(numeric)));
 }
 
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
@@ -703,6 +710,7 @@ export function CoachDashboardPage() {
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [isCreatingPlan, setIsCreatingPlan] = useState(false);
   const [planKind, setPlanKind] = useState<'series_reps' | 'circuit'>('series_reps');
+  const [planCircuitRounds, setPlanCircuitRounds] = useState(1);
   const [planTitle, setPlanTitle] = useState('');
   const [planWarmup, setPlanWarmup] = useState('');
   const [planWarmupVideoUrl, setPlanWarmupVideoUrl] = useState('');
@@ -1073,6 +1081,7 @@ export function CoachDashboardPage() {
   function reloadModalDraftFromServer() {
     if (!selectedPlan) {
       setPlanKind('series_reps');
+      setPlanCircuitRounds(1);
       setPlanTitle('');
       setPlanWarmup('');
       setPlanWarmupVideoUrl('');
@@ -1082,6 +1091,7 @@ export function CoachDashboardPage() {
       return;
     }
     setPlanKind(selectedPlan.kind === 'circuit' ? 'circuit' : 'series_reps');
+    setPlanCircuitRounds(normalizeCircuitRounds(selectedPlan.circuitRounds, 1));
     setPlanTitle(selectedPlan.title ?? '');
     setPlanWarmup(asText((selectedPlan as {warmup?: unknown}).warmup));
     setPlanWarmupVideoUrl(getPlanWarmupVideoUrl(selectedPlan));
@@ -1110,6 +1120,9 @@ export function CoachDashboardPage() {
       setPlanWarmupImageUrl('');
     }
     setPlanKind(nextKind);
+    if (nextKind === 'circuit') {
+      setPlanCircuitRounds((prev) => normalizeCircuitRounds(prev, 1));
+    }
   }
 
   function printPlanPreview() {
@@ -1270,6 +1283,7 @@ export function CoachDashboardPage() {
           updatePlanAsCoach(editingPlan.id, {
             title: normalizedTitle,
             kind: planKind,
+            circuitRounds: planKind === 'circuit' ? normalizeCircuitRounds(planCircuitRounds, 1) : null,
             warmup: planWarmup.trim(),
             warmupVideoUrl: planWarmupVideoUrl.trim(),
             warmupImageUrl: planWarmupImageUrl.trim(),
@@ -1290,6 +1304,7 @@ export function CoachDashboardPage() {
           createPlanAsCoach({
             title: normalizedTitle,
             kind: planKind,
+            circuitRounds: planKind === 'circuit' ? normalizeCircuitRounds(planCircuitRounds, 1) : null,
             warmup: planWarmup.trim(),
             warmupVideoUrl: planWarmupVideoUrl.trim(),
             warmupImageUrl: planWarmupImageUrl.trim(),
@@ -1310,6 +1325,7 @@ export function CoachDashboardPage() {
     setIsCreatingPlan(true);
     setSelectedPlanId('');
     setPlanKind('series_reps');
+    setPlanCircuitRounds(1);
     setPlanTitle('');
     setPlanWarmup('');
     setPlanWarmupVideoUrl('');
@@ -1326,6 +1342,7 @@ export function CoachDashboardPage() {
     setIsCreatingPlan(false);
     setSelectedPlanId(plan.id);
     setPlanKind(plan.kind === 'circuit' ? 'circuit' : 'series_reps');
+    setPlanCircuitRounds(normalizeCircuitRounds(plan.circuitRounds, 1));
     setPlanTitle(plan.title ?? '');
     setPlanWarmup(asText((plan as {warmup?: unknown}).warmup));
     setPlanWarmupVideoUrl(getPlanWarmupVideoUrl(plan));
@@ -2171,6 +2188,21 @@ export function CoachDashboardPage() {
                   required
                 />
               </label>
+              {planKind === 'circuit' ? (
+                <label>
+                  Giri circuito
+                  <select
+                    value={String(planCircuitRounds)}
+                    onChange={(event) => setPlanCircuitRounds(normalizeCircuitRounds(event.target.value, 1))}
+                  >
+                    {Array.from({ length: 5 }, (_, index) => index + 1).map((round) => (
+                      <option key={`circuit-rounds-${round}`} value={round}>
+                        {round} {round === 1 ? 'giro' : 'giri'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <label>
                 Riscaldamento (opzionale)
                 <textarea
@@ -2588,6 +2620,11 @@ export function CoachDashboardPage() {
             <p className="hint">
               Tipo scheda: <strong>{previewPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
             </p>
+            {previewPlan.kind === 'circuit' ? (
+              <p className="hint">
+                Giri circuito: <strong>{normalizeCircuitRounds(previewPlan.circuitRounds, 1)}</strong>
+              </p>
+            ) : null}
             {asText((previewPlan as {warmup?: unknown}).warmup).trim() || getPlanWarmupImageUrl(previewPlan) || getPlanWarmupVideoUrl(previewPlan) ? (
               <div className="client-info-block">
                 <div className={getPlanWarmupImageUrl(previewPlan) ? 'warmup-media-layout' : ''}>

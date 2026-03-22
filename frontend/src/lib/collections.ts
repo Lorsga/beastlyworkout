@@ -40,6 +40,7 @@ export interface PlanInput {
   warmupMediaUrl?: string;
   description?: string;
   kind?: 'series_reps' | 'circuit';
+  circuitRounds?: number | null;
   notes?: string;
   assignedClientIds?: string[];
   exercises: PlanExerciseInput[];
@@ -280,6 +281,9 @@ export async function setClientOnboardingAsCoach(clientId: string, payload: Reco
 
 export async function createPlanAsCoach(input: PlanInput) {
   const trainerId = requireUid();
+  const circuitRounds = input.kind === 'circuit'
+    ? Math.min(5, Math.max(1, Math.floor(Number(input.circuitRounds ?? 1) || 1)))
+    : null;
   const planRef = await addDoc(collection(db, 'plans'), {
     trainerId,
     clientId: input.clientId ?? '',
@@ -291,6 +295,7 @@ export async function createPlanAsCoach(input: PlanInput) {
     warmupMediaUrl: input.warmupMediaUrl ?? '',
     description: input.description ?? '',
     kind: input.kind ?? 'series_reps',
+    circuitRounds,
     notes: input.notes ?? '',
     assignedClientIds: input.assignedClientIds ?? [],
     exercises: input.exercises,
