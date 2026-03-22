@@ -227,12 +227,12 @@ function normalizeExercises(value: unknown): Array<{
         advancedMethodNotes: legacyAdvancedMethodNotes,
         restPauseNotes,
         dropSetNotes,
-        sets: typeof raw.sets === 'number' ? raw.sets : Number(raw.sets ?? 0) || 0,
-        reps: typeof raw.reps === 'number' ? raw.reps : Number(raw.reps ?? 0) || 0,
+        sets: normalizeExerciseNumber(raw.sets, 3),
+        reps: normalizeExerciseNumber(raw.reps, 10),
         repsUnit,
-        workValue: typeof raw.workValue === 'number' ? raw.workValue : Number(raw.workValue ?? raw.reps ?? 0) || 0,
-        weightKg: typeof raw.weightKg === 'number' ? raw.weightKg : Number(raw.weightKg ?? legacyWeight ?? 0) || 0,
-        restSeconds: typeof raw.restSeconds === 'number' ? raw.restSeconds : Number(raw.restSeconds ?? 0) || 0,
+        workValue: normalizeExerciseNumber(raw.workValue ?? raw.reps, 10),
+        weightKg: normalizeExerciseNumber(raw.weightKg, Number.isFinite(legacyWeight) ? legacyWeight : 0),
+        restSeconds: normalizeExerciseNumber(raw.restSeconds, 60),
         videoUrl: normalizedVideoUrl,
         imageUrl: normalizedImageUrl,
         mediaUrl: rawMediaUrl || normalizedVideoUrl || normalizedImageUrl,
@@ -273,8 +273,19 @@ function normalizeDisplayOrder(value: unknown, fallback: number): number {
   return fallback;
 }
 
+function normalizeExerciseNumber(value: unknown, fallback: number): number {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'string' && value.trim() === '') return 0;
+  const numeric = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
   return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
+}
+
+function formatWorkTarget(value: number, unit: ExerciseRepsUnit): string {
+  return `${value || '-'} ${unit === 'seconds' ? 'sec lavoro' : 'reps'}`;
 }
 
 function splitExercisesByMovementType<T extends { movementType: ExerciseMovementType }>(items: T[]) {
@@ -888,7 +899,7 @@ export function ClientDashboardPage() {
                           <p className="exercise-name">{exercise.name || `${exercise.movementType === 'stretching' ? 'Stretching' : 'Esercizio'} ${itemIndex + 1}`}</p>
                           <div className="exercise-meta">
                             {selectedPlan.kind === 'circuit' ? (
-                              <span>{exercise.workValue || '-'} reps/tempo</span>
+                              <span>{formatWorkTarget(exercise.workValue, exercise.repsUnit)}</span>
                             ) : (
                               <>
                                 <span>{exercise.sets ?? '-'} serie</span>

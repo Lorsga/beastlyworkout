@@ -233,12 +233,12 @@ function normalizePlanExercises(value: unknown) {
         advancedMethodNotes: legacyAdvancedMethodNotes,
         restPauseNotes: rawRestPauseNotes || (advancedMethod === 'rest_pause' ? legacyAdvancedMethodNotes : ''),
         dropSetNotes: rawDropSetNotes || (advancedMethod === 'drop_set' ? legacyAdvancedMethodNotes : ''),
-        sets: Number(raw.sets ?? 3) || 3,
-        reps: Number(raw.reps ?? 10) || 10,
+        sets: normalizeExerciseNumber(raw.sets, 3),
+        reps: normalizeExerciseNumber(raw.reps, 10),
         repsUnit,
-        workValue: Number(raw.workValue ?? raw.reps ?? 10) || 10,
-        weightKg: Number(raw.weightKg ?? legacyWeight ?? 0) || 0,
-        restSeconds: Number(raw.restSeconds ?? 60) || 60,
+        workValue: normalizeExerciseNumber(raw.workValue ?? raw.reps, 10),
+        weightKg: normalizeExerciseNumber(raw.weightKg, Number.isFinite(legacyWeight) ? legacyWeight : 0),
+        restSeconds: normalizeExerciseNumber(raw.restSeconds, 60),
         videoUrl: normalizedVideoUrl,
         imageUrl: normalizedImageUrl,
         mediaUrl: rawMediaUrl || normalizedVideoUrl || normalizedImageUrl,
@@ -279,8 +279,19 @@ function normalizeDisplayOrder(value: unknown, fallback: number): number {
   return fallback;
 }
 
+function normalizeExerciseNumber(value: unknown, fallback: number): number {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'string' && value.trim() === '') return 0;
+  const numeric = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
   return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
+}
+
+function formatWorkTarget(value: number, unit: ExerciseRepsUnit): string {
+  return `${value || '-'} ${unit === 'seconds' ? 'sec lavoro' : 'reps'}`;
 }
 
 function formatExerciseSummary(
@@ -288,7 +299,7 @@ function formatExerciseSummary(
   kind: 'series_reps' | 'circuit',
 ): string {
   const primary = kind === 'circuit'
-    ? `${Number(exercise.workValue) || 0} reps/tempo`
+    ? formatWorkTarget(Number(exercise.workValue) || 0, exercise.repsUnit)
     : `${Number(exercise.sets) || 0} serie · ${formatSeriesTarget(Number(exercise.reps) || 0, exercise.repsUnit)}`;
   return `${primary} · ${Number(exercise.weightKg) || 0} kg · ${Number(exercise.restSeconds) || 0} sec rec`;
 }
@@ -1238,7 +1249,7 @@ export function CoachDashboardPage() {
             : '',
         sets: planKind === 'series_reps' ? Number(item.sets) || 0 : 0,
         reps: planKind === 'series_reps' ? Number(item.reps) || 0 : 0,
-        repsUnit: planKind === 'series_reps' ? item.repsUnit : 'reps',
+        repsUnit: item.repsUnit,
         workValue: planKind === 'circuit' ? Number(item.workValue) || 0 : 0,
         weightKg: Number(item.weightKg) || 0,
         restSeconds: Number(item.restSeconds) || 0,
@@ -2358,17 +2369,38 @@ export function CoachDashboardPage() {
                                         </div>
                                       </>
                                     ) : (
-                                      <label>
-                                        Reps/tempo di lavoro
-                                        <input
-                                          type="number"
-                                          min={0}
-                                          inputMode="numeric"
-                                          onFocus={selectNumericInputContents}
-                                          value={exercise.workValue}
-                                          onChange={(event) => updateExercise(index, {workValue: parseExerciseNumericInput(event.target.value)})}
-                                        />
-                                      </label>
+                                      <>
+                                        <label>
+                                          Reps/tempo di lavoro
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            inputMode="numeric"
+                                            onFocus={selectNumericInputContents}
+                                            value={exercise.workValue}
+                                            onChange={(event) => updateExercise(index, {workValue: parseExerciseNumericInput(event.target.value)})}
+                                          />
+                                        </label>
+                                        <div className="exercise-unit-toggle">
+                                          <p className="hint">Unità</p>
+                                          <div className="exercise-unit-toggle-row">
+                                            <button
+                                              className={`btn btn-ghost ${exercise.repsUnit === 'reps' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                                              type="button"
+                                              onClick={() => updateExercise(index, {repsUnit: 'reps'})}
+                                            >
+                                              Reps
+                                            </button>
+                                            <button
+                                              className={`btn btn-ghost ${exercise.repsUnit === 'seconds' ? 'exercise-method-toggle-active' : ''}`.trim()}
+                                              type="button"
+                                              onClick={() => updateExercise(index, {repsUnit: 'seconds'})}
+                                            >
+                                              Sec
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </>
                                     )}
                                     <label>
                                       Peso (kg)
@@ -2663,7 +2695,7 @@ export function CoachDashboardPage() {
                               <p className="exercise-name">{exercise.name || `${movementTypeLabel(exercise.movementType)} ${orderIndex + 1}`}</p>
                               <div className="exercise-meta">
                                 {previewPlan.kind === 'circuit' ? (
-                                  <span>{exercise.workValue || '-'} reps/tempo</span>
+                                  <span>{formatWorkTarget(exercise.workValue, exercise.repsUnit)}</span>
                                 ) : (
                                   <>
                                     <span>{exercise.sets || '-'} serie</span>

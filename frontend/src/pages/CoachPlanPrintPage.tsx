@@ -112,12 +112,12 @@ function normalizePlanExercises(value: unknown) {
         advancedMethod,
         restPauseNotes: rawRestPauseNotes || (advancedMethod === 'rest_pause' ? legacyAdvancedMethodNotes : ''),
         dropSetNotes: rawDropSetNotes || (advancedMethod === 'drop_set' ? legacyAdvancedMethodNotes : ''),
-        sets: Number(raw.sets ?? 3) || 3,
-        reps: Number(raw.reps ?? 10) || 10,
+        sets: normalizeExerciseNumber(raw.sets, 3),
+        reps: normalizeExerciseNumber(raw.reps, 10),
         repsUnit,
-        workValue: Number(raw.workValue ?? raw.reps ?? 10) || 10,
-        weightKg: Number(raw.weightKg ?? legacyWeight ?? 0) || 0,
-        restSeconds: Number(raw.restSeconds ?? 60) || 60,
+        workValue: normalizeExerciseNumber(raw.workValue ?? raw.reps, 10),
+        weightKg: normalizeExerciseNumber(raw.weightKg, Number.isFinite(legacyWeight) ? legacyWeight : 0),
+        restSeconds: normalizeExerciseNumber(raw.restSeconds, 60),
         videoUrl: normalizedVideoUrl,
         imageUrl: normalizedImageUrl,
       };
@@ -155,8 +155,19 @@ function normalizeDisplayOrder(value: unknown, fallback: number): number {
   return fallback;
 }
 
+function normalizeExerciseNumber(value: unknown, fallback: number): number {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'string' && value.trim() === '') return 0;
+  const numeric = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
   return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
+}
+
+function formatWorkTarget(value: number, unit: ExerciseRepsUnit): string {
+  return `${value || '-'} ${unit === 'seconds' ? 'sec lavoro' : 'reps'}`;
 }
 
 function movementTypeLabel(value: ExerciseMovementType): string {
@@ -461,7 +472,7 @@ export function CoachPlanPrintPage() {
                 <h4>${escapeHtml(exercise.name || `${movementTypeLabel(exercise.movementType)} ${index + 1}`)}</h4>
                 <p class="meta">${
                   currentPlan.kind === 'circuit'
-                    ? `${exercise.workValue || '-'} reps/tempo`
+                    ? formatWorkTarget(exercise.workValue, exercise.repsUnit)
                     : `${exercise.sets || '-'} serie · ${formatSeriesTarget(exercise.reps, exercise.repsUnit)}`
                 } · ${exercise.weightKg || 0} kg · ${exercise.restSeconds || 0} sec recupero</p>
                 ${exercise.advancedMethod ? `<p><strong>Metodo:</strong> ${exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}</p>` : ''}
@@ -720,7 +731,7 @@ export function CoachPlanPrintPage() {
                       <p className="exercise-name">{exercise.name || `${movementTypeLabel(exercise.movementType)} ${index + 1}`}</p>
                       <div className="exercise-meta">
                         {currentPlan.kind === 'circuit' ? (
-                          <span>{exercise.workValue || '-'} reps/tempo</span>
+                          <span>{formatWorkTarget(exercise.workValue, exercise.repsUnit)}</span>
                         ) : (
                           <>
                             <span>{exercise.sets || '-'} serie</span>
