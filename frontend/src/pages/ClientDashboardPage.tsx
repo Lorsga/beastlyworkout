@@ -1040,7 +1040,6 @@ export function ClientDashboardPage() {
                 <label>Durata allenamento<input value={onboardingDraft.workoutDuration} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, workoutDuration: event.target.value }))} /></label>
                 <label>Dove ti alleni<input value={onboardingDraft.workoutLocation} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, workoutLocation: event.target.value }))} /></label>
                 <label>Attrezzatura disponibile<input value={onboardingDraft.equipment} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, equipment: event.target.value }))} /></label>
-                <label>Allenamenti fatti<textarea value={onboardingDraft.trainingTypeHistory} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, trainingTypeHistory: event.target.value }))} /></label>
                 <label>Infortuni/problemi<input value={onboardingDraft.hasInjuries} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, hasInjuries: event.target.value }))} /></label>
                 <label>Dettagli infortuni<textarea value={onboardingDraft.injuryDetails} onChange={(event) => setOnboardingDraft((prev) => ({ ...prev, injuryDetails: event.target.value }))} /></label>
               </div>
