@@ -169,6 +169,11 @@ function normalizeCircuitRounds(value: unknown, fallback = 1): number {
   return Math.min(5, Math.max(1, Math.floor(numeric)));
 }
 
+function formatCircuitRoundsLabel(value: unknown): string {
+  const rounds = normalizeCircuitRounds(value, 1);
+  return `${rounds} ${rounds === 1 ? 'giro' : 'giri'}`;
+}
+
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
   return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
 }
@@ -536,6 +541,21 @@ export function CoachPlanPrintPage() {
     .exercise-media img { margin-top: 0; }
     .warmup-media img { margin-top: 0; }
     a { color: #b31217; }
+    .rounds-hero { text-align: center; margin: 16px 0 18px; }
+    .rounds-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 22px;
+      border-radius: 18px;
+      background: #050505;
+      color: #fff;
+      font: italic 900 34px/1 "Space Grotesk", system-ui, sans-serif;
+      letter-spacing: -0.04em;
+      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
+    }
+    @media (max-width: 720px) { .rounds-badge { font-size: 28px; padding: 10px 18px; } }
+    @media print { .rounds-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
     @media print { body { margin: 10mm; } .exercise-row { display: flex; } .warmup-row { display: flex; } }
   </style>
 </head>
@@ -545,7 +565,7 @@ export function CoachPlanPrintPage() {
   <div class="block">
     <p><strong>Titolo programma:</strong> ${escapeHtml(currentPlan.title || 'Senza titolo')}</p>
     <p><strong>Tipo scheda:</strong> ${escapeHtml(currentPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps')}</p>
-    ${currentPlan.kind === 'circuit' ? `<p><strong>Giri circuito:</strong> ${normalizeCircuitRounds(currentPlan.circuitRounds, 1)}</p>` : ''}
+    ${currentPlan.kind === 'circuit' ? `<div class="rounds-hero"><span class="rounds-badge">${escapeHtml(formatCircuitRoundsLabel(currentPlan.circuitRounds))}</span></div>` : ''}
     ${asText(currentPlan.notes).trim() ? `<p><strong>Note coach:</strong> ${escapeHtml(asText(currentPlan.notes))}</p>` : ''}
   </div>
   ${warmupBlockHtml}
@@ -673,9 +693,9 @@ export function CoachPlanPrintPage() {
           Tipo scheda: <strong>{currentPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
         </p>
         {currentPlan.kind === 'circuit' ? (
-          <p className="hint">
-            Giri circuito: <strong>{normalizeCircuitRounds(currentPlan.circuitRounds, 1)}</strong>
-          </p>
+          <div className="circuit-rounds-hero" aria-label={`Circuito da ${formatCircuitRoundsLabel(currentPlan.circuitRounds)}`}>
+            <span className="circuit-rounds-hero-badge">{formatCircuitRoundsLabel(currentPlan.circuitRounds)}</span>
+          </div>
         ) : null}
         {asText(currentPlan.warmup).trim() || getPlanWarmupImageUrl(currentPlan) || getPlanWarmupVideoUrl(currentPlan) ? (
           <div className="client-info-block">

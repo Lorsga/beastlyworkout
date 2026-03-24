@@ -293,6 +293,11 @@ function normalizeCircuitRounds(value: unknown, fallback = 1): number {
   return Math.min(5, Math.max(1, Math.floor(numeric)));
 }
 
+function formatCircuitRoundsLabel(value: unknown): string {
+  const rounds = normalizeCircuitRounds(value, 1);
+  return `${rounds} ${rounds === 1 ? 'giro' : 'giri'}`;
+}
+
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
   return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
 }
@@ -2621,9 +2626,9 @@ export function CoachDashboardPage() {
               Tipo scheda: <strong>{previewPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
             </p>
             {previewPlan.kind === 'circuit' ? (
-              <p className="hint">
-                Giri circuito: <strong>{normalizeCircuitRounds(previewPlan.circuitRounds, 1)}</strong>
-              </p>
+              <div className="circuit-rounds-hero" aria-label={`Circuito da ${formatCircuitRoundsLabel(previewPlan.circuitRounds)}`}>
+                <span className="circuit-rounds-hero-badge">{formatCircuitRoundsLabel(previewPlan.circuitRounds)}</span>
+              </div>
             ) : null}
             {asText((previewPlan as {warmup?: unknown}).warmup).trim() || getPlanWarmupImageUrl(previewPlan) || getPlanWarmupVideoUrl(previewPlan) ? (
               <div className="client-info-block">
