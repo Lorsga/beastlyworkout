@@ -6,8 +6,6 @@ import {
   deleteMyProfile,
   getMyPlanWeightOverridesDoc,
   getMyAssignedPlans,
-  syncMyPlanWeightOverrides,
-  setMyPlanExerciseWeightOverride,
   setUserPrivateDoc,
   updateMyPlanExerciseWeight,
   getUserPrivateDoc,
@@ -508,11 +506,6 @@ export function ClientDashboardPage() {
       const profileSnap = authUid ? await getUserProfile(authUid) : null;
       const profile = (profileSnap?.data() as UserProfileDoc | undefined) ?? {};
       const onboardingSnap = authUid ? await getUserPrivateDoc(authUid, 'onboarding') : null;
-      try {
-        await syncMyPlanWeightOverrides();
-      } catch {
-        // Best effort sync for backward compatibility with existing private plan weights.
-      }
       const weightOverridesSnap = authUid ? await getMyPlanWeightOverridesDoc() : null;
       const weightOverridesData = (weightOverridesSnap?.data() as PlanWeightOverridesDoc | undefined) ?? {};
       const nextPersonalOverrides = weightOverridesData.weights ?? {};
@@ -564,9 +557,6 @@ export function ClientDashboardPage() {
           return bTime - aTime;
         });
       setPlans(mergedPlans);
-      if (mergedPlans.length > 0 && Object.keys(nextPersonalOverrides).length > 0) {
-        void syncPersonalOverridesToCoach(mergedPlans, nextPersonalOverrides);
-      }
       if (mergedPlans.length > 0) {
         setSelectedPlanId((prev) => (prev && mergedPlans.some((plan) => plan.id === prev) ? prev : mergedPlans[0].id));
       } else {
@@ -577,27 +567,6 @@ export function ClientDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function syncPersonalOverridesToCoach(
-    currentPlans: Array<PlanDoc & { id: string }>,
-    overridesByPlan: Record<string, Record<string, number>>,
-  ) {
-    const allowedPlanIds = new Set(currentPlans.map((plan) => plan.id));
-    const syncJobs: Array<Promise<unknown>> = [];
-    for (const [planId, mapByExercise] of Object.entries(overridesByPlan)) {
-      if (!allowedPlanIds.has(planId)) continue;
-      if (!mapByExercise || typeof mapByExercise !== 'object') continue;
-      for (const [exerciseIndex, rawWeight] of Object.entries(mapByExercise)) {
-        const idx = Number(exerciseIndex);
-        const weight = Number(rawWeight);
-        if (!Number.isInteger(idx) || idx < 0) continue;
-        if (!Number.isFinite(weight) || weight < 0) continue;
-        syncJobs.push(updateMyPlanExerciseWeight(planId, idx, weight));
-      }
-    }
-    if (syncJobs.length === 0) return;
-    await Promise.allSettled(syncJobs);
   }
 
   useEffect(() => {
@@ -672,11 +641,6 @@ export function ClientDashboardPage() {
 
     setSavingWeightKey(draftKey);
     try {
-      try {
-        await setMyPlanExerciseWeightOverride(planId, exerciseIndex, nextWeight);
-      } catch {
-        // Best effort: la fonte autoritativa viene aggiornata dalla callable.
-      }
       setPersonalWeightOverrides((prev) => ({
         ...prev,
         [planId]: {
@@ -864,8 +828,9 @@ export function ClientDashboardPage() {
                   Tipo scheda: <strong>{selectedPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
                 </p>
                 {selectedPlan.kind === 'circuit' ? (
-                  <div className="circuit-rounds-hero" aria-label={`Circuito da ${formatCircuitRoundsLabel(selectedPlan.circuitRounds)}`}>
-                    <span className="circuit-rounds-hero-badge">{formatCircuitRoundsLabel(selectedPlan.circuitRounds)}</span>
+                  <div className="circuit-rounds-inline" aria-label={`Circuito da ${formatCircuitRoundsLabel(selectedPlan.circuitRounds)}`}>
+                    <span className="hint circuit-rounds-inline-label">Giri circuito:</span>
+                    <span className="circuit-rounds-inline-badge">{formatCircuitRoundsLabel(selectedPlan.circuitRounds)}</span>
                   </div>
                 ) : null}
                 {(() => {

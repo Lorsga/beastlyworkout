@@ -53,6 +53,7 @@ interface PlanDoc {
     assignedAt?: unknown;
   }>;
   clientWeightOverrides?: Record<string, Record<string, number>>;
+  weightOverridesBackfilledAt?: unknown;
   exercises?: Array<{
     displayOrder?: number;
     movementType?: 'exercise' | 'stretching';
@@ -204,6 +205,15 @@ function getClientAuthUid(profile: UserProfileDoc & { id: string }): string {
   const docId = asText(profile.id).trim();
   const uid = asText(profile.uid).trim();
   return docId || uid;
+}
+
+function shouldSyncPlanWeightOverrides(plan: PlanDoc | null | undefined) {
+  if (!plan) return false;
+  const assignedClientIds = Array.isArray(plan.assignedClientIds)
+    ? plan.assignedClientIds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
+  const hasLegacyClient = asText(plan.clientId).trim().length > 0;
+  return (assignedClientIds.length > 0 || hasLegacyClient) && !plan.weightOverridesBackfilledAt;
 }
 
 function normalizePlanExercises(value: unknown) {
@@ -1365,14 +1375,20 @@ export function CoachDashboardPage() {
     setPreviewLoadingPlanId(planId);
     try {
       let syncOverrides: Record<string, Record<string, number>> | undefined;
-      try {
-        const syncResult = await syncPlanWeightOverridesForCoach(planId);
-        syncOverrides = syncResult.clientWeightOverrides;
-      } catch {
-        // Best effort sync from clients' private weights to plan overrides.
+      if (shouldSyncPlanWeightOverrides(plan)) {
+        try {
+          const syncResult = await syncPlanWeightOverridesForCoach(planId);
+          syncOverrides = syncResult.clientWeightOverrides;
+        } catch {
+          // Best effort sync from legacy private weights to plan overrides.
+        }
       }
       if (syncOverrides && Object.keys(syncOverrides).length > 0) {
-        setPlans((prev) => prev.map((item) => (item.id === planId ? {...item, clientWeightOverrides: syncOverrides} : item)));
+        setPlans((prev) => prev.map((item) => (
+          item.id === planId
+            ? {...item, clientWeightOverrides: syncOverrides, weightOverridesBackfilledAt: new Date().toISOString()}
+            : item
+        )));
       }
       try {
         const freshSnap = await getPlanById(planId);
@@ -2626,8 +2642,9 @@ export function CoachDashboardPage() {
               Tipo scheda: <strong>{previewPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
             </p>
             {previewPlan.kind === 'circuit' ? (
-              <div className="circuit-rounds-hero" aria-label={`Circuito da ${formatCircuitRoundsLabel(previewPlan.circuitRounds)}`}>
-                <span className="circuit-rounds-hero-badge">{formatCircuitRoundsLabel(previewPlan.circuitRounds)}</span>
+              <div className="circuit-rounds-inline" aria-label={`Circuito da ${formatCircuitRoundsLabel(previewPlan.circuitRounds)}`}>
+                <span className="hint circuit-rounds-inline-label">Giri circuito:</span>
+                <span className="circuit-rounds-inline-badge">{formatCircuitRoundsLabel(previewPlan.circuitRounds)}</span>
               </div>
             ) : null}
             {asText((previewPlan as {warmup?: unknown}).warmup).trim() || getPlanWarmupImageUrl(previewPlan) || getPlanWarmupVideoUrl(previewPlan) ? (

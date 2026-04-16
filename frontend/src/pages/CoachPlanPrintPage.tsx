@@ -17,6 +17,8 @@ interface PlanDoc {
   warmupMediaUrl?: string;
   assignedClientIds?: string[];
   clientWeightOverrides?: Record<string, Record<string, number>>;
+  clientId?: string;
+  weightOverridesBackfilledAt?: unknown;
   exercises?: Array<{
     displayOrder?: number;
     movementType?: 'exercise' | 'stretching';
@@ -68,6 +70,15 @@ function isVideoMediaUrl(url: string): boolean {
 
 function isImageMediaUrl(url: string): boolean {
   return /\.(jpg|jpeg|png|gif|webp|avif|svg)(\?.*)?$/i.test(url);
+}
+
+function shouldSyncPlanWeightOverrides(plan: PlanDoc | null | undefined) {
+  if (!plan) return false;
+  const assignedClientIds = Array.isArray(plan.assignedClientIds)
+    ? plan.assignedClientIds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
+  const hasLegacyClient = asText(plan.clientId).trim().length > 0;
+  return (assignedClientIds.length > 0 || hasLegacyClient) && !plan.weightOverridesBackfilledAt;
 }
 
 function getPlanWarmupVideoUrl(plan: PlanDoc | null | undefined): string {
@@ -247,11 +258,17 @@ export function CoachPlanPrintPage() {
       setLoading(true);
       setError('');
       try {
-        await syncPlanWeightOverridesForCoach(planId).catch(() => undefined);
-        const [planSnap, clientsSnap] = await Promise.all([
-          getPlanById(planId),
-          listAssignedClientsAsCoach(user.uid),
-        ]);
+        let planSnap = await getPlanById(planId);
+        if (!planSnap.exists()) {
+          setError('Scheda non trovata.');
+          return;
+        }
+        const initialPlan = { id: planSnap.id, ...(planSnap.data() as PlanDoc) };
+        if (shouldSyncPlanWeightOverrides(initialPlan)) {
+          await syncPlanWeightOverridesForCoach(planId).catch(() => undefined);
+          planSnap = await getPlanById(planId);
+        }
+        const clientsSnap = await listAssignedClientsAsCoach(user.uid);
         if (!planSnap.exists()) {
           setError('Scheda non trovata.');
           return;
@@ -541,20 +558,28 @@ export function CoachPlanPrintPage() {
     .exercise-media img { margin-top: 0; }
     .warmup-media img { margin-top: 0; }
     a { color: #b31217; }
-    .rounds-hero { text-align: center; margin: 16px 0 18px; }
+    .rounds-inline {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 12px 0 0;
+    }
+    .rounds-inline-label { font-size: 15px; font-weight: 500; color: #444; }
     .rounds-badge {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 12px 22px;
-      border-radius: 18px;
+      min-height: 32px;
+      padding: 6px 11px;
+      border-radius: 10px;
       background: #050505;
       color: #fff;
-      font: italic 900 34px/1 "Space Grotesk", system-ui, sans-serif;
+      font: italic 900 18px/1 "Space Grotesk", system-ui, sans-serif;
       letter-spacing: -0.04em;
-      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
+      box-shadow: 0 10px 22px rgba(0, 0, 0, 0.16);
     }
-    @media (max-width: 720px) { .rounds-badge { font-size: 28px; padding: 10px 18px; } }
+    @media (max-width: 720px) { .rounds-badge { font-size: 17px; padding: 6px 10px; } }
     @media print { .rounds-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
     @media print { body { margin: 10mm; } .exercise-row { display: flex; } .warmup-row { display: flex; } }
   </style>
@@ -565,7 +590,7 @@ export function CoachPlanPrintPage() {
   <div class="block">
     <p><strong>Titolo programma:</strong> ${escapeHtml(currentPlan.title || 'Senza titolo')}</p>
     <p><strong>Tipo scheda:</strong> ${escapeHtml(currentPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps')}</p>
-    ${currentPlan.kind === 'circuit' ? `<div class="rounds-hero"><span class="rounds-badge">${escapeHtml(formatCircuitRoundsLabel(currentPlan.circuitRounds))}</span></div>` : ''}
+    ${currentPlan.kind === 'circuit' ? `<div class="rounds-inline"><span class="rounds-inline-label">Giri circuito:</span><span class="rounds-badge">${escapeHtml(formatCircuitRoundsLabel(currentPlan.circuitRounds))}</span></div>` : ''}
     ${asText(currentPlan.notes).trim() ? `<p><strong>Note coach:</strong> ${escapeHtml(asText(currentPlan.notes))}</p>` : ''}
   </div>
   ${warmupBlockHtml}
@@ -693,8 +718,9 @@ export function CoachPlanPrintPage() {
           Tipo scheda: <strong>{currentPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps'}</strong>
         </p>
         {currentPlan.kind === 'circuit' ? (
-          <div className="circuit-rounds-hero" aria-label={`Circuito da ${formatCircuitRoundsLabel(currentPlan.circuitRounds)}`}>
-            <span className="circuit-rounds-hero-badge">{formatCircuitRoundsLabel(currentPlan.circuitRounds)}</span>
+          <div className="circuit-rounds-inline" aria-label={`Circuito da ${formatCircuitRoundsLabel(currentPlan.circuitRounds)}`}>
+            <span className="hint circuit-rounds-inline-label">Giri circuito:</span>
+            <span className="circuit-rounds-inline-badge">{formatCircuitRoundsLabel(currentPlan.circuitRounds)}</span>
           </div>
         ) : null}
         {asText(currentPlan.warmup).trim() || getPlanWarmupImageUrl(currentPlan) || getPlanWarmupVideoUrl(currentPlan) ? (

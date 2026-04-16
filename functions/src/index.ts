@@ -831,10 +831,18 @@ export const syncPlanWeightOverridesForCoach = onCall(
 
     const existingOverrides = parseClientWeightOverridesFromPlanData(planData);
     const mergedOverrides: Record<string, Record<string, number>> = {...existingOverrides};
-    const patch: Record<string, unknown> = {updatedAt: admin.firestore.FieldValue.serverTimestamp()};
+    const patch: Record<string, unknown> = {
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      weightOverridesBackfilledAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    const hasCompletedBackfill = Boolean(planData.weightOverridesBackfilledAt);
     let synced = 0;
 
     for (const clientId of targetClientIds) {
+      if (hasCompletedBackfill && existingOverrides[clientId] && Object.keys(existingOverrides[clientId]).length > 0) {
+        continue;
+      }
+
       const privateSnap = await db.collection('users').doc(clientId).collection('private').doc('planWeights').get();
       const privateData = privateSnap.data() ?? {};
       const rawWeights = privateData.weights;
@@ -842,11 +850,13 @@ export const syncPlanWeightOverridesForCoach = onCall(
       const planWeights = (rawWeights as Record<string, unknown>)[planId];
       if (!planWeights || typeof planWeights !== 'object' || Array.isArray(planWeights)) continue;
 
+      const existingClientOverrides = mergedOverrides[clientId] ?? {};
       for (const [rawIndex, rawWeight] of Object.entries(planWeights as Record<string, unknown>)) {
         const exerciseIndex = Number(rawIndex);
         const weight = typeof rawWeight === 'number' ? rawWeight : Number(rawWeight);
         if (!Number.isInteger(exerciseIndex) || exerciseIndex < 0 || exerciseIndex >= exercises.length) continue;
         if (!Number.isFinite(weight) || weight < 0) continue;
+        if (existingClientOverrides[rawIndex] === weight) continue;
         patch[`clientWeightOverrides.${clientId}.${exerciseIndex}`] = weight;
         mergedOverrides[clientId] = mergedOverrides[clientId] ?? {};
         mergedOverrides[clientId][String(exerciseIndex)] = weight;
@@ -854,7 +864,7 @@ export const syncPlanWeightOverridesForCoach = onCall(
       }
     }
 
-    if (synced > 0) await planRef.update(patch);
+    await planRef.set(patch, {merge: true});
 
     return {ok: true, synced, clientWeightOverrides: mergedOverrides};
   },
@@ -863,47 +873,67 @@ export const syncPlanWeightOverridesForCoach = onCall(
 export const cleanupExpiredPlanAssignments = onSchedule(
   {region: 'us-central1', schedule: 'every 24 hours', timeZone: 'Europe/Rome'},
   async () => {
-    const plansSnap = await db.collection('plans').get();
     const now = Date.now();
-    let batch = db.batch();
-    let writes = 0;
+    const batchSize = 200;
+    let lastDoc: FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData> | null = null;
 
-    for (const docSnap of plansSnap.docs) {
-      const data = docSnap.data();
-      const assignedClientIds = Array.isArray(data.assignedClientIds)
-        ? data.assignedClientIds.filter((item: unknown): item is string => typeof item === 'string')
-        : [];
-      const assignmentDetails = parseAssignmentDetails(data.assignmentDetails);
-      const expiredClientIds = Object.entries(assignmentDetails)
-        .filter(([clientId, detail]) => {
-          if (!assignedClientIds.includes(clientId)) return false;
-          const mode = typeof detail?.mode === 'string' ? detail.mode : 'permanent';
-          const expiresAt = toMillis(detail?.expiresAt);
-          return mode === 'timed' && expiresAt > 0 && expiresAt <= now;
-        })
-        .map(([clientId]) => clientId);
+    while (true) {
+      let pageQuery: FirebaseFirestore.Query<FirebaseFirestore.DocumentData> = db
+        .collection('plans')
+        .select('assignedClientIds', 'assignmentDetails')
+        .orderBy(admin.firestore.FieldPath.documentId())
+        .limit(batchSize);
 
-      if (expiredClientIds.length === 0) continue;
-
-      const patch: Record<string, unknown> = {
-        assignedClientIds: assignedClientIds.filter((id) => !expiredClientIds.includes(id)),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      };
-      expiredClientIds.forEach((clientId) => {
-        patch[`assignmentDetails.${clientId}`] = admin.firestore.FieldValue.delete();
-      });
-      batch.set(docSnap.ref, patch, {merge: true});
-      writes += 1;
-
-      if (writes >= 400) {
-        await batch.commit();
-        batch = db.batch();
-        writes = 0;
+      if (lastDoc) {
+        pageQuery = pageQuery.startAfter(lastDoc);
       }
-    }
 
-    if (writes > 0) {
-      await batch.commit();
+      const plansSnap = await pageQuery.get();
+      if (plansSnap.empty) break;
+
+      let batch = db.batch();
+      let writes = 0;
+
+      for (const docSnap of plansSnap.docs) {
+        const data = docSnap.data();
+        const assignedClientIds = Array.isArray(data.assignedClientIds)
+          ? data.assignedClientIds.filter((item: unknown): item is string => typeof item === 'string')
+          : [];
+        const assignmentDetails = parseAssignmentDetails(data.assignmentDetails);
+        const expiredClientIds = Object.entries(assignmentDetails)
+          .filter(([clientId, detail]) => {
+            if (!assignedClientIds.includes(clientId)) return false;
+            const mode = typeof detail?.mode === 'string' ? detail.mode : 'permanent';
+            const expiresAt = toMillis(detail?.expiresAt);
+            return mode === 'timed' && expiresAt > 0 && expiresAt <= now;
+          })
+          .map(([clientId]) => clientId);
+
+        if (expiredClientIds.length === 0) continue;
+
+        const patch: Record<string, unknown> = {
+          assignedClientIds: assignedClientIds.filter((id) => !expiredClientIds.includes(id)),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+        expiredClientIds.forEach((clientId) => {
+          patch[`assignmentDetails.${clientId}`] = admin.firestore.FieldValue.delete();
+        });
+        batch.set(docSnap.ref, patch, {merge: true});
+        writes += 1;
+
+        if (writes >= 400) {
+          await batch.commit();
+          batch = db.batch();
+          writes = 0;
+        }
+      }
+
+      if (writes > 0) {
+        await batch.commit();
+      }
+
+      lastDoc = plansSnap.docs[plansSnap.docs.length - 1] ?? null;
+      if (plansSnap.size < batchSize) break;
     }
   },
 );
@@ -930,13 +960,17 @@ function subscriptionStatePayload(current: CoachSubscriptionDoc, now: Date, stat
 }
 
 async function deleteQueryDocs(query: admin.firestore.Query): Promise<void> {
-  const snapshot = await query.get();
-  if (snapshot.empty) return;
-  const batch = db.batch();
-  snapshot.docs.forEach((docSnap) => {
-    batch.delete(docSnap.ref);
-  });
-  await batch.commit();
+  const batchSize = 400;
+  while (true) {
+    const snapshot = await query.limit(batchSize).get();
+    if (snapshot.empty) return;
+    const batch = db.batch();
+    snapshot.docs.forEach((docSnap) => {
+      batch.delete(docSnap.ref);
+    });
+    await batch.commit();
+    if (snapshot.size < batchSize) return;
+  }
 }
 
 async function deleteUserPrivateDocs(uid: string): Promise<void> {
@@ -946,21 +980,26 @@ async function deleteUserPrivateDocs(uid: string): Promise<void> {
 }
 
 async function clearCoachAssignments(coachUid: string): Promise<void> {
-  const assignedClients = await db.collection('users').where('assignedCoachId', '==', coachUid).get();
-  const batch = db.batch();
-  assignedClients.docs.forEach((docSnap) => {
-    batch.set(
-      docSnap.ref,
-      {
-        assignedCoachId: admin.firestore.FieldValue.delete(),
-        assignedCoachCode: admin.firestore.FieldValue.delete(),
-        assignedCoachEmail: admin.firestore.FieldValue.delete(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      {merge: true},
-    );
-  });
-  if (!assignedClients.empty) await batch.commit();
+  const batchSize = 400;
+  while (true) {
+    const assignedClients = await db.collection('users').where('assignedCoachId', '==', coachUid).limit(batchSize).get();
+    if (assignedClients.empty) return;
+    const batch = db.batch();
+    assignedClients.docs.forEach((docSnap) => {
+      batch.set(
+        docSnap.ref,
+        {
+          assignedCoachId: admin.firestore.FieldValue.delete(),
+          assignedCoachCode: admin.firestore.FieldValue.delete(),
+          assignedCoachEmail: admin.firestore.FieldValue.delete(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    });
+    await batch.commit();
+    if (assignedClients.size < batchSize) return;
+  }
 }
 
 async function deleteCoachOwnedData(coachUid: string): Promise<void> {
@@ -980,8 +1019,10 @@ async function deleteCoachOwnedData(coachUid: string): Promise<void> {
 async function deleteClientOwnedData(clientUid: string): Promise<void> {
   await deleteQueryDocs(db.collection('trainerClients').where('clientId', '==', clientUid));
   await db.collection('plans').doc(clientUid).delete().catch(() => undefined);
-  const assignedPlans = await db.collection('plans').where('assignedClientIds', 'array-contains', clientUid).get();
-  if (!assignedPlans.empty) {
+  const assignmentBatchSize = 400;
+  while (true) {
+    const assignedPlans = await db.collection('plans').where('assignedClientIds', 'array-contains', clientUid).limit(assignmentBatchSize).get();
+    if (assignedPlans.empty) break;
     const batch = db.batch();
     assignedPlans.docs.forEach((docSnap) => {
       batch.set(
@@ -995,6 +1036,7 @@ async function deleteClientOwnedData(clientUid: string): Promise<void> {
       );
     });
     await batch.commit();
+    if (assignedPlans.size < assignmentBatchSize) break;
   }
   await deleteQueryDocs(db.collection('sessions').where('clientId', '==', clientUid));
   await deleteQueryDocs(db.collection('workoutLogs').where('clientId', '==', clientUid));
