@@ -61,6 +61,14 @@ export interface PlanExerciseInput {
   mediaUrl?: string;
 }
 
+export interface CoachVideoLibraryItem {
+  id: string;
+  name: string;
+  url: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface WorkoutLogInput {
   trainerId: string;
   sessionDate: string;
@@ -250,6 +258,23 @@ export async function getUserPrivateDoc(uid: string, docId: string) {
 export async function getMyPlanWeightOverridesDoc() {
   const uid = requireUid();
   return getDoc(doc(db, 'users', uid, 'private', 'planWeights'));
+}
+
+export async function getCoachVideoLibraryDoc() {
+  const uid = requireUid();
+  return getDoc(doc(db, 'users', uid, 'private', 'videoLibrary'));
+}
+
+export async function saveCoachVideoLibrary(items: CoachVideoLibraryItem[]) {
+  const uid = requireUid();
+  await setDoc(
+    doc(db, 'users', uid, 'private', 'videoLibrary'),
+    {
+      items,
+      ...updateTimestamp(),
+    },
+    {merge: true},
+  );
 }
 
 export async function setMyPlanExerciseWeightOverride(planId: string, exerciseIndex: number, weightKg: number) {

@@ -13,6 +13,7 @@ import {
   deletePlanAsCoach,
   acceptCoachTrial,
   getCoachAccessState,
+  getCoachVideoLibraryDoc,
   getPlanById,
   getUserPrivateDoc,
   listAssignedClientsAsCoach,
@@ -21,6 +22,7 @@ import {
   logoutCurrentUser,
   renewCoachSubscription,
   removePlanAssignmentAsCoach,
+  saveCoachVideoLibrary,
   setPlanAssignmentDurationWithStartAsCoach,
   syncPlanWeightOverridesForCoach,
   setClientOnboardingAsCoach,
@@ -28,6 +30,7 @@ import {
   uploadWorkoutMediaAsCoach,
   updatePlanAsCoach,
   useAuthState,
+  type CoachVideoLibraryItem,
   type CoachAccessState,
 } from '../lib';
 import { AppShell } from '../components/AppShell';
@@ -159,6 +162,7 @@ type PlanGroupBucket = {
 };
 
 type ClientOption = { value: string; label: string };
+type VideoLibraryItemDraft = CoachVideoLibraryItem;
 type SupervisorCoachItem = {
   uid: string;
   displayName: string;
@@ -172,9 +176,30 @@ type SupervisorCoachItem = {
 };
 
 type CoachTabId = 'code' | 'clients' | 'plans' | 'overview' | 'supervisor';
+
+const COACH_TAB_STORAGE_KEY = 'beastly-coach-active-tab';
+
+function parseCoachTab(value: string | null | undefined): CoachTabId | null {
+  return value === 'code' || value === 'clients' || value === 'plans' || value === 'overview' || value === 'supervisor'
+    ? value
+    : null;
+}
+
+function getInitialCoachTab(): CoachTabId {
+  if (typeof window === 'undefined') return 'clients';
+  const hashTab = parseCoachTab(window.location.hash.replace(/^#/, ''));
+  if (hashTab) return hashTab;
+  const storedTab = parseCoachTab(window.localStorage.getItem(COACH_TAB_STORAGE_KEY));
+  return storedTab ?? 'clients';
+}
 type PlanBuilderSection = 'details' | 'exercises';
 type ExerciseRepsUnit = 'reps' | 'seconds';
 type ExerciseMovementType = 'exercise' | 'stretching';
+type VideoLibraryExerciseTarget = {
+  exerciseIndex: number;
+  movementType: ExerciseMovementType;
+  label: string;
+};
 type ExerciseDraft = {
   displayOrder: number;
   movementType: ExerciseMovementType;
@@ -214,6 +239,40 @@ function shouldSyncPlanWeightOverrides(plan: PlanDoc | null | undefined) {
     : [];
   const hasLegacyClient = asText(plan.clientId).trim().length > 0;
   return (assignedClientIds.length > 0 || hasLegacyClient) && !plan.weightOverridesBackfilledAt;
+}
+
+function isYoutubeVideoUrl(url: string): boolean {
+  return /(^https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i.test(url.trim());
+}
+
+function normalizeVideoLibraryItems(value: unknown): VideoLibraryItemDraft[] {
+  if (!Array.isArray(value)) return [];
+  const items: VideoLibraryItemDraft[] = [];
+  value.forEach((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+    const raw = item as Record<string, unknown>;
+    const id = asText(raw.id).trim();
+    const name = asText(raw.name).trim();
+    const url = asText(raw.url).trim();
+    if (!id || !name || !url || !isYoutubeVideoUrl(url)) return;
+    const createdAt = asText(raw.createdAt).trim();
+    const updatedAt = asText(raw.updatedAt).trim();
+    items.push({
+      id,
+      name,
+      url,
+      createdAt: createdAt || undefined,
+      updatedAt: updatedAt || undefined,
+    });
+  });
+  return items.sort((a, b) => a.name.localeCompare(b.name, 'it', {sensitivity: 'base'}));
+}
+
+function createVideoLibraryItemId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `video-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function normalizePlanExercises(value: unknown) {
@@ -717,7 +776,16 @@ export function CoachDashboardPage() {
   const [supervisorSearch, setSupervisorSearch] = useState('');
   const [supervisorActionUid, setSupervisorActionUid] = useState('');
   const [previewLoadingPlanId, setPreviewLoadingPlanId] = useState('');
-  const [activeTab, setActiveTab] = useState<CoachTabId>('clients');
+  const [videoLibrary, setVideoLibrary] = useState<VideoLibraryItemDraft[]>([]);
+  const [isVideoLibraryModalOpen, setIsVideoLibraryModalOpen] = useState(false);
+  const [videoLibraryDraftName, setVideoLibraryDraftName] = useState('');
+  const [videoLibraryDraftUrl, setVideoLibraryDraftUrl] = useState('');
+  const [videoLibraryEditingId, setVideoLibraryEditingId] = useState('');
+  const [videoLibrarySearch, setVideoLibrarySearch] = useState('');
+  const [videoLibraryPickerSearch, setVideoLibraryPickerSearch] = useState('');
+  const [videoLibrarySaving, setVideoLibrarySaving] = useState(false);
+  const [videoLibraryTarget, setVideoLibraryTarget] = useState<VideoLibraryExerciseTarget | null>(null);
+  const [activeTab, setActiveTab] = useState<CoachTabId>(() => getInitialCoachTab());
   const [planBuilderSection, setPlanBuilderSection] = useState<PlanBuilderSection>('details');
   const planBuilderScrollRef = useRef<HTMLElement | null>(null);
 
@@ -760,6 +828,29 @@ export function CoachDashboardPage() {
     acc[client.id] = label;
     return acc;
   }, {});
+  const sortedVideoLibrary = useMemo(
+    () => [...videoLibrary].sort((a, b) => a.name.localeCompare(b.name, 'it', {sensitivity: 'base'})),
+    [videoLibrary],
+  );
+  const filteredVideoLibrary = useMemo(() => {
+    const needle = videoLibrarySearch.trim().toLowerCase();
+    if (!needle) return sortedVideoLibrary;
+    return sortedVideoLibrary.filter((item) =>
+      item.name.toLowerCase().includes(needle) || item.url.toLowerCase().includes(needle),
+    );
+  }, [sortedVideoLibrary, videoLibrarySearch]);
+  const pickerVideoLibrary = useMemo(() => {
+    const needle = videoLibraryPickerSearch.trim().toLowerCase();
+    if (!needle) return sortedVideoLibrary;
+    return sortedVideoLibrary.filter((item) =>
+      item.name.toLowerCase().includes(needle) || item.url.toLowerCase().includes(needle),
+    );
+  }, [sortedVideoLibrary, videoLibraryPickerSearch]);
+  const videoLibraryByUrl = useMemo(() => {
+    const lookup = new Map<string, VideoLibraryItemDraft>();
+    sortedVideoLibrary.forEach((item) => lookup.set(item.url, item));
+    return lookup;
+  }, [sortedVideoLibrary]);
   const groupedPlanBuckets = useMemo<PlanGroupBucket[]>(() => {
     const assignedGroups: PlanGroupBucket[] = registeredClients
       .map((client) => {
@@ -840,17 +931,25 @@ export function CoachDashboardPage() {
   }, [isSupervisor, activeTab]);
 
   useEffect(() => {
-    const hash = window.location.hash.replace(/^#/, '');
-    if (hash === 'code' || hash === 'clients' || hash === 'plans' || hash === 'overview' || hash === 'supervisor') {
-      setActiveTab(hash as CoachTabId);
-    }
+    const applyLocationTab = () => {
+      const hashTab = parseCoachTab(window.location.hash.replace(/^#/, ''));
+      if (hashTab) {
+        setActiveTab(hashTab);
+      }
+    };
+
+    applyLocationTab();
+    window.addEventListener('hashchange', applyLocationTab);
+    return () => window.removeEventListener('hashchange', applyLocationTab);
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     const nextHash = `#${activeTab}`;
     if (window.location.hash !== nextHash) {
       window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${nextHash}`);
     }
+    window.localStorage.setItem(COACH_TAB_STORAGE_KEY, activeTab);
   }, [activeTab]);
 
   const customStyles: StylesConfig<ClientOption, boolean> = useMemo(
@@ -922,7 +1021,10 @@ export function CoachDashboardPage() {
     if (!role) return;
     setLoading(true);
     try {
-      const usersSnap = await listAssignedClientsAsCoach(user?.uid);
+      const [usersSnap, videoLibrarySnap] = await Promise.all([
+        listAssignedClientsAsCoach(user?.uid),
+        getCoachVideoLibraryDoc().catch(() => null),
+      ]);
       const allUsers = usersSnap.docs.map((docItem) => ({
         id: docItem.id,
         ...(docItem.data() as UserProfileDoc),
@@ -935,6 +1037,8 @@ export function CoachDashboardPage() {
         });
       setRegisteredClients(candidates);
       if (!selectedClientId && candidates[0]) setSelectedClientId(getClientAuthUid(candidates[0]));
+      const rawVideoItems = (videoLibrarySnap?.data() as {items?: unknown} | undefined)?.items;
+      setVideoLibrary(normalizeVideoLibraryItems(rawVideoItems));
 
       try {
         const plansSnap = await listPlansForRole(role);
@@ -1016,6 +1120,106 @@ export function CoachDashboardPage() {
   useEffect(() => {
     void loadSupervisorCoaches();
   }, [isSupervisor, user?.uid]);
+
+  function resetVideoLibraryDraft() {
+    setVideoLibraryDraftName('');
+    setVideoLibraryDraftUrl('');
+    setVideoLibraryEditingId('');
+  }
+
+  function openVideoLibraryModal() {
+    setVideoLibrarySearch('');
+    resetVideoLibraryDraft();
+    setIsVideoLibraryModalOpen(true);
+  }
+
+  function editVideoLibraryItem(item: VideoLibraryItemDraft) {
+    setVideoLibraryEditingId(item.id);
+    setVideoLibraryDraftName(item.name);
+    setVideoLibraryDraftUrl(item.url);
+    setIsVideoLibraryModalOpen(true);
+  }
+
+  async function persistVideoLibrary(nextItems: VideoLibraryItemDraft[], okMessage: string) {
+    setVideoLibrarySaving(true);
+    try {
+      await saveCoachVideoLibrary(nextItems);
+      setVideoLibrary(normalizeVideoLibraryItems(nextItems));
+      showSuccess(okMessage);
+    } catch (error) {
+      showError(toMessage(error));
+    } finally {
+      setVideoLibrarySaving(false);
+    }
+  }
+
+  async function saveVideoLibraryItem() {
+    const normalizedName = videoLibraryDraftName.trim();
+    const normalizedUrl = videoLibraryDraftUrl.trim();
+    if (!normalizedName) {
+      showError('Inserisci un nome per il video.');
+      return;
+    }
+    if (!normalizedUrl || !isYoutubeVideoUrl(normalizedUrl)) {
+      showError('Inserisci un link YouTube valido da salvare nella raccolta.');
+      return;
+    }
+    const duplicate = videoLibrary.find((item) => item.id !== videoLibraryEditingId && item.url === normalizedUrl);
+    if (duplicate) {
+      showError('Questo link è già presente nella raccolta video.');
+      return;
+    }
+    const now = new Date().toISOString();
+    const nextItems = videoLibraryEditingId
+      ? videoLibrary.map((item) => (
+        item.id === videoLibraryEditingId
+          ? {...item, name: normalizedName, url: normalizedUrl, updatedAt: now}
+          : item
+      ))
+      : [
+        {
+          id: createVideoLibraryItemId(),
+          name: normalizedName,
+          url: normalizedUrl,
+          createdAt: now,
+          updatedAt: now,
+        },
+        ...videoLibrary,
+      ];
+
+    await persistVideoLibrary(nextItems, videoLibraryEditingId ? 'Video aggiornato nella raccolta.' : 'Video aggiunto alla raccolta.');
+    resetVideoLibraryDraft();
+  }
+
+  async function deleteVideoLibraryItem(item: VideoLibraryItemDraft) {
+    const confirmed = window.confirm(`Vuoi rimuovere "${item.name}" dalla raccolta video?`);
+    if (!confirmed) return;
+    const nextItems = videoLibrary.filter((entry) => entry.id !== item.id);
+    await persistVideoLibrary(nextItems, 'Video rimosso dalla raccolta.');
+    if (videoLibraryEditingId === item.id) {
+      resetVideoLibraryDraft();
+    }
+  }
+
+  function openVideoLibraryPicker(exerciseIndex: number, movementType: ExerciseMovementType, label: string) {
+    if (sortedVideoLibrary.length === 0) {
+      openVideoLibraryModal();
+      return;
+    }
+    setVideoLibraryPickerSearch('');
+    setVideoLibraryTarget({exerciseIndex, movementType, label});
+  }
+
+  function applyVideoLibraryToExercise(item: VideoLibraryItemDraft) {
+    if (!videoLibraryTarget) return;
+    const currentExercise = exercises[videoLibraryTarget.exerciseIndex];
+    updateExercise(videoLibraryTarget.exerciseIndex, {
+      videoUrl: item.url,
+      mediaUrl: item.url || currentExercise?.imageUrl || '',
+    });
+    setVideoLibraryTarget(null);
+    showSuccess(`Video "${item.name}" collegato alla scheda.`);
+  }
 
   async function runAction<T>(action: () => Promise<T>, okMessage: string): Promise<T | undefined> {
     setLoading(true);
@@ -1959,6 +2163,22 @@ export function CoachDashboardPage() {
                     : 'Non hai ancora schede create: inizia con una nuova scheda.'}
                 </p>
 
+                <article className="card video-library-card" style={{ boxShadow: 'none', border: '1px solid rgba(18,18,18,0.10)' }}>
+                  <div className="video-library-card-head">
+                    <div className="video-library-card-copy">
+                      <h3>Raccolta video</h3>
+                      <p className="hint">
+                        {sortedVideoLibrary.length > 0
+                          ? `${sortedVideoLibrary.length} video YouTube salvati: puoi riusarli quando compili un esercizio.`
+                          : 'Salva una volta i link YouTube che usi spesso e richiamali mentre compili la scheda.'}
+                      </p>
+                    </div>
+                    <button className="btn btn-ghost" type="button" onClick={openVideoLibraryModal}>
+                      Apri raccolta
+                    </button>
+                  </div>
+                </article>
+
                 <div className="supervisor-actions">
                   <button className="btn" disabled={loading} onClick={openCreatePlanModal} type="button">
                     Crea nuova scheda
@@ -2046,6 +2266,172 @@ export function CoachDashboardPage() {
           </>
         )}
       </article>
+      ) : null}
+
+      {isVideoLibraryModalOpen ? (
+        <section className="modal-overlay modal-overlay-level-2" role="dialog" aria-modal="true" onClick={(event) => {
+          if (event.currentTarget !== event.target) return;
+          setIsVideoLibraryModalOpen(false);
+          resetVideoLibraryDraft();
+        }}>
+          <article className="card modal-card video-library-modal-card" onClick={(event) => event.stopPropagation()}>
+            <div className="exercise-head">
+              <div>
+                <h2>Raccolta video</h2>
+                <p className="hero-sub">Salva qui i link YouTube che usi spesso e richiamali mentre compili gli esercizi.</p>
+              </div>
+              <button
+                className="icon-btn"
+                type="button"
+                aria-label="Chiudi raccolta video"
+                onClick={() => {
+                  setIsVideoLibraryModalOpen(false);
+                  resetVideoLibraryDraft();
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="video-library-manage-grid">
+              <div className="video-library-form">
+                <label>
+                  Nome video *
+                  <input
+                    value={videoLibraryDraftName}
+                    onChange={(event) => setVideoLibraryDraftName(event.target.value)}
+                    placeholder="Es. Squat bilanciere"
+                  />
+                </label>
+                <label>
+                  Link YouTube *
+                  <input
+                    value={videoLibraryDraftUrl}
+                    onChange={(event) => setVideoLibraryDraftUrl(event.target.value)}
+                    placeholder="https://www.youtube.com/watch?v=..."
+                  />
+                </label>
+                <div className="action-row-split">
+                  {videoLibraryEditingId ? (
+                    <button className="btn btn-ghost" type="button" onClick={resetVideoLibraryDraft}>
+                      Annulla modifica
+                    </button>
+                  ) : null}
+                  <button className="btn btn-primary" type="button" disabled={videoLibrarySaving} onClick={() => void saveVideoLibraryItem()}>
+                    {videoLibrarySaving ? 'Salvataggio...' : videoLibraryEditingId ? 'Salva modifiche' : 'Aggiungi video'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="video-library-list-panel">
+                <label>
+                  Cerca nella raccolta
+                  <input
+                    value={videoLibrarySearch}
+                    onChange={(event) => setVideoLibrarySearch(event.target.value)}
+                    placeholder="Cerca per nome o link..."
+                  />
+                </label>
+
+                {filteredVideoLibrary.length > 0 ? (
+                  <ul className="video-library-list">
+                    {filteredVideoLibrary.map((item) => (
+                      <li key={item.id} className="video-library-item">
+                        <div className="video-library-item-main">
+                          <strong>{item.name}</strong>
+                          <a href={item.url} target="_blank" rel="noreferrer" className="hint video-library-item-link">
+                            {item.url}
+                          </a>
+                        </div>
+                        <div className="video-library-item-actions">
+                          <button className="btn btn-ghost" type="button" onClick={() => editVideoLibraryItem(item)}>
+                            Modifica
+                          </button>
+                          <button className="icon-btn assigned-client-remove-btn icon-btn-danger" type="button" aria-label={`Elimina ${item.name}`} onClick={() => void deleteVideoLibraryItem(item)}>
+                            🗑
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <article className="card video-library-empty" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
+                    <p className="hint">
+                      {sortedVideoLibrary.length > 0
+                        ? 'Nessun video trovato con questa ricerca.'
+                        : 'Non hai ancora video salvati. Aggiungi il primo link YouTube qui sopra.'}
+                    </p>
+                  </article>
+                )}
+              </div>
+            </div>
+          </article>
+        </section>
+      ) : null}
+
+      {videoLibraryTarget ? (
+        <section className="modal-overlay modal-overlay-level-2" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && setVideoLibraryTarget(null)}>
+          <article className="card modal-card video-library-picker-card" onClick={(event) => event.stopPropagation()}>
+            <div className="exercise-head">
+              <div>
+                <h2>Scegli un video</h2>
+                <p className="hero-sub">
+                  {videoLibraryTarget.movementType === 'stretching' ? 'Stretching' : 'Esercizio'}: {videoLibraryTarget.label}
+                </p>
+              </div>
+              <button className="icon-btn" type="button" aria-label="Chiudi selezione video" onClick={() => setVideoLibraryTarget(null)}>
+                ✕
+              </button>
+            </div>
+
+            <label>
+              Cerca video salvato
+              <input
+                value={videoLibraryPickerSearch}
+                onChange={(event) => setVideoLibraryPickerSearch(event.target.value)}
+                placeholder="Cerca per nome o link..."
+              />
+            </label>
+
+            {pickerVideoLibrary.length > 0 ? (
+              <ul className="video-library-list">
+                {pickerVideoLibrary.map((item) => (
+                  <li key={`picker-${item.id}`} className="video-library-item">
+                    <div className="video-library-item-main">
+                      <strong>{item.name}</strong>
+                      <p className="hint video-library-item-link">{item.url}</p>
+                    </div>
+                    <div className="video-library-item-actions">
+                      <button className="btn btn-primary" type="button" onClick={() => applyVideoLibraryToExercise(item)}>
+                        Usa video
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <article className="card video-library-empty" style={{ boxShadow: 'none', border: '1px dashed rgba(18,18,18,0.16)' }}>
+                <p className="hint">
+                  {sortedVideoLibrary.length > 0
+                    ? 'Nessun video trovato con questa ricerca.'
+                    : 'Non hai ancora una raccolta video. Aprila e salva i link YouTube che usi più spesso.'}
+                </p>
+              </article>
+            )}
+
+            <div className="action-row-split">
+              <button className="btn btn-ghost" type="button" onClick={() => {
+                setVideoLibraryTarget(null);
+                openVideoLibraryModal();
+              }}>
+                Gestisci raccolta
+              </button>
+              <button className="btn btn-ghost" type="button" onClick={() => setVideoLibraryTarget(null)}>
+                Chiudi
+              </button>
+            </div>
+          </article>
+        </section>
       ) : null}
 
       {isProfileModalOpen ? (
@@ -2513,8 +2899,24 @@ export function CoachDashboardPage() {
                                       />
                                     </label>
                                   ) : null}
+                                  <div className="exercise-video-library-row">
+                                    <div className="exercise-video-library-copy">
+                                      <p className="hint">Raccolta video</p>
+                                      <strong>
+                                        {videoLibraryByUrl.get(exercise.videoUrl)?.name
+                                          ?? (exercise.videoUrl.trim() ? 'Video manuale inserito' : 'Nessun video selezionato')}
+                                      </strong>
+                                    </div>
+                                    <button
+                                      className="btn btn-ghost"
+                                      type="button"
+                                      onClick={() => openVideoLibraryPicker(index, exercise.movementType, exercise.name.trim() || `${movementTypeLabel(exercise.movementType)} ${sectionIndex + 1}`)}
+                                    >
+                                      {sortedVideoLibrary.length > 0 ? 'Scegli dalla raccolta' : 'Apri raccolta'}
+                                    </button>
+                                  </div>
                                   <label>
-                                    URL video (YouTube o link diretto)
+                                    Oppure URL video manuale (YouTube o link diretto)
                                     <input
                                       value={exercise.videoUrl}
                                       onChange={(event) => updateExercise(index, {videoUrl: event.target.value, mediaUrl: event.target.value || exercise.imageUrl})}
@@ -2798,7 +3200,7 @@ export function CoachDashboardPage() {
       ) : null}
 
       {isAssignModalOpen && selectedPlan ? (
-        <section className="modal-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && setIsAssignModalOpen(false)}>
+        <section className="modal-overlay modal-overlay-level-2" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && setIsAssignModalOpen(false)}>
           <article className="card modal-card" onClick={(event) => event.stopPropagation()}>
             <div className="exercise-head">
               <h2>Gestisci assegnazioni</h2>
@@ -2879,7 +3281,7 @@ export function CoachDashboardPage() {
       ) : null}
 
       {isAssignmentModeModalOpen && selectedPlan ? (
-        <section className="modal-overlay" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && setIsAssignmentModeModalOpen(false)}>
+        <section className="modal-overlay modal-overlay-level-3" role="dialog" aria-modal="true" onClick={(event) => event.currentTarget === event.target && setIsAssignmentModeModalOpen(false)}>
           <article className="card modal-card" onClick={(event) => event.stopPropagation()}>
             <h2>Durata assegnazione</h2>
             <p className="hint">
