@@ -4,6 +4,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 
 import { useToast } from '../components/ToastProvider';
 import { assignPlanToClientAsCoach, getPlanById, listAssignedClientsAsCoach, removePlanAssignmentAsCoach, syncPlanWeightOverridesForCoach, useAuthState } from '../lib';
+import { SELECT_THEME } from '../theme';
 import { toMessage } from '../utils/firestore';
 
 interface PlanDoc {
@@ -301,21 +302,52 @@ export function CoachPlanPrintPage() {
         ...base,
         minHeight: 48,
         borderRadius: 12,
-        borderColor: state.isFocused ? '#ff6a00' : 'rgba(18,18,18,0.16)',
-        boxShadow: state.isFocused ? '0 0 0 2px rgba(255,106,0,0.20)' : 'none',
-        backgroundColor: '#fff',
-        '&:hover': { borderColor: '#ff6a00' },
+        borderColor: state.isFocused ? SELECT_THEME.accent : SELECT_THEME.border,
+        boxShadow: state.isFocused ? `0 0 0 3px ${SELECT_THEME.accentFocus}` : 'none',
+        backgroundColor: SELECT_THEME.surface,
+        '&:hover': { borderColor: SELECT_THEME.accent },
       }),
       menu: (base) => ({
         ...base,
         borderRadius: 12,
         overflow: 'hidden',
         zIndex: 50,
+        backgroundColor: SELECT_THEME.surface,
+        border: `1px solid ${SELECT_THEME.border}`,
+      }),
+      singleValue: (base) => ({
+        ...base,
+        color: SELECT_THEME.text,
+      }),
+      multiValue: (base) => ({
+        ...base,
+        backgroundColor: SELECT_THEME.surface2,
+        borderRadius: 999,
+      }),
+      multiValueLabel: (base) => ({
+        ...base,
+        color: SELECT_THEME.text,
+      }),
+      multiValueRemove: (base) => ({
+        ...base,
+        color: SELECT_THEME.textMuted,
+        ':hover': {
+          backgroundColor: SELECT_THEME.accentSoft,
+          color: SELECT_THEME.text,
+        },
+      }),
+      placeholder: (base) => ({
+        ...base,
+        color: SELECT_THEME.textMuted,
+      }),
+      input: (base) => ({
+        ...base,
+        color: SELECT_THEME.text,
       }),
       option: (base, state) => ({
         ...base,
-        backgroundColor: state.isSelected ? '#ff6a00' : state.isFocused ? 'rgba(255,106,0,0.10)' : '#fff',
-        color: state.isSelected ? '#fff' : '#121212',
+        backgroundColor: state.isSelected ? SELECT_THEME.accent : state.isFocused ? SELECT_THEME.accentSoft : SELECT_THEME.surface,
+        color: state.isSelected ? SELECT_THEME.accentForeground : SELECT_THEME.text,
         cursor: 'pointer',
       }),
     }),
