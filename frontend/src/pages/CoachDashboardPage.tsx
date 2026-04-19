@@ -7,6 +7,7 @@ import {
   assignPlanToClientAsCoach,
   activateCoachSubscription,
   disableCoachSubscription,
+  deleteClientAsCoach,
   deleteMyProfile,
   getUserProfile,
   createPlanAsCoach,
@@ -763,6 +764,8 @@ export function CoachDashboardPage() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingProfile, setDeletingProfile] = useState(false);
+  const [isClientDeleteModalOpen, setIsClientDeleteModalOpen] = useState(false);
+  const [deletingClient, setDeletingClient] = useState(false);
   const [coachPhone, setCoachPhone] = useState('');
   const [coachPhoneDraft, setCoachPhoneDraft] = useState('');
   const [editingCoachPhone, setEditingCoachPhone] = useState(false);
@@ -810,6 +813,9 @@ export function CoachDashboardPage() {
   const isUploadingMedia = uploadingExerciseIndex !== null || uploadingWarmupMedia;
 
   const selectedClientProfile = registeredClients.find((item) => getClientAuthUid(item) === selectedClientId) ?? null;
+  const selectedClientLabel = asText(selectedClientProfile?.displayName).trim()
+    || asText(selectedClientProfile?.email).trim()
+    || (selectedClientProfile ? getClientAuthUid(selectedClientProfile) : '');
   const coachPlanTemplates = [...plans].sort((a, b) => {
     const aTime = toTimestamp(asText((a as {createdAt?: unknown}).createdAt as string)) ?? 0;
     const bTime = toTimestamp(asText((b as {createdAt?: unknown}).createdAt as string)) ?? 0;
@@ -1049,7 +1055,7 @@ export function CoachDashboardPage() {
     }
   }, [isPlanPreviewOpen, selectedPlan?.id]);
 
-  async function loadData() {
+  async function loadData(preferredSelectedClientId?: string) {
     if (!role) return;
     setLoading(true);
     try {
@@ -1068,7 +1074,17 @@ export function CoachDashboardPage() {
           return aLabel.localeCompare(bLabel);
         });
       setRegisteredClients(candidates);
-      if (!selectedClientId && candidates[0]) setSelectedClientId(getClientAuthUid(candidates[0]));
+      const requestedClientId = preferredSelectedClientId === undefined ? selectedClientId : preferredSelectedClientId;
+      const hasRequestedClient = requestedClientId
+        ? candidates.some((item) => getClientAuthUid(item) === requestedClientId)
+        : false;
+      const nextSelectedClientId = hasRequestedClient ? requestedClientId : (candidates[0] ? getClientAuthUid(candidates[0]) : '');
+      if (nextSelectedClientId !== selectedClientId) {
+        setSelectedClientId(nextSelectedClientId);
+      }
+      if (!nextSelectedClientId) {
+        setSelectedClientOnboarding(null);
+      }
       const rawVideoItems = (videoLibrarySnap?.data() as {items?: unknown} | undefined)?.items;
       setVideoLibrary(normalizeVideoLibraryItems(rawVideoItems));
 
@@ -1891,6 +1907,22 @@ export function CoachDashboardPage() {
     }
   }
 
+  async function handleDeleteSelectedClient() {
+    if (!selectedClientProfile) return;
+    const clientId = getClientAuthUid(selectedClientProfile);
+    setDeletingClient(true);
+    try {
+      await deleteClientAsCoach(clientId);
+      setIsClientDeleteModalOpen(false);
+      showSuccess('Cliente eliminato correttamente.');
+      await loadData('');
+    } catch (error) {
+      showError(toMessage(error));
+    } finally {
+      setDeletingClient(false);
+    }
+  }
+
   async function saveCoachPhone() {
     const normalized = coachPhoneDraft.replace(/[^\d+]/g, '').trim();
     if (normalized.length < 8) {
@@ -2144,13 +2176,23 @@ export function CoachDashboardPage() {
             <article className="card card-dashed">
               <h2>Anagrafica cliente</h2>
               <p className="hint">Sola lettura: l&apos;anagrafica viene compilata e aggiornata direttamente dal cliente nella sua area profilo.</p>
-              {selectedClientWhatsappUrl ? (
-                <a className="btn btn-whatsapp" href={selectedClientWhatsappUrl} target="_blank" rel="noreferrer">
-                  Scrivi al cliente su WhatsApp
-                </a>
-              ) : (
-                <p className="hint">Numero WhatsApp cliente non disponibile.</p>
-              )}
+              <div className="action-row-split">
+                {selectedClientWhatsappUrl ? (
+                  <a className="btn btn-whatsapp" href={selectedClientWhatsappUrl} target="_blank" rel="noreferrer">
+                    Scrivi al cliente su WhatsApp
+                  </a>
+                ) : (
+                  <p className="hint">Numero WhatsApp cliente non disponibile.</p>
+                )}
+                <button
+                  className="btn btn-danger"
+                  type="button"
+                  disabled={!selectedClientProfile}
+                  onClick={() => setIsClientDeleteModalOpen(true)}
+                >
+                  Elimina cliente
+                </button>
+              </div>
 
               <div className="client-info-block">
                 <h3>Anagrafica</h3>
@@ -3393,6 +3435,44 @@ export function CoachDashboardPage() {
               </button>
               <button className="btn btn-danger" type="button" disabled={deletingProfile} onClick={() => void handleDeleteProfile()}>
                 {deletingProfile ? 'Eliminazione...' : 'Conferma eliminazione'}
+              </button>
+            </div>
+          </article>
+        </section>
+      ) : null}
+
+      {isClientDeleteModalOpen ? (
+        <section
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={(event) => event.currentTarget === event.target && !deletingClient && setIsClientDeleteModalOpen(false)}
+        >
+          <article className="card modal-card" onClick={(event) => event.stopPropagation()}>
+            <h2>Conferma eliminazione cliente</h2>
+            <p className="hint">
+              Stai per eliminare definitivamente il profilo di <strong>{selectedClientLabel || 'questo cliente'}</strong> insieme ai dati collegati,
+              incluse assegnazioni, schede associate, progressi e documenti privati.
+            </p>
+            <p className="hint">
+              Vuoi continuare davvero?
+            </p>
+            <div className="onboarding-actions">
+              <button
+                className="btn btn-ghost"
+                type="button"
+                disabled={deletingClient}
+                onClick={() => setIsClientDeleteModalOpen(false)}
+              >
+                No
+              </button>
+              <button
+                className="btn btn-danger"
+                type="button"
+                disabled={deletingClient}
+                onClick={() => void handleDeleteSelectedClient()}
+              >
+                {deletingClient ? 'Eliminazione...' : 'Sì, elimina'}
               </button>
             </div>
           </article>

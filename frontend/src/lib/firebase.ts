@@ -87,6 +87,10 @@ const disableCoachSubscriptionFn = httpsCallable<{ uid: string }, { ok: boolean;
   functions,
   'disableCoachSubscription',
 );
+const deleteClientAsCoachFn = httpsCallable<{ clientId: string }, { ok: boolean; clientId: string }>(
+  functions,
+  'deleteClientAsCoach',
+);
 const deleteMyProfileFn = httpsCallable<undefined, { ok: boolean }>(functions, 'deleteMyProfile');
 const updateMyCoachPhoneFn = httpsCallable<{ phone: string }, { ok: boolean; phone: string }>(functions, 'updateMyCoachPhone');
 const getMyAssignedPlansFn = httpsCallable<
@@ -173,6 +177,11 @@ export async function renewCoachSubscription(uid: string) {
 
 export async function disableCoachSubscription(uid: string) {
   const result = await disableCoachSubscriptionFn({ uid });
+  return result.data;
+}
+
+export async function deleteClientAsCoach(clientId: string) {
+  const result = await deleteClientAsCoachFn({ clientId });
   return result.data;
 }
 

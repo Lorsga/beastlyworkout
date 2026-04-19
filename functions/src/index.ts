@@ -1212,6 +1212,62 @@ export const disableCoachSubscription = onCall(
   },
 );
 
+export const deleteClientAsCoach = onCall(
+  {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    const coachUid = request.auth.uid;
+    const clientUid = typeof (request.data as {clientId?: unknown}).clientId === 'string'
+      ? (request.data as {clientId: string}).clientId.trim()
+      : '';
+
+    if (!clientUid) {
+      throw new HttpsError('invalid-argument', 'clientId is required.');
+    }
+
+    if (clientUid === coachUid) {
+      throw new HttpsError('failed-precondition', 'You cannot delete your own profile from this action.');
+    }
+
+    const coachRoleFromClaim = typeof request.auth.token.role === 'string' ? request.auth.token.role : '';
+    if (coachRoleFromClaim !== 'trainer' && coachRoleFromClaim !== 'admin') {
+      const coachSnap = await db.collection('users').doc(coachUid).get();
+      const coachRoleFromDoc = typeof coachSnap.data()?.role === 'string' ? coachSnap.data()?.role : '';
+      if (coachRoleFromDoc !== 'trainer' && coachRoleFromDoc !== 'admin') {
+        throw new HttpsError('permission-denied', 'Only coach accounts can delete an assigned client.');
+      }
+    }
+
+    const clientRef = db.collection('users').doc(clientUid);
+    const clientSnap = await clientRef.get();
+    if (!clientSnap.exists) {
+      throw new HttpsError('not-found', 'Client profile not found.');
+    }
+
+    const clientData = clientSnap.data() ?? {};
+    const clientRole = typeof clientData.role === 'string' ? clientData.role : '';
+    if (clientRole && clientRole !== 'client') {
+      throw new HttpsError('failed-precondition', 'Only client profiles can be deleted from this section.');
+    }
+
+    const assignedCoachId = typeof clientData.assignedCoachId === 'string' ? clientData.assignedCoachId : '';
+    if (assignedCoachId !== coachUid) {
+      throw new HttpsError('permission-denied', 'This client is not assigned to your coach account.');
+    }
+
+    await deleteClientOwnedData(clientUid);
+    await admin.auth().deleteUser(clientUid).catch((error: {code?: string}) => {
+      if (error?.code === 'auth/user-not-found') return;
+      throw error;
+    });
+
+    return {ok: true, clientId: clientUid};
+  },
+);
+
 export const deleteMyProfile = onCall(
   {region: 'us-central1', cors: allowedOrigins, invoker: 'public'},
   async (request) => {
