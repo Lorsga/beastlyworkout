@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>__PAGE_TITLE__</title>
+    <meta
+      name="description"
+      content="Lascia nome e telefono per ricevere una consulenza gratuita dal team di __GYM_NAME__."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/main.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Vai all'inizio">
+        <img src="/logo.svg" alt="Logo __GYM_NAME__" class="brand-mark" />
+        <span class="brand-copy">
+          <strong>__GYM_NAME__</strong>
+          <span>Consulenza fitness gratuita</span>
+        </span>
+      </a>
+      <a class="header-cta" href="#lead-form">Prenota il contatto</a>
+    </header>
+
+    <main id="top">
+      <section class="hero section">
+        <div class="hero-copy" data-reveal>
+          <p class="eyebrow">Allenamento personalizzato. Zero confusione.</p>
+          <h1>Lascia il tuo numero. Ti richiamiamo e costruiamo il tuo prossimo livello.</h1>
+          <p class="hero-text">
+            Un contatto semplice, diretto e veloce per capire obiettivi, disponibilita e punto di
+            partenza. Nessun form infinito. Solo nome, telefono e una chiamata fatta bene.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#lead-form">Voglio essere ricontattato</a>
+            <a class="btn btn-secondary" href="#method">Come funziona</a>
+          </div>
+          <ul class="proof-strip" aria-label="Punti di forza">
+            <li>Percorso costruito sui tuoi obiettivi</li>
+            <li>Contatto diretto e rapido</li>
+            <li>Esperienza pensata anche da mobile</li>
+          </ul>
+        </div>
+
+        <aside class="lead-panel" data-reveal>
+          <div class="lead-panel-shell">
+            <p class="panel-kicker">Prima chiamata</p>
+            <h2>Richiedi la consulenza gratuita</h2>
+            <p class="panel-text">
+              Inserisci i tuoi dati e li salviamo direttamente nel foglio Google collegato alla tua
+              attivita.
+            </p>
+
+            <form id="lead-form" class="lead-form" novalidate>
+              <div class="field-group">
+                <label for="name">Nome</label>
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  autocomplete="name"
+                  placeholder="Es. Lorenzo"
+                  required
+                />
+                <p class="field-error" id="name-error" aria-live="polite"></p>
+              </div>
+
+              <div class="field-group">
+                <label for="phone">Numero di telefono</label>
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  autocomplete="tel"
+                  inputmode="tel"
+                  placeholder="Es. +39 347 123 4567"
+                  required
+                />
+                <p class="field-error" id="phone-error" aria-live="polite"></p>
+              </div>
+
+              <div class="field-group field-honeypot" aria-hidden="true">
+                <label for="website">Website</label>
+                <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+              </div>
+
+              <button class="btn btn-submit" type="submit" data-submit-button>
+                <span data-submit-label>Invia richiesta</span>
+                <span class="spinner" aria-hidden="true"></span>
+              </button>
+
+              <p class="form-note">
+                Inviando il modulo accetti di essere ricontattato dal team di __GYM_NAME__.
+              </p>
+              <p class="form-status" role="status" aria-live="polite" data-form-status></p>
+            </form>
+          </div>
+        </aside>
+      </section>
+
+      <section class="section metrics" data-reveal>
+        <div class="metric-card">
+          <span class="metric-label">Obiettivo</span>
+          <strong>Più conversioni</strong>
+          <p>Il form chiede solo i due dati essenziali per abbassare l'attrito.</p>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Processo</span>
+          <strong>Subito su Google Sheets</strong>
+          <p>I lead arrivano direttamente nel foglio condiviso con la tua attivita.</p>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Futuro</span>
+          <strong>Email modificabile</strong>
+          <p>Quando cambi email basta puntare a un nuovo foglio: il codice resta uguale.</p>
+        </div>
+      </section>
+
+      <section class="section content-grid" id="method">
+        <div class="section-intro" data-reveal>
+          <p class="eyebrow">Metodo</p>
+          <h2>Una landing page costruita per farti ricevere richieste, non per distrarre.</h2>
+        </div>
+
+        <div class="card-grid">
+          <article class="info-card" data-reveal>
+            <span class="card-index">01</span>
+            <h3>Messaggio chiaro</h3>
+            <p>Una promessa diretta, grande tipografia e una sola azione principale.</p>
+          </article>
+          <article class="info-card" data-reveal>
+            <span class="card-index">02</span>
+            <h3>Form essenziale</h3>
+            <p>Nome e telefono con validazione semplice, feedback immediato e invio veloce.</p>
+          </article>
+          <article class="info-card" data-reveal>
+            <span class="card-index">03</span>
+            <h3>Raccolta centralizzata</h3>
+            <p>Ogni contatto viene salvato con data, orario e sorgente direttamente nel foglio.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div class="story-card" data-reveal>
+          <p class="eyebrow">Perche funziona</p>
+          <h2>Chi arriva qui capisce subito cosa fare.</h2>
+          <p>
+            Niente menu complessi, niente percorsi laterali, niente elementi superflui. Solo una
+            pagina di acquisizione pensata per trasformare traffico in conversazioni reali.
+          </p>
+        </div>
+        <div class="checklist-card" data-reveal>
+          <h3>Dentro al progetto trovi:</h3>
+          <ul class="check-list">
+            <li>Landing page standalone separata dall'app esistente</li>
+            <li>Backend Node con endpoint `/api/leads`</li>
+            <li>Integrazione Google Sheets via service account</li>
+            <li>Configurazione semplice con file `.env`</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section faq-section" data-reveal>
+        <div class="section-intro narrow">
+          <p class="eyebrow">FAQ</p>
+          <h2>Domande pratiche prima della messa online.</h2>
+        </div>
+        <div class="faq-list">
+          <article class="faq-card">
+            <h3>Come arriva il lead nel foglio Google?</h3>
+            <p>
+              Il backend usa le credenziali del service account per aggiungere una nuova riga nel
+              foglio che scegli tu.
+            </p>
+          </article>
+          <article class="faq-card">
+            <h3>Se cambio email in futuro devo rifare tutto?</h3>
+            <p>
+              No. Crei un nuovo Google Sheet con il nuovo account, lo condividi con il service
+              account e aggiorni lo `spreadsheet id`.
+            </p>
+          </article>
+          <article class="faq-card">
+            <h3>Che dati salva ogni invio?</h3>
+            <p>Timestamp UTC, data locale, nome, telefono, nome palestra e email proprietaria.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

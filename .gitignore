@@ -13,3 +13,6 @@ npm-debug.log*
 
 # Netlify
 .netlify/
+
+# Standalone landing app
+gym-landing/.env
