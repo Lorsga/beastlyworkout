@@ -16,6 +16,7 @@ import {
 } from '../lib';
 import { AppShell } from '../components/AppShell';
 import { buildWhatsAppUrl } from '../config/support';
+import { formatDurationLabel, formatRecoveryLabel, formatWorkLabel } from '../utils/duration';
 import { mapDocs, toMessage } from '../utils/firestore';
 
 interface PlanDoc {
@@ -291,11 +292,13 @@ function formatCircuitRoundsLabel(value: unknown): string {
 }
 
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
-  return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
+  if (unit === 'seconds') return formatDurationLabel(value);
+  return `${value || '-'} reps`;
 }
 
 function formatWorkTarget(value: number, unit: ExerciseRepsUnit): string {
-  return `${value || '-'} ${unit === 'seconds' ? 'sec lavoro' : 'reps'}`;
+  if (unit === 'seconds') return formatWorkLabel(value);
+  return `${value || '-'} reps`;
 }
 
 function splitExercisesByMovementType<T extends { movementType: ExerciseMovementType }>(items: T[]) {
@@ -889,7 +892,7 @@ export function ClientDashboardPage() {
                               </>
                             )}
                             <span>{exercise.weightKg || 0} kg</span>
-                            <span>{exercise.restSeconds || 0} sec recupero</span>
+                            <span>{formatRecoveryLabel(exercise.restSeconds)}</span>
                           </div>
                           {exercise.advancedMethod ? (
                             <p className="hint">

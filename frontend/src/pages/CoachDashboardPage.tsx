@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
 import Select, { type MultiValue, type StylesConfig } from 'react-select';
 import { useNavigate } from 'react-router-dom';
 
+import { DurationPicker } from '../components/DurationPicker';
 import { useToast } from '../components/ToastProvider';
 import {
   assignPlanToClientAsCoach,
@@ -36,6 +37,9 @@ import {
 } from '../lib';
 import { AppShell } from '../components/AppShell';
 import { SELECT_THEME } from '../theme';
+import { formatDurationLabel, formatRecoveryLabel, formatWorkLabel } from '../utils/duration';
+import { buildPlanPdfBaseName } from '../utils/pdf';
+import { printHtmlDocument } from '../utils/print';
 import { toMessage } from '../utils/firestore';
 
 interface PlanDoc {
@@ -228,6 +232,15 @@ function asText(value: unknown): string {
   return typeof value === 'string' ? value : value == null ? '' : String(value);
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 function getClientAuthUid(profile: UserProfileDoc & { id: string }): string {
   const docId = asText(profile.id).trim();
   const uid = asText(profile.uid).trim();
@@ -370,11 +383,13 @@ function formatCircuitRoundsLabel(value: unknown): string {
 }
 
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
-  return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
+  if (unit === 'seconds') return formatDurationLabel(value);
+  return `${value || '-'} reps`;
 }
 
 function formatWorkTarget(value: number, unit: ExerciseRepsUnit): string {
-  return `${value || '-'} ${unit === 'seconds' ? 'sec lavoro' : 'reps'}`;
+  if (unit === 'seconds') return formatWorkLabel(value);
+  return `${value || '-'} reps`;
 }
 
 function formatExerciseSummary(
@@ -384,7 +399,7 @@ function formatExerciseSummary(
   const primary = kind === 'circuit'
     ? formatWorkTarget(Number(exercise.workValue) || 0, exercise.repsUnit)
     : `${Number(exercise.sets) || 0} serie · ${formatSeriesTarget(Number(exercise.reps) || 0, exercise.repsUnit)}`;
-  return `${primary} · ${Number(exercise.weightKg) || 0} kg · ${Number(exercise.restSeconds) || 0} sec rec`;
+  return `${primary} · ${Number(exercise.weightKg) || 0} kg · ${formatRecoveryLabel(exercise.restSeconds)}`;
 }
 
 function movementTypeLabel(value: ExerciseMovementType): string {
@@ -1393,20 +1408,164 @@ export function CoachDashboardPage() {
   }
 
   function printPlanPreview() {
-    const body = document.body;
-    let restored = false;
-    const restore = () => {
-      if (restored) return;
-      restored = true;
-      body.classList.remove('print-plan-only');
-    };
+    if (!previewPlan) return;
 
-    body.classList.add('print-plan-only');
-    window.addEventListener('afterprint', restore, { once: true });
-    window.setTimeout(() => {
-      window.print();
-    }, 80);
-    window.setTimeout(restore, 12000);
+    const pdfBaseName = buildPlanPdfBaseName({
+      assignedClientIds: previewPlan.assignedClientIds,
+      legacyClientId: previewPlan.clientId,
+      title: previewPlan.title,
+      clientLabelById,
+    });
+    const assignedNames = Array.isArray(previewPlan.assignedClientIds) && previewPlan.assignedClientIds.length > 0
+      ? previewPlan.assignedClientIds.map((id) => clientLabelById[id] || id).join(', ')
+      : 'Nessuno';
+
+    const feedbackHtml = previewPlanWeightFeedback.length > 0
+      ? `
+      <section class="block">
+        <h3>Feedback peso cliente</h3>
+        ${previewPlanWeightFeedback
+          .map(
+            (item) => `
+          <div class="sub">
+            <p><strong>${escapeHtml(item.clientLabel)}</strong></p>
+            <ul>
+              ${item.lines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
+            </ul>
+          </div>`,
+          )
+          .join('')}
+      </section>`
+      : '';
+
+    const exercisesHtml = previewPlanDisplayItems.length > 0
+      ? `
+      <section class="section-block">
+        <h3>Sequenza visualizzazione</h3>
+        ${previewPlanDisplayItems
+          .map(
+            ({ exercise, index }, orderIndex) => `
+          <article class="exercise">
+            <div class="${exercise.imageUrl ? 'exercise-row' : ''}">
+              ${exercise.imageUrl ? `<div class="exercise-media"><img src="${escapeHtml(exercise.imageUrl)}" alt="Media ${escapeHtml(movementTypeLabel(exercise.movementType))} ${orderIndex + 1}" /></div>` : ''}
+              <div class="exercise-content">
+                <p><strong>${escapeHtml(movementTypeLabel(exercise.movementType))}</strong> · Ordine ${orderIndex + 1}</p>
+                <h4>${escapeHtml(exercise.name || `${movementTypeLabel(exercise.movementType)} ${orderIndex + 1}`)}</h4>
+                <p class="meta">${
+                  previewPlan.kind === 'circuit'
+                    ? formatWorkTarget(exercise.workValue, exercise.repsUnit)
+                    : `${exercise.sets || '-'} serie · ${formatSeriesTarget(exercise.reps, exercise.repsUnit)}`
+                } · ${exercise.weightKg || 0} kg · ${formatRecoveryLabel(exercise.restSeconds)}</p>
+                ${exercise.advancedMethod ? `<p><strong>Metodo:</strong> ${exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}</p>` : ''}
+                ${
+                  exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim()
+                    ? `<p><strong>Note metodo:</strong> ${escapeHtml(exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes)}</p>`
+                    : ''
+                }
+                ${exercise.notes.trim() ? `<p><strong>Note:</strong> ${escapeHtml(exercise.notes)}</p>` : ''}
+                ${exercise.videoUrl ? `<p><a href="${escapeHtml(exercise.videoUrl)}" target="_blank" rel="noreferrer">URL video: ${escapeHtml(exercise.videoUrl)}</a></p>` : ''}
+              </div>
+            </div>
+          </article>`,
+          )
+          .join('')}
+      </section>`
+      : '';
+
+    const warmupImageUrl = getPlanWarmupImageUrl(previewPlan);
+    const warmupVideoUrl = getPlanWarmupVideoUrl(previewPlan);
+    const warmupText = asText((previewPlan as { warmup?: unknown }).warmup).trim();
+    const warmupBlockHtml = warmupText || warmupImageUrl || warmupVideoUrl
+      ? `<div class="block">
+    <div class="${warmupImageUrl ? 'warmup-row' : ''}">
+      ${warmupImageUrl ? `<div class="warmup-media"><img src="${escapeHtml(warmupImageUrl)}" alt="Media riscaldamento" /></div>` : ''}
+      <div class="warmup-content">
+        ${warmupText ? `<p><strong>Riscaldamento:</strong> ${escapeHtml(warmupText)}</p>` : ''}
+        ${warmupVideoUrl ? `<p><a href="${escapeHtml(warmupVideoUrl)}" target="_blank" rel="noreferrer">URL video riscaldamento: ${escapeHtml(warmupVideoUrl)}</a></p>` : ''}
+      </div>
+    </div>
+  </div>`
+      : '';
+
+    const html = `<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${escapeHtml(pdfBaseName)}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 16px; color: #111; }
+    h1, h2, h3, h4 { margin: 0 0 8px; }
+    .block { border: 1px solid #e5e5e5; border-radius: 12px; padding: 12px; margin: 10px 0; }
+    .sub { border-top: 1px solid #eee; margin-top: 8px; padding-top: 8px; }
+    .section-block { margin: 18px 0; }
+    .exercise { border: 1px solid #e5e5e5; border-radius: 12px; padding: 12px; margin: 10px 0; break-inside: avoid; }
+    .exercise-row { display: flex; gap: 12px; align-items: flex-start; }
+    .exercise-media { flex: 0 0 180px; width: 180px; }
+    .exercise-content { flex: 1 1 auto; min-width: 0; }
+    .warmup-row { display: flex; gap: 12px; align-items: flex-start; }
+    .warmup-media { flex: 0 0 180px; width: 180px; }
+    .warmup-content { flex: 1 1 auto; min-width: 0; }
+    .meta { color: #444; margin: 4px 0 8px; }
+    img { display: block; width: 100%; max-height: 260px; object-fit: cover; border-radius: 10px; margin-top: 8px; }
+    .exercise-media img { margin-top: 0; }
+    .warmup-media img { margin-top: 0; }
+    a { color: #b31217; }
+    .rounds-inline {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 12px 0 0;
+    }
+    .rounds-inline-label { font-size: 15px; font-weight: 500; color: #444; }
+    .rounds-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 32px;
+      padding: 6px 11px;
+      border-radius: 10px;
+      background: #050505;
+      color: #fff;
+      font: italic 900 18px/1 "Space Grotesk", system-ui, sans-serif;
+      letter-spacing: -0.04em;
+      box-shadow: 0 10px 22px rgba(0, 0, 0, 0.16);
+    }
+    @media (max-width: 720px) { .rounds-badge { font-size: 17px; padding: 6px 10px; } }
+    @media print { .rounds-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    @media print { body { margin: 10mm; } .exercise-row { display: flex; } .warmup-row { display: flex; } }
+  </style>
+</head>
+<body>
+  <h1>Scheda</h1>
+  <p><strong>Clienti assegnati:</strong> ${escapeHtml(assignedNames)}</p>
+  <div class="block">
+    <p><strong>Titolo programma:</strong> ${escapeHtml(previewPlan.title || 'Senza titolo')}</p>
+    <p><strong>Tipo scheda:</strong> ${escapeHtml(previewPlan.kind === 'circuit' ? 'Circuito' : 'Serie e reps')}</p>
+    ${previewPlan.kind === 'circuit' ? `<div class="rounds-inline"><span class="rounds-inline-label">Giri circuito:</span><span class="rounds-badge">${escapeHtml(formatCircuitRoundsLabel(previewPlan.circuitRounds))}</span></div>` : ''}
+    ${asText(previewPlan.notes).trim() ? `<p><strong>Note coach:</strong> ${escapeHtml(asText(previewPlan.notes))}</p>` : ''}
+  </div>
+  ${warmupBlockHtml}
+  ${feedbackHtml}
+  ${exercisesHtml}
+</body>
+</html>`;
+
+    void (async () => {
+      try {
+        await printHtmlDocument({
+          html,
+          title: pdfBaseName,
+        });
+      } catch (nextError) {
+        if (nextError instanceof Error && nextError.message === 'POPUP_BLOCKED') {
+          showError('Consenti l’apertura della finestra di stampa per salvare il PDF con il nome corretto.');
+          return;
+        }
+        showError(toMessage(nextError));
+      }
+    })();
   }
 
   function openProfileModal() {
@@ -2850,17 +3009,26 @@ export function CoachDashboardPage() {
                                             onChange={(event) => updateExercise(index, {sets: parseExerciseNumericInput(event.target.value)})}
                                           />
                                         </label>
-                                        <label>
-                                          Valore per serie
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            inputMode="numeric"
-                                            onFocus={selectNumericInputContents}
+                                        {exercise.repsUnit === 'seconds' ? (
+                                          <DurationPicker
+                                            label="Durata set"
                                             value={exercise.reps}
-                                            onChange={(event) => updateExercise(index, {reps: parseExerciseNumericInput(event.target.value)})}
+                                            onFocus={selectNumericInputContents}
+                                            onChange={(reps) => updateExercise(index, {reps})}
                                           />
-                                        </label>
+                                        ) : (
+                                          <label>
+                                            Valore per serie
+                                            <input
+                                              type="number"
+                                              min={0}
+                                              inputMode="numeric"
+                                              onFocus={selectNumericInputContents}
+                                              value={exercise.reps}
+                                              onChange={(event) => updateExercise(index, {reps: parseExerciseNumericInput(event.target.value)})}
+                                            />
+                                          </label>
+                                        )}
                                         <div className="exercise-unit-toggle">
                                           <p className="hint">Unità</p>
                                           <div className="exercise-unit-toggle-row">
@@ -2883,17 +3051,26 @@ export function CoachDashboardPage() {
                                       </>
                                     ) : (
                                       <>
-                                        <label>
-                                          Reps/tempo di lavoro
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            inputMode="numeric"
-                                            onFocus={selectNumericInputContents}
+                                        {exercise.repsUnit === 'seconds' ? (
+                                          <DurationPicker
+                                            label="Tempo di lavoro"
                                             value={exercise.workValue}
-                                            onChange={(event) => updateExercise(index, {workValue: parseExerciseNumericInput(event.target.value)})}
+                                            onFocus={selectNumericInputContents}
+                                            onChange={(workValue) => updateExercise(index, {workValue})}
                                           />
-                                        </label>
+                                        ) : (
+                                          <label>
+                                            Reps/tempo di lavoro
+                                            <input
+                                              type="number"
+                                              min={0}
+                                              inputMode="numeric"
+                                              onFocus={selectNumericInputContents}
+                                              value={exercise.workValue}
+                                              onChange={(event) => updateExercise(index, {workValue: parseExerciseNumericInput(event.target.value)})}
+                                            />
+                                          </label>
+                                        )}
                                         <div className="exercise-unit-toggle">
                                           <p className="hint">Unità</p>
                                           <div className="exercise-unit-toggle-row">
@@ -2926,17 +3103,12 @@ export function CoachDashboardPage() {
                                         onChange={(event) => updateExercise(index, {weightKg: parseExerciseNumericInput(event.target.value)})}
                                       />
                                     </label>
-                                    <label>
-                                      Recupero (sec)
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        inputMode="numeric"
-                                        onFocus={selectNumericInputContents}
-                                        value={exercise.restSeconds}
-                                        onChange={(event) => updateExercise(index, {restSeconds: parseExerciseNumericInput(event.target.value)})}
-                                      />
-                                    </label>
+                                    <DurationPicker
+                                      label="Recupero"
+                                      value={exercise.restSeconds}
+                                      onFocus={selectNumericInputContents}
+                                      onChange={(restSeconds) => updateExercise(index, {restSeconds})}
+                                    />
                                   </div>
                                   <div className="exercise-method-toggle">
                                     <p className="hint">Metodo opzionale</p>
@@ -3238,7 +3410,7 @@ export function CoachDashboardPage() {
                                   </>
                                 )}
                                 <span>{exercise.weightKg || 0} kg</span>
-                                <span>{exercise.restSeconds || 0} sec recupero</span>
+                                <span>{formatRecoveryLabel(exercise.restSeconds)}</span>
                               </div>
                               {exercise.advancedMethod ? (
                                 <p className="hint">

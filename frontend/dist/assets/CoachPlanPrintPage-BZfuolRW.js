@@ -1,0 +1,100 @@
+import{u as fe,a as xe,b as be,M as ve,j as s,N as ne,O as K,P as Ne,t as je,K as ye,E as we}from"./index-BmY_fmbn.js";import{b as g,S as $e}from"./select-CJLCgfbc.js";import{S as m,b as Ce,p as ke}from"./print-js3LHors.js";import{f as ie,a as Se,b as Me}from"./duration-CL_2nJPc.js";import{t as q}from"./firestore-DMWt7ifY.js";import"./firebase-core-CXRRKy3K.js";import"./firebase-auth-BeCCtD6K.js";import"./firebase-firestore-CfgzhvOh.js";import"./firebase-functions-BRt_Ma07.js";import"./firebase-storage-DaZtX2fN.js";function r(t){return typeof t=="string"?t:t==null?"":String(t)}function u(t){return t.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;")}function oe(t){return t.includes("youtube.com")||t.includes("youtu.be")||/\.(mp4|webm|mov|m4v|ogg)(\?.*)?$/i.test(t)}function le(t){return/\.(jpg|jpeg|png|gif|webp|avif|svg)(\?.*)?$/i.test(t)}function Ue(t){if(!t)return!1;const o=Array.isArray(t.assignedClientIds)?t.assignedClientIds.filter(f=>typeof f=="string"&&f.trim().length>0):[],l=r(t.clientId).trim().length>0;return(o.length>0||l)&&!t.weightOverridesBackfilledAt}function U(t){if(!t)return"";const o=r(t.warmupVideoUrl).trim();if(o)return o;const l=r(t.warmupMediaUrl).trim();return oe(l)?l:""}function I(t){if(!t)return"";const o=r(t.warmupImageUrl).trim();if(o)return o;const l=r(t.warmupMediaUrl).trim();return le(l)?l:""}function ce(t){return Array.isArray(t)?t.map((o,l,f)=>{if(!o||typeof o!="object")return null;const c=o,h=Number(r(c.weight).replace(/[^\d.-]/g,"")),j=r(c.advancedMethod).trim(),N=j==="rest_pause"||j==="drop_set"?j:"",k=r(c.advancedMethodNotes),C=r(c.restPauseNotes),p=r(c.dropSetNotes),b=r(c.mediaUrl).trim(),y=r(c.videoUrl).trim(),M=r(c.imageUrl).trim(),w=y||(oe(b)?b:""),A=M||(le(b)?b:""),G=Ie(c.repsUnit),z=Pe(c.movementType);return{displayOrder:Ae(c.displayOrder,f.length-l),movementType:z,name:r(c.name),notes:r(c.notes),advancedMethod:N,restPauseNotes:C||(N==="rest_pause"?k:""),dropSetNotes:p||(N==="drop_set"?k:""),sets:_(c.sets,3),reps:_(c.reps,10),repsUnit:G,workValue:_(c.workValue??c.reps,10),weightKg:_(c.weightKg,Number.isFinite(h)?h:0),restSeconds:_(c.restSeconds,60),videoUrl:w,imageUrl:A}}).filter(o=>!!o):[]}function Ie(t){return r(t).trim()==="seconds"?"seconds":"reps"}function Pe(t){return r(t).trim()==="stretching"?"stretching":"exercise"}function Ae(t,o){const l=typeof t=="number"?t:Number(t);return Number.isFinite(l)&&l>0?Math.floor(l):o}function _(t,o){if(t==null)return o;if(typeof t=="string"&&t.trim()==="")return 0;const l=typeof t=="number"?t:Number(t);return Number.isFinite(l)?l:o}function ze(t,o=1){const l=typeof t=="number"?t:Number(t);return Number.isFinite(l)?Math.min(5,Math.max(1,Math.floor(l))):o}function J(t){const o=ze(t,1);return`${o} ${o===1?"giro":"giri"}`}function ae(t,o){return o==="seconds"?Me(t):`${t||"-"} reps`}function re(t,o){return o==="seconds"?Se(t):`${t||"-"} reps`}function P(t){return t==="stretching"?"Stretching":"Esercizio"}function Oe(t){return[...t].sort((o,l)=>o.displayOrder-l.displayOrder)}function Ee(t,o){const l=t.clientWeightOverrides&&typeof t.clientWeightOverrides=="object"?t.clientWeightOverrides:{},f=ce(t.exercises),c=[];for(const[h,j]of Object.entries(l)){if(!j||typeof j!="object")continue;const N=[];for(const[k,C]of Object.entries(j)){const p=Number(k);if(!Number.isInteger(p)||p<0||p>=f.length)continue;const b=Number(C);if(!Number.isFinite(b))continue;const y=f[p],M=Number(y.weightKg||0);if(b===M)continue;const w=y.name.trim()||`Esercizio ${p+1}`;N.push(`${w}: ${M} kg -> ${b} kg`)}N.length!==0&&c.push({clientId:h,clientLabel:o[h]||h,lines:N})}return c}function Ke(){const{user:t,role:o}=fe(),l=xe(),{showError:f,showSuccess:c}=be(),{planId:h=""}=ve(),[j,N]=g.useState(!0),[k,C]=g.useState(""),[p,b]=g.useState(null),[y,M]=g.useState([]),[w,A]=g.useState(!0),[G,z]=g.useState(0),[V,X]=g.useState(!1),[de,O]=g.useState(!1),[E,W]=g.useState([]),[$,D]=g.useState(!1);g.useEffect(()=>{async function e(){if(!(!h||!t)){N(!0),C("");try{let n=await K(h);if(!n.exists()){C("Scheda non trovata.");return}const d={id:n.id,...n.data()};Ue(d)&&(await Ne(h).catch(()=>{}),n=await K(h));const v=await je(t.uid);if(!n.exists()){C("Scheda non trovata.");return}b({id:n.id,...n.data()}),M(v.docs.map(x=>({id:x.id,...x.data()})))}catch(n){C(q(n))}finally{N(!1)}}}e()},[h,t==null?void 0:t.uid]);const Q=g.useMemo(()=>y.reduce((e,n)=>{const d=r(n.displayName).trim()||r(n.email).trim()||n.id,v=r(n.uid).trim()||n.id;return e[v]=d,e[n.id]=d,e},{}),[y]),me=g.useMemo(()=>({control:(e,n)=>({...e,minHeight:48,borderRadius:12,borderColor:n.isFocused?m.accent:m.border,boxShadow:n.isFocused?`0 0 0 3px ${m.accentFocus}`:"none",backgroundColor:m.surface,"&:hover":{borderColor:m.accent}}),menu:e=>({...e,borderRadius:12,overflow:"hidden",zIndex:50,backgroundColor:m.surface,border:`1px solid ${m.border}`}),singleValue:e=>({...e,color:m.text}),multiValue:e=>({...e,backgroundColor:m.surface2,borderRadius:999}),multiValueLabel:e=>({...e,color:m.text}),multiValueRemove:e=>({...e,color:m.textMuted,":hover":{backgroundColor:m.accentSoft,color:m.text}}),placeholder:e=>({...e,color:m.textMuted}),input:e=>({...e,color:m.text}),option:(e,n)=>({...e,backgroundColor:n.isSelected?m.accent:n.isFocused?m.accentSoft:m.surface,color:n.isSelected?m.accentForeground:m.text,cursor:"pointer"})}),[]),B=g.useMemo(()=>ce(p==null?void 0:p.exercises),[p==null?void 0:p.exercises]),R=g.useMemo(()=>Oe(B.map((e,n)=>({exercise:e,index:n,displayOrder:e.displayOrder}))),[B]),T=g.useMemo(()=>{const e=B.map(d=>d.imageUrl).filter(d=>!!d),n=I(p);return n&&e.push(n),e},[B,p]);if(g.useEffect(()=>{if(T.length===0){A(!0),z(0);return}let e=!1;A(!1),z(T.length);let n=0;const d=()=>{if(n+=1,e)return;const x=Math.max(T.length-n,0);z(x),x===0&&A(!0)},v=T.map(x=>{const S=new Image,F=()=>{S.onload=null,S.onerror=null,d()};S.onload=F,S.onerror=F,S.src=x;const a=window.setTimeout(F,9e3);return()=>window.clearTimeout(a)});return()=>{e=!0,v.forEach(x=>x())}},[T]),!t)return s.jsx(ne,{to:"/auth",replace:!0});if(o==="client")return s.jsx(ne,{to:"/app/client",replace:!0});if(j)return s.jsx("main",{className:"page page-top",children:s.jsxs("section",{className:"card print-sheet",style:{width:"min(900px, 100%)"},children:[s.jsx("p",{className:"eyebrow",children:"Scheda"}),s.jsx("h1",{children:"Caricamento in corso..."})]})});if(k||!p)return s.jsx("main",{className:"page page-top",children:s.jsxs("section",{className:"card print-sheet",style:{width:"min(900px, 100%)"},children:[s.jsx("h1",{children:"Impossibile aprire la scheda"}),s.jsx("p",{className:"hero-sub",children:k||"Qualcosa non ha funzionato."}),s.jsx("button",{className:"btn btn-ghost screen-only",type:"button",onClick:()=>l("/app/coach#plans"),children:"Torna all'area coach"})]})});const i=p,H=Ee(p,Q),Y=Array.isArray(i.assignedClientIds)&&i.assignedClientIds.length>0?i.assignedClientIds.map(e=>Q[e]||e).join(", "):"Nessuno",Z=y.map(e=>({value:r(e.uid).trim()||e.id,label:r(e.displayName).trim()||r(e.email).trim()||e.id})),ee=Z.filter(e=>!Array.isArray(i.assignedClientIds)||!i.assignedClientIds.includes(e.value)),ue=Z.filter(e=>E.includes(e.value)),se=y.filter(e=>{const n=r(e.uid).trim()||e.id;return Array.isArray(i.assignedClientIds)&&i.assignedClientIds.includes(n)}),te=Ce({assignedClientIds:i.assignedClientIds,legacyClientId:i.clientId,title:i.title,clientLabelById:Q});async function pe(){if(h){if(E.length===0){f("Seleziona almeno un cliente da assegnare.");return}D(!0);try{await Promise.all(E.map(n=>we(h,n)));const e=await K(h);e.exists()&&b({id:e.id,...e.data()}),W([]),O(!1),c(E.length===1?"Scheda assegnata al cliente.":"Scheda assegnata ai clienti selezionati.")}catch(e){f(q(e))}finally{D(!1)}}}async function he(e){if(!(!h||$)){D(!0);try{await ye(h,e);const n=await K(h);n.exists()&&b({id:n.id,...n.data()}),W(d=>d.filter(v=>v!==e)),c("Assegnazione rimossa.")}catch(n){f(q(n))}finally{D(!1)}}}function ge(){X(!0);const e=H.length>0?`
+      <section class="block">
+        <h3>Feedback peso cliente</h3>
+        ${H.map(a=>`
+          <div class="sub">
+            <p><strong>${u(a.clientLabel)}</strong></p>
+            <ul>
+              ${a.lines.map(L=>`<li>${u(L)}</li>`).join("")}
+            </ul>
+          </div>`).join("")}
+      </section>`:"",n=R.length>0?`
+      <section class="section-block">
+        <h3>Sequenza visualizzazione</h3>
+        ${R.map(({exercise:a},L)=>`
+          <article class="exercise">
+            <div class="${a.imageUrl?"exercise-row":""}">
+              ${a.imageUrl?`<div class="exercise-media"><img src="${u(a.imageUrl)}" alt="Media ${u(P(a.movementType))} ${L+1}" /></div>`:""}
+              <div class="exercise-content">
+                <p><strong>${u(P(a.movementType))}</strong> · Ordine ${L+1}</p>
+                <h4>${u(a.name||`${P(a.movementType)} ${L+1}`)}</h4>
+                <p class="meta">${i.kind==="circuit"?re(a.workValue,a.repsUnit):`${a.sets||"-"} serie · ${ae(a.reps,a.repsUnit)}`} · ${a.weightKg||0} kg · ${ie(a.restSeconds)}</p>
+                ${a.advancedMethod?`<p><strong>Metodo:</strong> ${a.advancedMethod==="rest_pause"?"Rest Pause":"Drop set"}</p>`:""}
+                ${a.advancedMethod&&(a.advancedMethod==="rest_pause"?a.restPauseNotes:a.dropSetNotes).trim()?`<p><strong>Note metodo:</strong> ${u(a.advancedMethod==="rest_pause"?a.restPauseNotes:a.dropSetNotes)}</p>`:""}
+                ${a.notes.trim()?`<p><strong>Note:</strong> ${u(a.notes)}</p>`:""}
+                ${a.videoUrl?`<p><a href="${u(a.videoUrl)}" target="_blank" rel="noreferrer">URL video: ${u(a.videoUrl)}</a></p>`:""}
+              </div>
+            </div>
+          </article>`).join("")}
+      </section>`:"",d=I(i),v=U(i),x=r(i.warmup).trim(),S=x||d||v?`<div class="block">
+    <div class="${d?"warmup-row":""}">
+      ${d?`<div class="warmup-media"><img src="${u(d)}" alt="Media riscaldamento" /></div>`:""}
+      <div class="warmup-content">
+        ${x?`<p><strong>Riscaldamento:</strong> ${u(x)}</p>`:""}
+        ${v?`<p><a href="${u(v)}" target="_blank" rel="noreferrer">URL video riscaldamento: ${u(v)}</a></p>`:""}
+      </div>
+    </div>
+  </div>`:"",F=`<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${u(te)}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 16px; color: #111; }
+    h1, h2, h3, h4 { margin: 0 0 8px; }
+    .block { border: 1px solid #e5e5e5; border-radius: 12px; padding: 12px; margin: 10px 0; }
+    .sub { border-top: 1px solid #eee; margin-top: 8px; padding-top: 8px; }
+    .section-block { margin: 18px 0; }
+    .exercise { border: 1px solid #e5e5e5; border-radius: 12px; padding: 12px; margin: 10px 0; break-inside: avoid; }
+    .exercise-row { display: flex; gap: 12px; align-items: flex-start; }
+    .exercise-media { flex: 0 0 180px; width: 180px; }
+    .exercise-content { flex: 1 1 auto; min-width: 0; }
+    .warmup-row { display: flex; gap: 12px; align-items: flex-start; }
+    .warmup-media { flex: 0 0 180px; width: 180px; }
+    .warmup-content { flex: 1 1 auto; min-width: 0; }
+    .meta { color: #444; margin: 4px 0 8px; }
+    img { display: block; width: 100%; max-height: 260px; object-fit: cover; border-radius: 10px; margin-top: 8px; }
+    .exercise-media img { margin-top: 0; }
+    .warmup-media img { margin-top: 0; }
+    a { color: #b31217; }
+    .rounds-inline {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 12px 0 0;
+    }
+    .rounds-inline-label { font-size: 15px; font-weight: 500; color: #444; }
+    .rounds-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 32px;
+      padding: 6px 11px;
+      border-radius: 10px;
+      background: #050505;
+      color: #fff;
+      font: italic 900 18px/1 "Space Grotesk", system-ui, sans-serif;
+      letter-spacing: -0.04em;
+      box-shadow: 0 10px 22px rgba(0, 0, 0, 0.16);
+    }
+    @media (max-width: 720px) { .rounds-badge { font-size: 17px; padding: 6px 10px; } }
+    @media print { .rounds-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    @media print { body { margin: 10mm; } .exercise-row { display: flex; } .warmup-row { display: flex; } }
+  </style>
+</head>
+<body>
+  <h1>Scheda</h1>
+  <p><strong>Clienti assegnati:</strong> ${u(Y)}</p>
+  <div class="block">
+    <p><strong>Titolo programma:</strong> ${u(i.title||"Senza titolo")}</p>
+    <p><strong>Tipo scheda:</strong> ${u(i.kind==="circuit"?"Circuito":"Serie e reps")}</p>
+    ${i.kind==="circuit"?`<div class="rounds-inline"><span class="rounds-inline-label">Giri circuito:</span><span class="rounds-badge">${u(J(i.circuitRounds))}</span></div>`:""}
+    ${r(i.notes).trim()?`<p><strong>Note coach:</strong> ${u(r(i.notes))}</p>`:""}
+  </div>
+  ${S}
+  ${e}
+  ${n}
+</body>
+</html>`;(async()=>{try{await ke({html:F,title:te})}catch(a){if(a instanceof Error&&a.message==="POPUP_BLOCKED"){f("Consenti l’apertura della finestra di stampa per salvare il PDF con il nome corretto.");return}f(q(a))}finally{X(!1)}})()}return s.jsxs("main",{className:"page page-top",children:[s.jsxs("section",{className:"card print-sheet",style:{width:"min(900px, 100%)"},children:[s.jsxs("div",{className:"exercise-head screen-only",children:[s.jsxs("div",{className:"preview-head-main",children:[s.jsx("button",{className:"icon-btn",type:"button","aria-label":"Indietro",title:"Indietro",onClick:()=>l("/app/coach#plans"),children:"←"}),s.jsx("h2",{children:"Scheda"})]}),s.jsxs("div",{className:"preview-head-actions",children:[s.jsx("button",{className:"btn btn-ghost",type:"button",disabled:$,onClick:()=>{W([]),O(!0)},children:"Assegna"}),s.jsx("button",{className:"icon-btn btn-inline-loading",type:"button","aria-label":"Stampa scheda",title:w?"Stampa scheda":"Attendi caricamento immagini",onClick:()=>{!w||V||ge()},disabled:!w||V,children:!w||V?s.jsx("span",{className:"spinner","aria-hidden":"true"}):"🖨"})]})]}),w?null:s.jsxs("p",{className:"hint screen-only",children:["Carico immagini per la stampa... (",G," rimanenti)"]}),V?s.jsx("p",{className:"hint screen-only",children:"Apro anteprima di stampa..."}):null,s.jsxs("p",{className:"hint",children:["Clienti assegnati: ",s.jsx("strong",{children:Y})]}),s.jsxs("div",{className:"plan-head",children:[s.jsx("p",{className:"hint",children:"Titolo programma"}),s.jsx("h3",{children:i.title||"Senza titolo"})]}),s.jsxs("p",{className:"hint",children:["Tipo scheda: ",s.jsx("strong",{children:i.kind==="circuit"?"Circuito":"Serie e reps"})]}),i.kind==="circuit"?s.jsxs("div",{className:"circuit-rounds-inline","aria-label":`Circuito da ${J(i.circuitRounds)}`,children:[s.jsx("span",{className:"hint circuit-rounds-inline-label",children:"Giri circuito:"}),s.jsx("span",{className:"circuit-rounds-inline-badge",children:J(i.circuitRounds)})]}):null,r(i.warmup).trim()||I(i)||U(i)?s.jsx("div",{className:"client-info-block",children:s.jsxs("div",{className:I(i)?"warmup-media-layout":"",children:[I(i)?s.jsx("div",{className:"warmup-media-visual",children:s.jsx("img",{src:I(i),alt:"Media riscaldamento",className:"exercise-upload-preview"})}):null,s.jsxs("div",{className:"warmup-media-content",children:[r(i.warmup).trim()?s.jsxs("p",{className:"hint",children:[s.jsx("strong",{children:"Riscaldamento:"})," ",r(i.warmup)]}):null,U(i)?s.jsxs(s.Fragment,{children:[s.jsx("a",{className:"btn-link screen-only",href:U(i),target:"_blank",rel:"noreferrer",children:"Apri video riscaldamento"}),s.jsxs("a",{className:"hint print-video-link print-only",href:U(i),target:"_blank",rel:"noreferrer",children:["URL video riscaldamento: ",U(i)]})]}):null]})]})}):null,r(i.notes).trim()?s.jsx("div",{className:"client-info-block",children:s.jsxs("p",{className:"hint",children:[s.jsx("strong",{children:"Note coach:"})," ",r(i.notes)]})}):null,H.length>0?s.jsxs("div",{className:"client-info-block",children:[s.jsx("h3",{children:"Feedback peso cliente"}),H.map(e=>s.jsxs("div",{className:"divider-block",children:[s.jsx("p",{className:"hint",children:s.jsx("strong",{children:e.clientLabel})}),s.jsx("ul",{className:"list",children:e.lines.map(n=>s.jsx("li",{children:n},`${e.clientId}-${n}`))})]},`weight-feedback-${e.clientId}`))]}):null,R.length>0?s.jsxs("section",{className:"plan-preview-section",children:[s.jsxs("div",{className:"plan-builder-group-head",children:[s.jsx("p",{className:"hint",children:"Sequenza visualizzazione"}),s.jsx("strong",{children:R.length})]}),s.jsx("div",{className:"exercise-grid",children:R.map(({exercise:e},n)=>s.jsx("article",{className:"exercise-card",children:s.jsxs("div",{className:e.imageUrl?"coach-exercise-media-layout":"",children:[e.imageUrl?s.jsx("div",{className:"coach-exercise-media-visual",children:s.jsx("img",{src:e.imageUrl,alt:`Media ${P(e.movementType).toLowerCase()} ${n+1}`,className:"exercise-upload-preview"})}):null,s.jsxs("div",{className:e.imageUrl?"coach-exercise-media-content":"",children:[s.jsxs("p",{className:"hint",children:[s.jsx("strong",{children:P(e.movementType)})," · Ordine ",n+1]}),s.jsx("p",{className:"exercise-name",children:e.name||`${P(e.movementType)} ${n+1}`}),s.jsxs("div",{className:"exercise-meta",children:[i.kind==="circuit"?s.jsx("span",{children:re(e.workValue,e.repsUnit)}):s.jsxs(s.Fragment,{children:[s.jsxs("span",{children:[e.sets||"-"," serie"]}),s.jsx("span",{children:ae(e.reps,e.repsUnit)})]}),s.jsxs("span",{children:[e.weightKg||0," kg"]}),s.jsx("span",{children:ie(e.restSeconds)})]}),e.advancedMethod?s.jsxs("p",{className:"hint",children:[s.jsx("strong",{children:"Metodo:"})," ",e.advancedMethod==="rest_pause"?"Rest Pause":"Drop set"]}):null,e.advancedMethod&&(e.advancedMethod==="rest_pause"?e.restPauseNotes:e.dropSetNotes).trim()?s.jsxs("p",{className:"hint",children:[s.jsx("strong",{children:"Note metodo:"})," ",e.advancedMethod==="rest_pause"?e.restPauseNotes:e.dropSetNotes]}):null,e.notes.trim()?s.jsxs("p",{className:"hint",children:[s.jsx("strong",{children:"Note:"})," ",e.notes]}):null,e.videoUrl?s.jsxs("a",{className:"hint print-video-link",href:e.videoUrl,target:"_blank",rel:"noreferrer",children:["URL video: ",e.videoUrl]}):null]})]})},`print-sequence-${n}`))})]}):null]}),de?s.jsx("section",{className:"modal-overlay",role:"dialog","aria-modal":"true",onClick:e=>{e.currentTarget===e.target&&!$&&O(!1)},children:s.jsxs("article",{className:"card modal-card",onClick:e=>e.stopPropagation(),children:[s.jsxs("div",{className:"exercise-head",children:[s.jsx("h2",{children:"Assegna scheda"}),s.jsx("button",{className:"icon-btn",type:"button","aria-label":"Chiudi assegnazione",title:"Chiudi",disabled:$,onClick:()=>O(!1),children:"✕"})]}),s.jsxs("label",{children:["Clienti",s.jsx($e,{styles:me,options:ee,value:ue,onChange:e=>W(e.map(n=>n.value)),placeholder:ee.length===0?"Tutti i clienti sono già assegnati":"Cerca cliente per nome...",noOptionsMessage:()=>"Nessun risultato",isSearchable:!0,isMulti:!0,closeMenuOnSelect:!1,isDisabled:$})]}),s.jsxs("div",{className:"client-info-block",children:[s.jsx("h3",{children:"Clienti assegnati"}),se.length===0?s.jsx("p",{className:"hint",children:"Nessun cliente assegnato."}):se.map(e=>{const n=r(e.uid).trim()||e.id,d=r(e.displayName).trim()||r(e.email).trim()||n;return s.jsxs("div",{className:"assigned-client-item",children:[s.jsx("span",{className:"assigned-client-name",children:d}),s.jsx("button",{className:"icon-btn icon-btn-danger assigned-client-remove-btn",type:"button","aria-label":`Rimuovi ${d}`,title:"Rimuovi cliente",disabled:$,onClick:()=>void he(n),children:"🗑"})]},`assigned-${n}`)})]}),s.jsxs("div",{className:"action-row-split",children:[s.jsx("button",{className:"btn btn-ghost",type:"button",disabled:$,onClick:()=>O(!1),children:"Annulla"}),s.jsx("button",{className:"btn btn-primary",type:"button",disabled:$||E.length===0,onClick:()=>void pe(),children:$?"Assegno...":"Assegna"})]})]})}):null]})}export{Ke as CoachPlanPrintPage};

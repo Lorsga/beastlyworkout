@@ -5,6 +5,9 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useToast } from '../components/ToastProvider';
 import { assignPlanToClientAsCoach, getPlanById, listAssignedClientsAsCoach, removePlanAssignmentAsCoach, syncPlanWeightOverridesForCoach, useAuthState } from '../lib';
 import { SELECT_THEME } from '../theme';
+import { formatDurationLabel, formatRecoveryLabel, formatWorkLabel } from '../utils/duration';
+import { buildPlanPdfBaseName } from '../utils/pdf';
+import { printHtmlDocument } from '../utils/print';
 import { toMessage } from '../utils/firestore';
 
 interface PlanDoc {
@@ -187,11 +190,13 @@ function formatCircuitRoundsLabel(value: unknown): string {
 }
 
 function formatSeriesTarget(value: number, unit: ExerciseRepsUnit): string {
-  return `${value || '-'} ${unit === 'seconds' ? 'sec' : 'reps'}`;
+  if (unit === 'seconds') return formatDurationLabel(value);
+  return `${value || '-'} reps`;
 }
 
 function formatWorkTarget(value: number, unit: ExerciseRepsUnit): string {
-  return `${value || '-'} ${unit === 'seconds' ? 'sec lavoro' : 'reps'}`;
+  if (unit === 'seconds') return formatWorkLabel(value);
+  return `${value || '-'} reps`;
 }
 
 function movementTypeLabel(value: ExerciseMovementType): string {
@@ -454,6 +459,12 @@ export function CoachPlanPrintPage() {
     const uid = asText(client.uid).trim() || client.id;
     return Array.isArray(currentPlan.assignedClientIds) && currentPlan.assignedClientIds.includes(uid);
   });
+  const pdfBaseName = buildPlanPdfBaseName({
+    assignedClientIds: currentPlan.assignedClientIds,
+    legacyClientId: currentPlan.clientId,
+    title: currentPlan.title,
+    clientLabelById,
+  });
 
   async function assignSelectedClients() {
     if (!planId) return;
@@ -535,7 +546,7 @@ export function CoachPlanPrintPage() {
                   currentPlan.kind === 'circuit'
                     ? formatWorkTarget(exercise.workValue, exercise.repsUnit)
                     : `${exercise.sets || '-'} serie · ${formatSeriesTarget(exercise.reps, exercise.repsUnit)}`
-                } · ${exercise.weightKg || 0} kg · ${exercise.restSeconds || 0} sec recupero</p>
+                } · ${exercise.weightKg || 0} kg · ${formatRecoveryLabel(exercise.restSeconds)}</p>
                 ${exercise.advancedMethod ? `<p><strong>Metodo:</strong> ${exercise.advancedMethod === 'rest_pause' ? 'Rest Pause' : 'Drop set'}</p>` : ''}
                 ${
                   exercise.advancedMethod && (exercise.advancedMethod === 'rest_pause' ? exercise.restPauseNotes : exercise.dropSetNotes).trim()
@@ -571,7 +582,7 @@ export function CoachPlanPrintPage() {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>${escapeHtml(currentPlan.title || 'Scheda')}</title>
+  <title>${escapeHtml(pdfBaseName)}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 16px; color: #111; }
     h1, h2, h3, h4 { margin: 0 0 8px; }
@@ -631,71 +642,21 @@ export function CoachPlanPrintPage() {
 </body>
 </html>`;
 
-    const iframe = document.createElement('iframe');
-    iframe.setAttribute('aria-hidden', 'true');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '1px';
-    iframe.style.height = '1px';
-    iframe.style.border = '0';
-    iframe.style.opacity = '0';
-    iframe.style.pointerEvents = 'none';
-    document.body.appendChild(iframe);
-
-    const printWindow = iframe.contentWindow;
-    const printDocument = printWindow?.document;
-    if (!printWindow || !printDocument) {
-      iframe.remove();
-      setOpeningPrintPreview(false);
-      window.print();
-      return;
-    }
-
-    printDocument.open();
-    printDocument.write(html);
-    printDocument.close();
-
-    const cleanup = () => {
-      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-      setOpeningPrintPreview(false);
-    };
-
-    const waitForIframeImages = async (): Promise<void> => {
-      const images = Array.from(printDocument.images ?? []);
-      const pending = images.filter((img) => !img.complete);
-      if (pending.length === 0) return;
-      await Promise.race([
-        Promise.allSettled(
-          pending.map(
-            (img) =>
-              new Promise<void>((resolve) => {
-                const done = () => {
-                  img.removeEventListener('load', done);
-                  img.removeEventListener('error', done);
-                  resolve();
-                };
-                img.addEventListener('load', done, { once: true });
-                img.addEventListener('error', done, { once: true });
-              }),
-          ),
-        ),
-        new Promise<void>((resolve) => window.setTimeout(resolve, 7000)),
-      ]);
-    };
-
     void (async () => {
-      await waitForIframeImages();
-      printWindow.onafterprint = cleanup;
-      setTimeout(() => {
-        try {
-          printWindow.focus();
-          printWindow.print();
-        } catch {
-          cleanup();
+      try {
+        await printHtmlDocument({
+          html,
+          title: pdfBaseName,
+        });
+      } catch (nextError) {
+        if (nextError instanceof Error && nextError.message === 'POPUP_BLOCKED') {
+          showError('Consenti l’apertura della finestra di stampa per salvare il PDF con il nome corretto.');
+          return;
         }
-        setTimeout(cleanup, 15000);
-      }, 80);
+        showError(toMessage(nextError));
+      } finally {
+        setOpeningPrintPreview(false);
+      }
     })();
   }
 
@@ -830,7 +791,7 @@ export function CoachPlanPrintPage() {
                           </>
                         )}
                         <span>{exercise.weightKg || 0} kg</span>
-                        <span>{exercise.restSeconds || 0} sec recupero</span>
+                        <span>{formatRecoveryLabel(exercise.restSeconds)}</span>
                       </div>
                       {exercise.advancedMethod ? (
                         <p className="hint">
